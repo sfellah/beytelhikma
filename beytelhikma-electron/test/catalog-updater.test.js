@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import test, { after, before } from 'node:test';
+import zlib from 'node:zlib';
 
 import {
   SUPPORTED_SCHEMA_VERSION,
   decideUpdate,
   fetchPointer,
+  installCatalog,
 } from '../src/main/catalog-updater.js';
 
 let server;
@@ -118,4 +124,97 @@ test('le pointeur est lu sous catalog/latest.json', async () => {
   const lu = await fetchPointer(origin, {});
   assert.equal(demandé, '/catalog/latest.json');
   assert.equal(lu.catalog_version, 3);
+});
+
+function racineJetable(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'beyt-catalog-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+const CLAIR = Buffer.from('SQLite format 3\0'.repeat(64));
+const COMPRESSÉ = zlib.zstdCompressSync(CLAIR);
+const EMPREINTE = createHash('sha256').update(CLAIR).digest('hex');
+
+function sertLArchive() {
+  handler = (request, response) => {
+    response.writeHead(200, { 'content-length': COMPRESSÉ.length });
+    response.end(COMPRESSÉ);
+  };
+}
+
+test('le catalogue est téléchargé, décompressé et installé', async (t) => {
+  const root = racineJetable(t);
+  sertLArchive();
+
+  const installé = await installCatalog({
+    pointer: pointeur({
+      sha256: EMPREINTE,
+      compressed_size: COMPRESSÉ.length,
+      uncompressed_size: CLAIR.length,
+    }),
+    baseUrl: origin,
+    storageRoot: root,
+  });
+
+  assert.equal(installé, path.join(root, 'catalog.sqlite'));
+  assert.deepEqual(fs.readFileSync(installé), CLAIR);
+});
+
+test('un SHA-256 faux laisse l’ancien catalogue en place', async (t) => {
+  // C'est la propriété qui compte : un catalogue corrompu ne remplace jamais un
+  // catalogue valide, et ne laisse rien à moitié écrit derrière lui.
+  const root = racineJetable(t);
+  const ancien = path.join(root, 'catalog.sqlite');
+  fs.writeFileSync(ancien, Buffer.from('ancien catalogue'));
+  sertLArchive();
+
+  await assert.rejects(
+    installCatalog({
+      pointer: pointeur({ sha256: 'c'.repeat(64), compressed_size: COMPRESSÉ.length }),
+      baseUrl: origin,
+      storageRoot: root,
+    }),
+    /empreinte/,
+  );
+
+  assert.deepEqual(fs.readFileSync(ancien), Buffer.from('ancien catalogue'));
+  assert.equal(fs.existsSync(`${ancien}.new`), false, 'aucun reste à moitié écrit');
+});
+
+test('une coupure en cours de route laisse le catalogue précédent valide', async (t) => {
+  const root = racineJetable(t);
+  const ancien = path.join(root, 'catalog.sqlite');
+  fs.writeFileSync(ancien, Buffer.from('ancien catalogue'));
+
+  handler = (request, response) => {
+    response.writeHead(200, { 'content-length': COMPRESSÉ.length * 2 });
+    response.write(COMPRESSÉ.subarray(0, 8));
+    response.destroy(); // coupure franche au milieu
+  };
+
+  await assert.rejects(
+    installCatalog({
+      pointer: pointeur({ sha256: EMPREINTE }),
+      baseUrl: origin,
+      storageRoot: root,
+    }),
+  );
+
+  assert.deepEqual(fs.readFileSync(ancien), Buffer.from('ancien catalogue'));
+  assert.equal(fs.existsSync(`${ancien}.new`), false);
+});
+
+test('un 404 sur le catalogue ne touche à rien', async (t) => {
+  const root = racineJetable(t);
+  handler = (request, response) => {
+    response.writeHead(404);
+    response.end();
+  };
+
+  await assert.rejects(
+    installCatalog({ pointer: pointeur(), baseUrl: origin, storageRoot: root }),
+    /404/,
+  );
+  assert.equal(fs.existsSync(path.join(root, 'catalog.sqlite')), false);
 });

@@ -272,6 +272,19 @@ export class AppDatabase {
   }
 
   /**
+   * Referme le catalogue en mémoire et le rouvre depuis le disque.
+   *
+   * sql.js charge le fichier entier en mémoire : sans cette fermeture, l'ancien
+   * catalogue resterait servi jusqu'au redémarrage et l'échange n'aurait
+   * visiblement aucun effet.
+   */
+  async reloadCatalog() {
+    this.#catalog?.close();
+    this.#catalog = null;
+    return this.catalog();
+  }
+
+  /**
    * Ouvre un livre **installé**. Contrairement au catalogue, aucun fichier n'est
    * copié ici : c'est `download-manager.js` qui installe les livres.
    */

@@ -8,6 +8,13 @@
  * d'anxiogène, elle a déjà tout ce qu'il lui faut pour explorer.
  */
 
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import zlib from 'node:zlib';
+
 import { resolveObject } from '../shared/distribution.js';
 
 /** Version de schéma de catalogue que ce client sait lire. */
@@ -81,4 +88,66 @@ export function decideUpdate({ pointer, localVersion, declinedVersion }) {
     return { action: 'none', reason: 'declined', pointer: null };
   }
   return { action: 'offer', reason: 'newer', pointer };
+}
+
+/**
+ * Télécharge, vérifie et installe le catalogue désigné par [pointer].
+ *
+ * L'ordre est la garantie : on décompresse vers un fichier de côté, on vérifie
+ * l'empreinte, et le `rename` n'a lieu qu'après. Une coupure à n'importe quel
+ * point laisse l'ancien catalogue intact et lisible — jamais de catalogue à
+ * moitié écrit, jamais de catalogue corrompu qui en remplace un bon.
+ *
+ * Renvoie le chemin installé.
+ */
+export async function installCatalog({ pointer, baseUrl, storageRoot, signal = null, onProgress }) {
+  const cible = resolveObject(baseUrl, pointer.object_key);
+  if (cible.kind !== 'http') {
+    throw new Error(`clé de catalogue non téléchargeable : ${pointer.object_key}`);
+  }
+
+  fs.mkdirSync(storageRoot, { recursive: true });
+  const destination = path.join(storageRoot, 'catalog.sqlite');
+  const staged = `${destination}.new`;
+
+  const response = await fetch(cible.url, { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error(`catalogue introuvable (HTTP ${response.status})`);
+
+  const total = pointer.compressed_size || Number(response.headers.get('content-length')) || 0;
+  let reçus = 0;
+  const empreinte = createHash('sha256');
+
+  try {
+    // L'empreinte porte sur le catalogue **décompressé** : c'est lui que
+    // `publish_minio.py` a haché, et c'est lui qu'on va ouvrir.
+    await pipeline(
+      Readable.fromWeb(response.body),
+      async function* (source) {
+        for await (const morceau of source) {
+          reçus += morceau.length;
+          onProgress?.({ receivedBytes: reçus, totalBytes: total });
+          yield morceau;
+        }
+      },
+      zlib.createZstdDecompress(),
+      async function* (source) {
+        for await (const morceau of source) {
+          empreinte.update(morceau);
+          yield morceau;
+        }
+      },
+      fs.createWriteStream(staged),
+    );
+
+    const obtenue = empreinte.digest('hex');
+    if (pointer.sha256 && obtenue !== pointer.sha256) {
+      throw new Error(`empreinte du catalogue invalide : ${obtenue} au lieu de ${pointer.sha256}`);
+    }
+
+    fs.renameSync(staged, destination); // atomique : le dernier geste
+    return destination;
+  } catch (error) {
+    fs.rmSync(staged, { force: true });
+    throw error;
+  }
 }
