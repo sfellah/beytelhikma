@@ -65,8 +65,15 @@ class Reader {
 
   async start() {
     try {
-      const [detail, count, toc, saved, prefs] = await Promise.all([
-        repository.getBookDetail(this.#editionId),
+      // Le contenu n'est lisible qu'une fois le fichier installé : sans lui, la
+      // fiche est le seul endroit où l'on peut faire quelque chose.
+      const detail = await repository.getBookDetail(this.#editionId);
+      if (detail.download?.status !== 'installed') {
+        navigate(`/book/${this.#editionId}`);
+        return;
+      }
+
+      const [count, toc, saved, prefs] = await Promise.all([
         repository.getPageCount(this.#editionId),
         repository.getToc(this.#editionId).catch(() => []),
         repository.getProgress(this.#editionId),
@@ -95,6 +102,11 @@ class Reader {
       document.addEventListener('fullscreenchange', this.#fullscreenHandler);
       this.#hintTimer = setTimeout(() => this.#hideHint(), HINT_DELAY);
     } catch (error) {
+      // Livre supprimé pendant la lecture : la fiche, pas un écran d'erreur.
+      if (String(error?.message ?? '').includes('livre non installé')) {
+        navigate(`/book/${this.#editionId}`);
+        return;
+      }
       this.#host.replaceChildren(
         errorView(error, () => navigate(`/book/${this.#editionId}`)),
       );

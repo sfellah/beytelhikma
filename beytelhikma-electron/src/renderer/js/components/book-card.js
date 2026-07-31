@@ -23,6 +23,7 @@ export function bookCard(
       { class: 'book-card__media' },
       cover(book),
       badge && h('span', { class: 'book-card__badge' }, badge),
+      statusBadge(book.downloadStatus),
       h(
         'div',
         { class: 'book-card__overlay' },
@@ -46,4 +47,19 @@ export function bookCard(
       percent > 0 &&
       h('span', { class: 'label-sm muted' }, `${percent}٪`),
   );
+}
+
+/** Pastille discrète d'état : installé ou en cours. Rien d'autre. */
+function statusBadge(status) {
+  if (status === 'installed') {
+    return h('span', { class: 'book-card__status', title: 'مُنزَّل' }, icon('check', { size: 14 }));
+  }
+  if (status === 'downloading' || status === 'queued' || status === 'verifying') {
+    return h(
+      'span',
+      { class: 'book-card__status book-card__status--busy', title: 'قيد التنزيل' },
+      icon('download', { size: 14 }),
+    );
+  }
+  return null;
 }
