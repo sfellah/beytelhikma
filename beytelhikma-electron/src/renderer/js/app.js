@@ -23,6 +23,7 @@ defineRoutes(
     '/category/:id': collectionView('category'),
     '/author/:id': collectionView('author'),
     '/era/:id': collectionView('era'),
+    '/undated': collectionView('undated'),
     '/collection/:id': collectionDetailView,
     '/explore': exploreView,
     '/search': searchView,

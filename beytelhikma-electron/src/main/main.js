@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
@@ -11,11 +12,35 @@ const projectRoot = path.join(here, '..', '..');
 let database;
 let repository;
 
+/**
+ * D'où vient le catalogue au démarrage.
+ *
+ * En développement, d'un dossier de bibliothèque local (`dist/shamela` ou
+ * `assets/sample`). Dans une application empaquetée, aucun des deux n'existe :
+ * c'est la graine embarquée par `scripts/fetch-seed.mjs` qui l'apporte, et
+ * `librarySource` reste nul — donc **aucun livre ne peut venir d'ailleurs que
+ * du bucket**, ce qui est le comportement voulu en production.
+ */
+function resoudreOrigine() {
+  try {
+    const librarySource = resolveLibrarySource(projectRoot);
+    console.log(`[beytelhikma] bibliothèque : ${librarySource}`);
+    return { librarySource, seedArchive: null };
+  } catch (erreur) {
+    const seedArchive = app.isPackaged
+      ? path.join(process.resourcesPath, 'catalog.sqlite.zst')
+      : path.join(projectRoot, 'assets', 'catalog.sqlite.zst');
+    console.log(`[beytelhikma] graine embarquée : ${seedArchive}`);
+    if (!fs.existsSync(seedArchive)) throw erreur; // ni source ni graine : le message d'origine
+    return { librarySource: null, seedArchive };
+  }
+}
+
 async function openRepository() {
-  const librarySource = resolveLibrarySource(projectRoot);
-  console.log(`[beytelhikma] bibliothèque : ${librarySource}`);
+  const { librarySource, seedArchive } = resoudreOrigine();
   database = new AppDatabase({
     librarySource,
+    seedArchive,
     storageRoot: path.join(app.getPath('userData'), 'library'),
   });
   await database.initialize();

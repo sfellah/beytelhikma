@@ -370,7 +370,7 @@
 .era {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   padding-top: var(--space-md);
   border-top: 1px solid var(--rule-strong);
   transition: border-color 0.25s;
@@ -381,12 +381,14 @@
 }
 
 /* La barre porte l'information : combien de livres, relativement au siècle le
-   mieux fourni. Elle n'est pas décorative. */
+   mieux fourni. Elle n'est pas décorative. La vue la pose en racine du rapport
+   — un siècle à un livre reste lisible face à un siècle à trente-neuf. */
 .era__bar {
   display: block;
   height: 4px;
   width: var(--fill, 0%);
-  min-width: 12px;
+  min-width: 6px;
+  margin-bottom: var(--space-sm);
   border-radius: var(--radius-pill);
   background: var(--deep-emerald);
   transform-origin: 100% 50%;
@@ -397,8 +399,43 @@
   transform: scaleY(2);
 }
 
+/* Un siècle vide et la cellule non datée gardent la place de la barre : sans
+   elle les libellés remonteraient et l'axe cesserait de s'aligner. */
+.era__bar--none {
+  width: 100%;
+  min-width: 0;
+  height: 0;
+  border-top: 1px dashed var(--rule-strong);
+  background: none;
+}
+
+.era:hover .era__bar--none {
+  transform: none;
+}
+
 .era__name {
   color: var(--primary);
+}
+
+.era__count {
+  color: var(--on-surface-variant);
+}
+
+/* Un siècle sans livre se voit. Le masquer donnerait à la frise une continuité
+   que le catalogue n'a pas. */
+.era--empty {
+  opacity: 0.42;
+  border-top-style: dashed;
+  cursor: default;
+}
+
+.era--empty:hover {
+  border-color: var(--rule-strong);
+}
+
+.era--undated {
+  border-top-color: var(--antique-gold);
+  border-top-style: dashed;
 }
 
 /* ---------------------------------------------------------- nouveautés */
@@ -445,9 +482,12 @@ html:not([dir='rtl']) .scroller--at-start {
 
 /* -------------------------------------------------------- disciplines */
 
+/* Six tuiles doivent tomber en deux rangées de trois, jamais en cinq plus une
+   orpheline : `min(45%, …)` borne la colonne à la largeur disponible, ce qui
+   donne trois colonnes au large et deux à l'étroit. */
 .disciplines {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(45%, 300px), 1fr));
   gap: var(--space-md);
 }
 
@@ -456,10 +496,10 @@ html:not([dir='rtl']) .scroller--at-start {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg) var(--space-md);
-  min-height: 148px;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md) var(--space-md);
+  min-height: 208px;
   text-align: center;
   background: var(--surface-container-low);
   border: 1px solid var(--rule);
@@ -480,37 +520,79 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--primary);
 }
 
-.discipline--more {
-  background: transparent;
-  border-style: dashed;
+/* Trois couvertures réelles de la discipline, en éventail. Elles disent ce que
+   « ٣٩ كتابًا » ne dit pas : de quoi ces livres ont l'air. Purement décoratives
+   au sens du lecteur d'écran — le lien porte déjà le nom et le compte. */
+.discipline__stack {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
 }
 
+.discipline__mini {
+  display: block;
+  width: 46px;
+  margin-inline: -9px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Les rangs se posent en dur : `abs()` en CSS n'est pas acquis sur toutes les
+   versions de Chromium embarquées, et trois enfants ne valent pas ce pari. */
+.discipline__mini:first-child {
+  z-index: 1;
+  transform: rotate(-7deg) translateY(3px);
+}
+
+.discipline__mini:nth-child(2) {
+  z-index: 2;
+}
+
+.discipline__mini:last-child {
+  z-index: 1;
+  transform: rotate(7deg) translateY(3px);
+}
+
+.discipline:hover .discipline__mini:first-child {
+  transform: rotate(-13deg) translate(7px, -2px);
+}
+
+.discipline:hover .discipline__mini:last-child {
+  transform: rotate(13deg) translate(-7px, -2px);
+}
+
+/* La teinte est celle de la famille de couvertures, posée en ligne par la vue
+   depuis `COVER_FAMILIES`. L'anneau reprend le fond de la tuile : la bulle
+   mord sur l'éventail sans le trancher. */
 .discipline__bubble {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
+  margin-top: calc(var(--space-sm) * -1);
   border-radius: var(--radius-pill);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  background: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 16%, transparent);
+  color: var(--tint-to, var(--deep-emerald));
+  box-shadow: 0 0 0 5px var(--surface-container-low);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
 }
 
 .discipline:hover .discipline__bubble {
   transform: scale(1.08);
+  box-shadow: 0 0 0 5px var(--surface-container-lowest);
 }
 
-.discipline__bubble--teal {
-  background: var(--teal-veil);
-  color: var(--slate-teal);
+/* Les neuf teintes sont des reliures : sombres par construction. Sur graphite
+   elles disparaîtraient — on éclaircit l'encre et on épaissit le voile. */
+:root[data-theme='night'] .discipline__bubble {
+  background: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 34%, transparent);
+  color: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 30%, #f6f1e6);
 }
 
-.discipline__bubble--gold {
-  background: var(--gold-veil);
-  color: var(--secondary);
-}
-
-.discipline__bubble--emerald {
-  background: var(--emerald-veil);
-  color: var(--deep-emerald);
+.disciplines__more {
+  margin-top: var(--space-md);
 }
 
 /* --------------------------------------------------- auteur en vedette */

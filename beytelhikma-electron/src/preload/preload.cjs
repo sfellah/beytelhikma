@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const METHODS = [
   'getCategories',
+  'getTopCategories',
   'getRecentBooks',
   'getBooks',
   'getBooksByCategory',
@@ -13,6 +14,7 @@ const METHODS = [
   'getAuthorStats',
   'getBooksIn',
   'getEras',
+  'getUndatedCount',
   'getBooksByCentury',
   'getBooksByAuthor',
   'getToc',

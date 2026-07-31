@@ -1,5 +1,6 @@
+import { COVER_FAMILIES, coverFamily } from '../../../shared/book-cover.js';
 import { h } from '../dom.js';
-import { excerpt, initial, ordinal, percent } from '../format.js';
+import { arabicNumber, excerpt, initial, ordinal, percent } from '../format.js';
 import { categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -17,15 +18,16 @@ export function homeView(host) {
 }
 
 async function load() {
-  const [resume, library, recent, categories, eras, featured] = await Promise.all([
+  const [resume, library, recent, disciplines, eras, undated, featured] = await Promise.all([
     repository.getContinueReading(),
     // L'étagère est une bande, pas un inventaire : en demander une page évite
     // de joindre le catalogue pour chaque livre installé, dont on n'affichera
     // que quatre. Un de plus que `SHELF_LIMIT` : la reprise en sort.
     repository.getLibrary({ limit: SHELF_LIMIT + 1, sort: 'recent' }),
     repository.getRecentBooks({ limit: 12 }),
-    repository.getCategories(),
+    repository.getTopCategories({ limit: DISCIPLINE_LIMIT, sample: DISCIPLINE_SAMPLE }),
     repository.getEras(),
+    repository.getUndatedCount(),
     repository.getFeaturedAuthor(),
   ]);
 
@@ -45,8 +47,9 @@ async function load() {
       .slice(0, SHELF_LIMIT),
     libraryTotal: library.total,
     recent,
-    categories: categories.filter((category) => category.bookCount > 0),
+    disciplines,
     eras: eras.filter((era) => era.bookCount > 0),
+    undated,
     featured,
     featuredBooks,
   };
@@ -61,8 +64,8 @@ function render(data) {
     // `data-reveal` 1 est libre : le héros compte pour deux blocs visuels.
     shelfSection(data.shelf, data.libraryTotal),
     recentSection(data.recent),
-    disciplinesSection(data.categories),
-    erasSection(data.eras),
+    disciplinesSection(data.disciplines),
+    erasSection(data.eras, data.undated),
     featuredSection(data.featured, data.featuredBooks),
   );
   return reveal(root);
@@ -360,10 +363,17 @@ function recentSection(recent) {
 
 // ------------------------------------------------------------- disciplines
 
-const BUBBLES = ['teal', 'gold', 'emerald'];
+/**
+ * Six disciplines, pas quarante. Le catalogue en compte quarante peuplées : les
+ * dessiner toutes faisait de l'accueil un inventaire. Le repli porte le vrai
+ * total, compté par SQL — six tuiles ne doivent jamais laisser croire à six
+ * disciplines.
+ */
+const DISCIPLINE_LIMIT = 6;
+const DISCIPLINE_SAMPLE = 3;
 
-function disciplinesSection(categories) {
-  if (!categories.length) return null;
+function disciplinesSection({ rows, total }) {
+  if (!rows.length) return null;
   return h(
     'section',
     {
@@ -371,38 +381,51 @@ function disciplinesSection(categories) {
       'aria-labelledby': 'disciplines-title',
       'data-reveal': 4,
     },
-    sectionHead(
-      'disciplines-title',
-      'التخصصات العلمية',
-      'تصفّح المكتبة حسب الفن',
-    ),
+    sectionHead('disciplines-title', 'التخصصات العلمية', 'تصفّح المكتبة حسب الفن'),
     h(
       'div',
       { class: 'disciplines' },
-      categories.map((category, index) =>
-        h(
-          'a',
-          { class: 'discipline', href: `#/category/${category.categoryId}` },
-          h(
-            'span',
-            { class: `discipline__bubble discipline__bubble--${BUBBLES[index % 3]}` },
-            icon(categoryIcon(category.label), { size: 22 }),
-          ),
-          h('span', { class: 'title-md discipline__label' }, category.label),
-          h('span', { class: 'label-sm muted' }, `${category.bookCount} كتاب`),
-        ),
-      ),
+      rows.map((category) => disciplineTile(category)),
+    ),
+    total > rows.length &&
       h(
         'a',
-        { class: 'discipline discipline--more', href: '#/library' },
-        h(
-          'span',
-          { class: 'discipline__bubble discipline__bubble--emerald' },
-          icon('more', { size: 22 }),
-        ),
-        h('span', { class: 'title-md discipline__label' }, 'المزيد'),
-        h('span', { class: 'label-sm muted' }, 'كل المكتبة'),
+        { class: 'link-action label-md disciplines__more', href: '#/explore' },
+        h('span', {}, `تصفّح ${arabicNumber(total)} فنًّا`),
+        icon('arrowLeft', { size: 18 }),
       ),
+  );
+}
+
+/**
+ * La teinte vient de la famille de la discipline, pas de sa position dans la
+ * liste : la bulle de الحديث porte la couleur des couvertures de الحديث. La
+ * table est celle de `src/shared/book-cover.js`, jamais une seconde copie.
+ */
+function disciplineTile(category) {
+  const { from, to } = COVER_FAMILIES[coverFamily(category.label)];
+
+  return h(
+    'a',
+    {
+      class: 'discipline',
+      href: `#/category/${category.categoryId}`,
+      style: { '--tint-from': from, '--tint-to': to },
+    },
+    category.books.length > 0 &&
+      h(
+        'span',
+        { class: 'discipline__stack', 'aria-hidden': 'true' },
+        category.books.map((book) =>
+          h('span', { class: 'discipline__mini' }, cover(book, { showText: false })),
+        ),
+      ),
+    h('span', { class: 'discipline__bubble' }, icon(categoryIcon(category.label), { size: 22 })),
+    h('span', { class: 'title-md discipline__label' }, category.label),
+    h(
+      'span',
+      { class: 'label-sm muted discipline__count' },
+      `${arabicNumber(category.bookCount)} كتابًا · ${arabicNumber(Math.round(category.share * 100))}٪`,
     ),
   );
 }
@@ -413,9 +436,18 @@ function disciplinesSection(categories) {
  * Le catalogue n'a pas de date de composition : le repère temporel du
  * patrimoine, c'est le siècle de décès de l'auteur (`authors.death_year_hijri`).
  */
-function erasSection(eras) {
+function erasSection(eras, undated) {
   if (eras.length < 2) return null;
   const max = Math.max(...eras.map((era) => era.bookCount));
+
+  // L'axe se comble : `getEras` ne rend que les siècles peuplés, et une grille
+  // qui les colle les uns aux autres prétendrait à une continuité que le
+  // catalogue n'a pas. Un siècle sans livre doit se voir comme tel.
+  const known = new Map(eras.map((era) => [era.century, era.bookCount]));
+  const cells = [];
+  for (let century = eras[0].century; century <= eras[eras.length - 1].century; century += 1) {
+    cells.push({ century, bookCount: known.get(century) ?? 0 });
+  }
 
   return h(
     'section',
@@ -428,22 +460,60 @@ function erasSection(eras) {
     h(
       'ol',
       { class: 'timeline' },
-      eras.map((era) =>
-        h(
-          'li',
-          { class: 'timeline__item' },
-          h(
-            'a',
-            { class: 'era', href: `#/era/${era.century}` },
-            h('span', {
-              class: 'era__bar',
-              style: { '--fill': `${Math.round((era.bookCount / max) * 100)}%` },
-            }),
-            h('span', { class: 'title-md era__name' }, ordinal(era.century)),
-            h('span', { class: 'label-sm muted' }, `${era.bookCount} كتاب`),
-          ),
-        ),
-      ),
+      cells.map((era) => eraCell(era, max)),
+      undated > 0 ? undatedCell(undated) : null,
+    ),
+  );
+}
+
+/**
+ * La hauteur suit la racine du rapport, pas le rapport. Un siècle à un livre
+ * face à un siècle à trente-neuf valait 2,5 % : la barre tombait sous son
+ * plancher de 12 px et cessait de porter une valeur. En racine elle vaut 16 %,
+ * sans que l'ordre des siècles en soit changé.
+ */
+function eraCell({ century, bookCount }, max) {
+  const empty = bookCount === 0;
+  const span = `${arabicNumber((century - 1) * 100 + 1)}–${arabicNumber(century * 100)} هـ`;
+  const body = [
+    h('span', {
+      class: empty ? 'era__bar era__bar--none' : 'era__bar',
+      style: empty ? null : { '--fill': `${Math.round(Math.sqrt(bookCount / max) * 100)}%` },
+    }),
+    h('span', { class: 'title-md era__name' }, ordinal(century)),
+    h('span', { class: 'label-sm muted era__span' }, span),
+    h(
+      'span',
+      { class: 'label-sm era__count' },
+      empty ? 'لا شيء بعد' : `${arabicNumber(bookCount)} كتابًا`,
+    ),
+  ];
+
+  return h(
+    'li',
+    { class: 'timeline__item' },
+    empty
+      ? h('span', { class: 'era era--empty' }, body)
+      : h('a', { class: 'era', href: `#/era/${century}` }, body),
+  );
+}
+
+/**
+ * Le bout de l'axe : 29 % des éditions n'ont aucun auteur daté. Sans cette
+ * cellule elles seraient absentes d'une section qui se donne pour une vue
+ * d'ensemble. Elle ne porte pas de barre — elle n'a pas de position sur l'axe.
+ */
+function undatedCell(undated) {
+  return h(
+    'li',
+    { class: 'timeline__item' },
+    h(
+      'a',
+      { class: 'era era--undated', href: '#/undated' },
+      h('span', { class: 'era__bar era__bar--none' }),
+      h('span', { class: 'title-md era__name' }, 'غير مؤرّخ'),
+      h('span', { class: 'label-sm muted era__span' }, 'لا تُعرف سنة الوفاة'),
+      h('span', { class: 'label-sm era__count' }, `${arabicNumber(undated)} كتابًا`),
     ),
   );
 }

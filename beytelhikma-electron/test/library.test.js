@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 import {
   AppDatabase,
@@ -206,6 +207,67 @@ test('un catalogue republié de même taille est tout de même recopié', async 
 
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(path.dirname(source), { recursive: true, force: true });
+});
+
+/** Archive de graine bâtie depuis le catalogue d'exemple. */
+function grainePour(dossier) {
+  fs.mkdirSync(dossier, { recursive: true });
+  const archive = path.join(dossier, 'catalog.sqlite.zst');
+  const clair = fs.readFileSync(path.join(sampleLibrary, 'catalog.sqlite'));
+  fs.writeFileSync(archive, zlib.zstdCompressSync(clair));
+  return archive;
+}
+
+test('sans bibliothèque source, la graine fournit le catalogue', async () => {
+  // C'est le cas d'une application empaquetée : ni `dist/shamela` ni
+  // `assets/sample` n'existent, et aucun livre ne peut venir d'ailleurs que du
+  // bucket.
+  const root = tempRoot();
+  const graine = grainePour(path.join(tempRoot(), 'assets'));
+  const database = new AppDatabase({ librarySource: null, seedArchive: graine, storageRoot: root });
+  try {
+    await database.initialize();
+    assert.ok(fs.existsSync(path.join(root, 'catalog.sqlite')), 'graine décompressée');
+
+    const repository = new BookRepository(database);
+    assert.equal((await repository.getBooks({ limit: 50 })).length, 5);
+    assert.equal(database.librarySource, null, 'aucune source locale en production');
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('la graine ne remplace jamais un catalogue déjà installé', async () => {
+  // Une mise à jour d'application embarque une graine plus ancienne que le
+  // catalogue que l'utilisateur a téléchargé depuis le bucket. L'écraser ferait
+  // régresser son catalogue à l'installation d'une nouvelle version.
+  const root = tempRoot();
+  const graine = grainePour(path.join(tempRoot(), 'assets'));
+  fs.mkdirSync(root, { recursive: true });
+  const plusRecent = Buffer.from('catalogue plus récent que la graine');
+  fs.writeFileSync(path.join(root, 'catalog.sqlite'), plusRecent);
+
+  const database = new AppDatabase({ librarySource: null, seedArchive: graine, storageRoot: root });
+  try {
+    await database.initialize();
+    assert.deepEqual(fs.readFileSync(path.join(root, 'catalog.sqlite')), plusRecent);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ni source ni graine ni catalogue installé : erreur explicite', async () => {
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: null, storageRoot: root });
+  try {
+    await database.initialize();
+    await assert.rejects(() => database.catalog(), /catalogue/i);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('une réédition est signalée, jamais appliquée', async () => {

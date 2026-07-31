@@ -64,6 +64,19 @@ const BOOK_SCOPES = {
     params: (id) => [Number(id)],
     label: null,
   },
+  // 29 % des éditions n'ont aucun auteur daté. Sans cette portée, elles ne sont
+  // atteignables depuis aucune vue temporelle : la frise des siècles les
+  // passerait sous silence au lieu de les ranger au bout de son axe.
+  undated: {
+    where: `e.edition_id NOT IN (
+      SELECT ea.edition_id
+      FROM edition_authors ea
+      JOIN authors a ON a.author_id = ea.author_id
+      WHERE a.death_year_hijri IS NOT NULL AND a.death_year_hijri > 0
+    )`,
+    params: () => [],
+    label: null,
+  },
 };
 
 /** Filtres de la bibliothèque, appliqués sur la progression enregistrée. */
@@ -735,6 +748,64 @@ export class BookRepository {
     });
   }
 
+  /**
+   * Les disciplines les mieux fournies, avec de quoi les montrer plutôt que de
+   * les nommer : un échantillon de couvertures composées.
+   *
+   * `total` compte *toutes* les disciplines peuplées, pas les `limit` rendues —
+   * c'est lui qui permet à l'accueil d'annoncer « ٤٠ فنًّا » sous six tuiles au
+   * lieu de laisser croire que six est tout ce qu'il y a.
+   *
+   * L'échantillon se lit par une requête et par discipline retenue. Une
+   * fonction de fenêtrage ferait l'affaire en une passe, mais le build sql.js
+   * embarqué est déjà pris en défaut sur FTS5 : on ne parie pas dessus pour
+   * économiser cinq requêtes sur une base déjà chargée en mémoire.
+   */
+  getTopCategories({ limit = 6, sample = 3 } = {}) {
+    return this.#guard('lecture des disciplines principales', async () => {
+      const db = await this.#db.catalog();
+
+      const visible = first(db, 'SELECT COUNT(*) AS n FROM editions WHERE is_hidden = 0')?.n ?? 0;
+      const total =
+        first(
+          db,
+          `SELECT COUNT(*) AS n FROM (
+             SELECT e.category_id FROM editions e
+              WHERE e.is_hidden = 0 AND e.category_id IS NOT NULL
+              GROUP BY e.category_id)`,
+        )?.n ?? 0;
+
+      const rows = all(
+        db,
+        `SELECT c.category_id, c.label_ar, COUNT(e.edition_id) AS book_count
+           FROM categories c
+           JOIN editions e ON e.category_id = c.category_id AND e.is_hidden = 0
+          GROUP BY c.category_id
+          ORDER BY book_count DESC, c.sort_order
+          LIMIT ?`,
+        [limit],
+      );
+
+      return {
+        total,
+        rows: rows.map((row) => ({
+          categoryId: row.category_id,
+          label: row.label_ar,
+          bookCount: row.book_count ?? 0,
+          // La part se calcule ici : la vue n'a pas à connaître la taille du
+          // catalogue pour afficher un pourcentage.
+          share: visible ? (row.book_count ?? 0) / visible : 0,
+          books: all(
+            db,
+            `${SUMMARY_SELECT} AND e.category_id = ?
+             GROUP BY e.edition_id ORDER BY r.published_at DESC, e.title_ar LIMIT ?`,
+            [row.category_id, sample],
+          ).map(bookSummary),
+        })),
+      };
+    });
+  }
+
   getRecentBooks({ limit = 12 } = {}) {
     return this.#guard('lecture des nouveautés', async () => {
       const db = await this.#db.catalog();
@@ -1027,6 +1098,24 @@ export class BookRepository {
         century: row.century,
         bookCount: row.book_count ?? 0,
       }));
+    });
+  }
+
+  /**
+   * Ce que la frise ne peut pas dater. Compté par SQL, comme tout décompte
+   * affiché : c'est la seule façon d'annoncer une part du corpus sans que
+   * l'écran ne se contente de décrire ce qu'il a reçu.
+   */
+  getUndatedCount() {
+    return this.#guard('lecture des éditions non datées', async () => {
+      const db = await this.#db.catalog();
+      return (
+        first(
+          db,
+          `SELECT COUNT(*) AS n FROM editions e
+            WHERE e.is_hidden = 0 AND ${BOOK_SCOPES.undated.where}`,
+        )?.n ?? 0
+      );
     });
   }
 
@@ -2022,6 +2111,7 @@ export const REPOSITORY_METHODS = [
   'getSelectionWeight',
   'downloadSelection',
   'getCategories',
+  'getTopCategories',
   'getRecentBooks',
   'getBooks',
   'getBooksByCategory',
@@ -2031,6 +2121,7 @@ export const REPOSITORY_METHODS = [
   'getAuthorStats',
   'getBooksIn',
   'getEras',
+  'getUndatedCount',
   'getBooksByCentury',
   'getBooksByAuthor',
   'getToc',

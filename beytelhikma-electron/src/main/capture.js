@@ -297,6 +297,16 @@ async function shootNightTheme(window, editionId, outDir, problems) {
     ]) {
       await shoot(window, name, route, selector, outDir, problems);
     }
+
+    // Les disciplines et la frise des siècles sont sous la ligne de flottaison
+    // en 900 px, et ce sont elles qui portent les teintes tirées des familles
+    // de couvertures — les seules du lecteur à changer de recette en nuit.
+    // Sans cette image, elles ne seraient vérifiées qu'en parchemin.
+    window.setContentSize(1360, 3100);
+    await wait(400);
+    await shoot(window, 'home-night-full', '/home', '.featured', outDir, problems);
+    window.setContentSize(1360, 900);
+    await wait(300);
   } finally {
     // Sans ce retour au parchemin, toute la fin de la campagne partirait en
     // graphite et le réglage survivrait à la capture.
@@ -378,8 +388,10 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
 
   await shootNightTheme(window, editionId, outDir, problems);
 
-  // Fenêtre haute : l'accueil entier, jusqu'aux disciplines et à l'auteur.
-  window.setContentSize(width, 2700);
+  // Fenêtre haute : l'accueil entier, jusqu'aux disciplines, aux siècles et à
+  // l'auteur. Trop courte, elle tranche la frise sans que rien ne le signale —
+  // une section qu'aucune image ne montre est une section qui dérive.
+  window.setContentSize(width, 3100);
   await wait(500);
   await shoot(window, 'home-full', '/home', '.featured', outDir, problems);
   await shoot(window, 'authors-full', '/authors', '.author-grid', outDir, problems);

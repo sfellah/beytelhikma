@@ -458,6 +458,45 @@ test('les siècles se déduisent du décès des auteurs', async () => {
   }
 });
 
+test('les disciplines principales comptent tout le fonds, pas la page rendue', async () => {
+  const peupled = (await repository.getCategories()).filter((item) => item.bookCount > 0);
+
+  const page = await repository.getTopCategories({ limit: 2, sample: 3 });
+  assert.equal(page.rows.length, 2);
+  assert.equal(page.total, peupled.length, 'le total vient de SQL, jamais de rows.length');
+  assert.ok(page.total > page.rows.length, "l'accueil doit pouvoir annoncer ce qu'il ne montre pas");
+
+  const counts = page.rows.map((row) => row.bookCount);
+  assert.deepEqual(counts, [...counts].sort((a, b) => b - a), 'un top se trie par volume');
+
+  for (const row of page.rows) {
+    assert.ok(row.share > 0 && row.share <= 1);
+    assert.ok(row.books.length <= 3, "l'échantillon est plafonné");
+    assert.ok(row.books.length >= 1);
+    for (const book of row.books) {
+      assert.equal(book.categoryId, row.categoryId);
+      // Les trois canaux de la couverture composée doivent être projetés :
+      // sans eux les vignettes tomberaient toutes sur le même repli.
+      assert.ok('bookType' in book && 'authorDeathYear' in book && 'categoryLabel' in book);
+    }
+  }
+});
+
+test('ce que la frise ne sait pas dater reste atteignable', async () => {
+  const undated = await repository.getUndatedCount();
+  const list = await repository.getBooksIn({ scope: 'undated' });
+  assert.equal(list.total, undated, 'le compte affiché et la liste viennent du même SQL');
+  for (const book of list.rows) assert.equal(book.authorDeathYear, null);
+
+  // Le corpus se partage entre siècles et non datés : la somme des siècles peut
+  // dépasser le fonds (une édition à deux auteurs compte deux fois), mais un
+  // livre non daté n'apparaît dans aucun siècle.
+  const eras = await repository.getEras();
+  const dated = eras.reduce((sum, era) => sum + era.bookCount, 0);
+  const all = await repository.getBooks({ limit: 500 });
+  assert.ok(dated + undated >= all.length);
+});
+
 test("l'auteur en vedette a des œuvres", async () => {
   const author = await repository.getFeaturedAuthor();
   assert.ok(author.fullName);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import zlib from 'node:zlib';
 import initSqlJs from 'sql.js';
 
 const require = createRequire(import.meta.url);
@@ -174,14 +175,21 @@ export function resolveLibrarySource(projectRoot) {
  */
 export class AppDatabase {
   #source;
+  #seedArchive;
   #root;
   #catalog = null;
   #user = null;
   #books = new Map();
 
-  constructor({ librarySource, storageRoot }) {
-    if (!librarySource) throw new Error('librarySource est requis');
+  /**
+   * [librarySource] est un dossier de développement, absent d'une application
+   * empaquetée : [seedArchive] prend alors le relais pour le seul catalogue.
+   * Sans source, aucun livre ne peut venir d'ailleurs que du bucket — ce qui
+   * est exactement le comportement voulu en production.
+   */
+  constructor({ librarySource = null, seedArchive = null, storageRoot }) {
     this.#source = librarySource;
+    this.#seedArchive = seedArchive;
     this.#root = storageRoot;
   }
 
@@ -196,7 +204,30 @@ export class AppDatabase {
   async initialize() {
     fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
     this.#syncInstalledLibrary();
+    this.#plantSeed();
     await engine();
+  }
+
+  /**
+   * Décompresse la graine embarquée, **si et seulement si** aucun catalogue
+   * n'est installé.
+   *
+   * La graine est figée à la date du build. Le catalogue installé, lui, a pu
+   * être mis à jour depuis le bucket. L'écraser ferait régresser le catalogue
+   * de l'utilisateur à chaque installation d'une nouvelle version de
+   * l'application — une mise à jour qui retire des livres.
+   */
+  #plantSeed() {
+    if (!this.#seedArchive) return;
+    const cible = path.join(this.#root, 'catalog.sqlite');
+    if (fs.existsSync(cible)) return;
+    if (!fs.existsSync(this.#seedArchive)) return;
+
+    // Écriture de côté puis renommage : une coupure ne laisse jamais un
+    // catalogue tronqué qui serait pris pour valide au démarrage suivant.
+    const staged = `${cible}.seed`;
+    fs.writeFileSync(staged, zlib.zstdDecompressSync(fs.readFileSync(this.#seedArchive)));
+    fs.renameSync(staged, cible);
   }
 
   /**
@@ -208,6 +239,10 @@ export class AppDatabase {
    * simplement ignorées à la lecture.
    */
   #syncInstalledLibrary() {
+    // Sans source locale — application empaquetée — il n'y a pas de changement
+    // de source à détecter : le catalogue vient de la graine puis du bucket.
+    if (!this.#source) return;
+
     const marker = path.join(this.#root, 'library.json');
     const current = { source: path.resolve(this.#source) };
 
@@ -249,6 +284,15 @@ export class AppDatabase {
    * chercher les livres en `local://`.
    */
   #materialize(relativePath, targetPath) {
+    // Application empaquetée : il n'y a pas de source à recopier, le fichier
+    // installé est la seule vérité.
+    if (!this.#source) {
+      if (fs.existsSync(targetPath)) return targetPath;
+      throw new Error(
+        `catalogue absent : ni bibliothèque source, ni graine embarquée, ni ${relativePath} installé`,
+      );
+    }
+
     const source = path.join(this.#source, relativePath);
     if (!fs.existsSync(source)) {
       if (fs.existsSync(targetPath)) return targetPath;

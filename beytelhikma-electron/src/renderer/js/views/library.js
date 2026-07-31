@@ -272,12 +272,14 @@ class ScopeScreen {
 
   #title(label) {
     if (this.#scope === 'era') return `${ordinal(Number(this.#id))} الهجري`;
+    if (this.#scope === 'undated') return 'غير مؤرّخ';
     return label ?? (this.#scope === 'author' ? 'المؤلف' : 'التخصص');
   }
 
   #subtitle(total) {
     const count = `${arabicNumber(total)} كتاب`;
     if (this.#scope === 'era') return `${count} لمؤلفين توفّوا في هذا القرن`;
+    if (this.#scope === 'undated') return `${count} لا تُعرف سنة وفاة مؤلفها`;
     if (this.#scope === 'category') return `${count} في هذا التخصص`;
     return count;
   }
