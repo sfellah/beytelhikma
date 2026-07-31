@@ -19,6 +19,7 @@ flutter analyze          # lint / analyse statique
 dart format lib test     # formatage
 
 python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple
+python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
 
 # import du corpus Shamela 4 (depuis la racine)
 python tools/import_shamela.py                    # 3 livres par catégorie -> dist/shamela/
@@ -69,11 +70,18 @@ Le rendu du contenu passe par `lib/utils/arabic_html_parser.dart` (HTML minimal 
 
 Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design des écrans Flutter.
 
-## Hors périmètre v1
+## État par implémentation
 
-Recherche : FTS5 est déjà indexé dans les bases, mais non exposé.
+Le portage Electron est en avance sur le client Flutter. Écrans livrés côté Electron : accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`), **collections** (`/collection/:id`), **réglages** (`/settings`).
 
-Le gestionnaire de téléchargement est en revanche implémenté côté Electron (écran `/downloads`, file séquentielle, suppression au choix). Le client Flutter, lui, lit toujours une bibliothèque entièrement locale : son alignement reste à faire.
+**Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire pour le client Flutter, mais ce portage ne les interroge jamais. La recherche s'appuie à la place sur :
+
+- les colonnes normalisées déjà présentes au schéma, `pages.body_search` et `toc.title_normalized`, interrogées en `LIKE` ;
+- un index mémoire des titres, auteurs et éditeurs, normalisé par `src/shared/arabic.js`.
+
+`src/shared/arabic.js` est le **reflet exact** de `normalize_ar` de `tools/_common.py` : c'est ce contrat qui a produit les colonnes normalisées. `test/arabic.test.js` porte une table de parité — sans elle, les deux implémentations divergeraient en silence et la recherche se dégraderait sans qu'aucun test n'échoue.
+
+Reste à faire : alignement du client Flutter sur le téléchargement et l'exploration ; recherche transversale à tous les livres installés.
 
 ## i18n / RTL (critique)
 
