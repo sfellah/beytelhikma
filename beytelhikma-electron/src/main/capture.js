@@ -16,6 +16,7 @@ function routesFor(editionId) {
     ['home', '/home', '.home'],
     ['library', '/library', '.library__grid'],
     ['downloads', '/downloads', '.downloads'],
+    ['explore', '/explore', '.explore__grid'],
     ['authors', '/authors', '.author-grid'],
     ['book-detail', `/book/${editionId}`, '.detail__main'],
     ['reader', `/reader/${editionId}`, '.reader__page p'],

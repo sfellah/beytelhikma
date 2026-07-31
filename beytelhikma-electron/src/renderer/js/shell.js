@@ -73,15 +73,18 @@ addEventListener('keydown', (event) => {
 });
 
 /**
- * Marque de l'application : le monogramme sert de logo partout (rail, barre
+ * Marque de l'application : le symbole du logo sert partout (rail, barre
  * supérieure, écrans vides) pour qu'il n'y ait qu'une seule identité à tenir.
+ * Le nom reste du texte à côté — il doit rester net, traduisible, copiable.
+ * Assets produits par `tools/gen_brand_assets.py` depuis `logo.png`.
  */
 export function brandMark(size = 36) {
-  return h(
-    'span',
-    { class: 'brand-mark', style: { '--mark-size': `${size}px` } },
-    icon('book', { size: Math.round(size * 0.55) }),
-  );
+  return h('img', {
+    class: 'brand-mark',
+    src: 'assets/brand/mark.png',
+    alt: '',
+    style: { '--mark-size': `${size}px` },
+  });
 }
 
 function railItem({ key, path, label, icon: name }, active) {
@@ -141,7 +144,8 @@ function topbar() {
     placeholder: 'البحث عن كتاب، مؤلف، طبعة…',
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
-      toast('البحث غير مفعَّل في هذه النسخة');
+      const term = field.value.trim();
+      navigate(`/explore${term ? `?text=${encodeURIComponent(term)}` : ''}`);
     },
   });
   searchField = field;

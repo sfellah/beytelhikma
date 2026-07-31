@@ -219,6 +219,21 @@
   color: var(--ink-mute);
 }
 
+.book-card__check {
+  position: absolute;
+  top: var(--space-sm);
+  inset-inline-end: var(--space-sm);
+  width: 20px;
+  height: 20px;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.book-card.is-selected .book-card__media {
+  outline: 3px solid var(--deep-emerald);
+  outline-offset: 2px;
+}
+
 /* --------------------------------------------------------- progression */
 
 .progress {
