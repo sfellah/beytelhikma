@@ -1,13 +1,44 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
+import { onDownloadsChanged, repository } from './repository.js';
 import { navigate } from './router.js';
 
 const NAV = [
   { key: 'home', path: '/home', label: 'الرئيسية', icon: 'home' },
   { key: 'library', path: '/library', label: 'مكتبتي', icon: 'bookOpen' },
+  { key: 'downloads', path: '/downloads', label: 'التنزيلات', icon: 'download' },
   { key: 'explore', path: '/explore', label: 'استكشاف', icon: 'compass' },
   { key: 'authors', path: '/authors', label: 'المؤلفون', icon: 'pen' },
 ];
+
+/**
+ * Nombre de travaux dans la file, tenu à jour pour la pastille de navigation.
+ * La coque étant redessinée à chaque navigation, les pastilles sont repeintes
+ * après chaque rendu plutôt que conservées d'un écran à l'autre.
+ */
+let activeDownloads = 0;
+
+repository
+  .getDownloads()
+  .then((jobs) => {
+    activeDownloads = jobs.length;
+    paintBadges();
+  })
+  .catch(() => {});
+
+onDownloadsChanged((jobs) => {
+  activeDownloads = jobs.length;
+  paintBadges();
+});
+
+function paintBadges() {
+  for (const node of document.querySelectorAll('[data-nav="downloads"]')) {
+    node.querySelector('.nav-badge')?.remove();
+    if (activeDownloads > 0) {
+      node.append(h('span', { class: 'nav-badge label-sm' }, String(activeDownloads)));
+    }
+  }
+}
 
 /**
  * Coquille commune (rail, barre supérieure, barre inférieure). Renvoie le
@@ -25,6 +56,7 @@ export function renderShell(host, { active }) {
       bottomNav(active),
     ),
   );
+  paintBadges();
   return content;
 }
 
@@ -60,6 +92,7 @@ function railItem({ key, path, label, icon: name }, active) {
       class: `rail__item${current ? ' is-active' : ''}`,
       href: `#${path}`,
       title: label,
+      dataset: { nav: key },
       'aria-current': current ? 'page' : null,
     },
     h('span', { class: 'rail__item-icon' }, icon(name, { size: 22 })),
@@ -156,6 +189,7 @@ function bottomNav(active) {
         {
           class: `bottom-nav__item${item.key === active ? ' is-active' : ''}`,
           href: `#${item.path}`,
+          dataset: { nav: item.key },
         },
         h('span', { class: 'bottom-nav__bubble' }, icon(item.icon, { size: 22 })),
         h('span', {}, item.label),

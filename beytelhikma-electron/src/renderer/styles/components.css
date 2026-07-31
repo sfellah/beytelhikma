@@ -274,6 +274,18 @@
   color: var(--on-error);
 }
 
+/* -------------------------------------------- pastille de la navigation */
+
+.nav-badge {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--deep-emerald);
+  color: var(--surface-container-lowest);
+  line-height: 20px;
+  text-align: center;
+}
+
 /* ------------------------------------------------------ titres section */
 
 .section-header {
