@@ -10,27 +10,15 @@
 
 /* --------------------------------------------------------------- marque */
 
-/* Monogramme : carré émeraude, filet clair, glyphe blanc. Une seule identité,
-   déclinée en taille selon l'emplacement. */
+/* Symbole du logo : mihrab et livre ouvert, encre émeraude et filets dorés.
+   Posé sans plaque ni ombre — le tracé est déjà l'identité — et décliné en
+   taille selon l'emplacement. La largeur suit la hauteur, le fichier n'est pas
+   carré. */
 .brand-mark {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: var(--mark-size, 36px);
+  display: block;
   height: var(--mark-size, 36px);
+  width: auto;
   flex: none;
-  border-radius: calc(var(--mark-size, 36px) * 0.3);
-  background: linear-gradient(150deg, var(--primary-container), var(--primary));
-  color: var(--primary-fixed);
-  box-shadow: var(--shadow-sm);
-}
-
-.brand-mark::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border: 1px solid rgb(176 240 214 / 25%);
-  border-radius: calc(var(--mark-size, 36px) * 0.22);
 }
 
 /* --------------------------------------------------------- barre latérale */

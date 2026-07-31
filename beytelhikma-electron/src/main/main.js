@@ -57,6 +57,7 @@ function createWindow({ capture = false } = {}) {
     show: !capture,
     backgroundColor: '#fbf9f4',
     title: 'بيت الحكمة',
+    icon: path.join(projectRoot, 'src', 'renderer', 'assets', 'brand', 'app-icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(projectRoot, 'src', 'preload', 'preload.cjs'),
