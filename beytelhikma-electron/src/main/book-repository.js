@@ -98,6 +98,50 @@ const volume = (row) => ({
   lastPageId: row.last_page_id ?? null,
 });
 
+/** Couleur retenue quand l'interface n'en propose pas (jaune de la maquette). */
+const HIGHLIGHT_DEFAULT_COLOR = '#f2c744';
+
+const highlight = (row) =>
+  row == null
+    ? null
+    : {
+        highlightId: row.highlight_id,
+        editionId: row.edition_id,
+        pageId: row.page_id,
+        startOffset: row.start_offset ?? 0,
+        endOffset: row.end_offset ?? 0,
+        selectedText: row.selected_text,
+        prefixText: row.prefix_text ?? null,
+        suffixText: row.suffix_text ?? null,
+        color: row.color ?? HIGHLIGHT_DEFAULT_COLOR,
+        createdAt: row.created_at,
+      };
+
+const note = (row) =>
+  row == null
+    ? null
+    : {
+        noteId: row.note_id,
+        editionId: row.edition_id,
+        pageId: row.page_id ?? null,
+        highlightId: row.highlight_id ?? null,
+        content: row.content,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+
+const bookmark = (row) =>
+  row == null
+    ? null
+    : {
+        bookmarkId: row.bookmark_id,
+        editionId: row.edition_id,
+        pageId: row.page_id,
+        textOffset: row.text_offset ?? null,
+        label: row.label ?? null,
+        createdAt: row.created_at,
+      };
+
 const progress = (row) =>
   row.current_page_id == null
     ? null
@@ -271,6 +315,11 @@ export class BookRepository {
         } else {
           user.run('DELETE FROM downloaded_books WHERE edition_id = ?', [editionId]);
           user.run('DELETE FROM collection_books WHERE edition_id = ?', [editionId]);
+          // Les annotations suivent la progression : effacer l'un sans l'autre
+          // laisserait des notes pointant un livre qu'on ne sait plus nommer.
+          user.run('DELETE FROM notes WHERE edition_id = ?', [editionId]);
+          user.run('DELETE FROM highlights WHERE edition_id = ?', [editionId]);
+          user.run('DELETE FROM bookmarks WHERE edition_id = ?', [editionId]);
         }
       });
     });
@@ -336,8 +385,17 @@ export class BookRepository {
     });
   }
 
+  /**
+   * File en cours, chaque travail portant le titre du livre : l'écran de suivi
+   * ne doit pas montrer d'`edition_id` brut.
+   */
   getDownloads() {
-    return this.#guard('lecture des téléchargements', async () => this.#downloads?.snapshot() ?? []);
+    return this.#guard('lecture des téléchargements', async () => {
+      const jobs = this.#downloads?.snapshot() ?? [];
+      if (!jobs.length) return jobs;
+      const titles = await this.#titlesFor(jobs.map((job) => job.editionId));
+      return jobs.map((job) => ({ ...job, title: titles.get(job.editionId) ?? job.editionId }));
+    });
   }
 
   clearFailedDownloads() {
@@ -1157,6 +1215,418 @@ export class BookRepository {
     });
   }
 
+  // ------------------------------------------------------------ annotations
+
+  /**
+   * Toutes les annotations d'un livre, en un aller-retour : le lecteur les
+   * réapplique page par page sans requêter à chaque tournage.
+   */
+  getBookAnnotations(editionId) {
+    return this.#guard('lecture des annotations', async () => {
+      const user = await this.#db.user();
+      return {
+        highlights: all(
+          user,
+          'SELECT * FROM highlights WHERE edition_id = ? ORDER BY page_id, start_offset',
+          [editionId],
+        ).map(highlight),
+        notes: all(
+          user,
+          'SELECT * FROM notes WHERE edition_id = ? ORDER BY created_at DESC',
+          [editionId],
+        ).map(note),
+        bookmarks: all(
+          user,
+          'SELECT * FROM bookmarks WHERE edition_id = ? ORDER BY page_id',
+          [editionId],
+        ).map(bookmark),
+      };
+    });
+  }
+
+  saveHighlight(input) {
+    return this.#guard("enregistrement d'un surlignage", async () => {
+      const text = String(input.selectedText ?? '').trim();
+      if (!text) throw new Error('surlignage sans texte');
+      const id = input.highlightId ?? randomUUID();
+      const now = new Date().toISOString();
+      await this.#db.writeUser((user) => {
+        user.run(
+          `INSERT INTO highlights
+             (highlight_id, edition_id, page_id, start_offset, end_offset,
+              selected_text, prefix_text, suffix_text, color, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(highlight_id) DO UPDATE SET
+             color        = excluded.color,
+             start_offset = excluded.start_offset,
+             end_offset   = excluded.end_offset`,
+          [
+            id,
+            input.editionId,
+            input.pageId,
+            input.startOffset ?? 0,
+            input.endOffset ?? 0,
+            text,
+            input.prefixText ?? null,
+            input.suffixText ?? null,
+            input.color ?? HIGHLIGHT_DEFAULT_COLOR,
+            now,
+          ],
+        );
+      });
+      const user = await this.#db.user();
+      return highlight(first(user, 'SELECT * FROM highlights WHERE highlight_id = ?', [id]));
+    });
+  }
+
+  /** Le surlignage part avec les notes qui ne commentaient que lui. */
+  deleteHighlight(highlightId) {
+    return this.#guard("suppression d'un surlignage", async () => {
+      await this.#db.writeUser((user) => {
+        user.run('DELETE FROM notes WHERE highlight_id = ?', [highlightId]);
+        user.run('DELETE FROM highlights WHERE highlight_id = ?', [highlightId]);
+      });
+    });
+  }
+
+  saveNote(input) {
+    return this.#guard("enregistrement d'une note", async () => {
+      const content = String(input.content ?? '').trim();
+      if (!content) throw new Error('note vide');
+      const id = input.noteId ?? randomUUID();
+      const now = new Date().toISOString();
+      await this.#db.writeUser((user) => {
+        user.run(
+          `INSERT INTO notes
+             (note_id, edition_id, page_id, highlight_id, content, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT(note_id) DO UPDATE SET
+             content      = excluded.content,
+             page_id      = COALESCE(excluded.page_id, notes.page_id),
+             highlight_id = COALESCE(excluded.highlight_id, notes.highlight_id),
+             updated_at   = excluded.updated_at`,
+          [
+            id,
+            input.editionId,
+            input.pageId ?? null,
+            input.highlightId ?? null,
+            content,
+            now,
+            now,
+          ],
+        );
+      });
+      const user = await this.#db.user();
+      return note(first(user, 'SELECT * FROM notes WHERE note_id = ?', [id]));
+    });
+  }
+
+  deleteNote(noteId) {
+    return this.#guard("suppression d'une note", async () => {
+      await this.#db.writeUser((user) => {
+        user.run('DELETE FROM notes WHERE note_id = ?', [noteId]);
+      });
+    });
+  }
+
+  /** Pose ou retire la marque-page de la page : le lecteur n'a qu'un bouton. */
+  toggleBookmark({ editionId, pageId, label = null, textOffset = null }) {
+    return this.#guard("bascule d'une marque-page", async () => {
+      const user = await this.#db.user();
+      const existing = first(
+        user,
+        'SELECT bookmark_id FROM bookmarks WHERE edition_id = ? AND page_id = ?',
+        [editionId, pageId],
+      );
+      if (existing) {
+        await this.#db.writeUser((db) => {
+          db.run('DELETE FROM bookmarks WHERE bookmark_id = ?', [existing.bookmark_id]);
+        });
+        return { added: false, bookmark: null };
+      }
+      const id = randomUUID();
+      await this.#db.writeUser((db) => {
+        db.run(
+          `INSERT INTO bookmarks (bookmark_id, edition_id, page_id, text_offset, label, created_at)
+           VALUES (?,?,?,?,?,?)`,
+          [id, editionId, pageId, textOffset, label, new Date().toISOString()],
+        );
+      });
+      const fresh = await this.#db.user();
+      return {
+        added: true,
+        bookmark: bookmark(first(fresh, 'SELECT * FROM bookmarks WHERE bookmark_id = ?', [id])),
+      };
+    });
+  }
+
+  deleteBookmark(bookmarkId) {
+    return this.#guard("suppression d'une marque-page", async () => {
+      await this.#db.writeUser((user) => {
+        user.run('DELETE FROM bookmarks WHERE bookmark_id = ?', [bookmarkId]);
+      });
+    });
+  }
+
+  /**
+   * Vue transversale des annotations, tous livres confondus, pour l'écran
+   * « ملاحظاتي ». Le filtre texte passe par `normalizeArabic` en mémoire : les
+   * volumes sont de l'ordre du millier, et un `LIKE` ignorerait les variantes de
+   * hamza que l'utilisateur a lui-même tapées.
+   */
+  getAnnotations({ kind = 'all', text = null, editionId = null, offset = 0, limit = 30 } = {}) {
+    return this.#guard('lecture des annotations', async () => {
+      const user = await this.#db.user();
+      const clause = editionId ? ' WHERE edition_id = ?' : '';
+      const params = editionId ? [editionId] : [];
+
+      const items = [];
+      if (kind === 'all' || kind === 'note') {
+        items.push(
+          ...all(user, `SELECT * FROM notes${clause}`, params).map((row) => ({
+            ...note(row),
+            kind: 'note',
+            sortKey: row.updated_at ?? row.created_at,
+            searchText: `${row.content}`,
+          })),
+        );
+      }
+      if (kind === 'all' || kind === 'highlight') {
+        items.push(
+          ...all(user, `SELECT * FROM highlights${clause}`, params).map((row) => ({
+            ...highlight(row),
+            kind: 'highlight',
+            sortKey: row.created_at,
+            searchText: row.selected_text,
+          })),
+        );
+      }
+      if (kind === 'all' || kind === 'bookmark') {
+        items.push(
+          ...all(user, `SELECT * FROM bookmarks${clause}`, params).map((row) => ({
+            ...bookmark(row),
+            kind: 'bookmark',
+            sortKey: row.created_at,
+            searchText: row.label ?? '',
+          })),
+        );
+      }
+
+      const needle = normalizeArabic(text ?? '');
+      const filtered = needle
+        ? items.filter((item) => normalizeArabic(item.searchText).includes(needle))
+        : items;
+      filtered.sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)));
+
+      const visible = filtered.slice(offset, offset + limit);
+      const titles = await this.#titlesFor(visible.map((item) => item.editionId));
+      // Une note peut commenter un surlignage : on rapproche les deux ici plutôt
+      // qu'en SQL, la page est déjà en mémoire.
+      const highlightsById = new Map(
+        all(user, 'SELECT * FROM highlights').map((row) => [row.highlight_id, highlight(row)]),
+      );
+
+      // Les compteurs des onglets ignorent le filtre de type : sinon l'onglet
+      // qu'on ne regarde pas annoncerait toujours zéro.
+      const countOf = (table) =>
+        first(user, `SELECT COUNT(*) AS n FROM ${table}${clause}`, params)?.n ?? 0;
+
+      return {
+        total: filtered.length,
+        counts: {
+          note: countOf('notes'),
+          highlight: countOf('highlights'),
+          bookmark: countOf('bookmarks'),
+        },
+        items: visible.map(({ searchText, sortKey, ...item }) => ({
+          ...item,
+          bookTitle: titles.get(item.editionId) ?? item.editionId,
+          highlight: item.highlightId ? highlightsById.get(item.highlightId) ?? null : null,
+        })),
+      };
+    });
+  }
+
+  /** Titres du catalogue pour un lot d'éditions ; les absentes sont ignorées. */
+  async #titlesFor(editionIds) {
+    const ids = [...new Set(editionIds.filter(Boolean))];
+    if (!ids.length) return new Map();
+    const catalog = await this.#db.catalog();
+    return new Map(
+      all(
+        catalog,
+        `SELECT edition_id, title_ar FROM editions
+          WHERE edition_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      ).map((row) => [row.edition_id, row.title_ar]),
+    );
+  }
+
+  // ------------------------------------------------- recherche transversale
+
+  /**
+   * Recherche le terme dans **tous les livres installés**, un par un.
+   *
+   * sql.js charge chaque livre entièrement en mémoire : un livre ouvert pour la
+   * seule recherche est refermé aussitôt, sinon parcourir la bibliothèque la
+   * ferait grossir sans fin. Les livres déjà ouverts (celui qu'on lit) restent
+   * en cache.
+   *
+   * [maxBooks] borne le balayage ; le compte réel est renvoyé pour que
+   * l'interface dise ce qui n'a pas été exploré plutôt que de le taire.
+   */
+  searchLibrary(term, { limit = 60, perBook = 5, maxBooks = 60 } = {}) {
+    return this.#guard('recherche dans la bibliothèque', async () => {
+      const needle = normalizeArabic(term ?? '');
+      if (needle.length < 2) {
+        return { results: [], total: 0, scanned: 0, installed: 0, skipped: 0, term: needle };
+      }
+
+      const installed = await this.#installedIds();
+      const scanning = installed.slice(0, maxBooks);
+      const titles = await this.#titlesFor(scanning);
+      const pattern = `%${needle.replace(/[\\%_]/g, '\\$&')}%`;
+      const marker = arabicSearchPattern(needle);
+
+      const results = [];
+      let total = 0;
+      for (const editionId of scanning) {
+        const wasOpen = this.#db.isBookOpen(editionId);
+        let book;
+        try {
+          book = await this.#db.book(editionId);
+        } catch {
+          continue; // fichier disparu entre le listage et la lecture
+        }
+        try {
+          const count =
+            first(book, `SELECT COUNT(*) AS n FROM pages WHERE body_search LIKE ? ESCAPE '\\'`, [
+              pattern,
+            ])?.n ?? 0;
+          if (!count) continue;
+          total += count;
+
+          const hits = all(
+            book,
+            `SELECT page_id, sequence_num, printed_page_num, body_plain
+               FROM pages WHERE body_search LIKE ? ESCAPE '\\'
+              ORDER BY sequence_num LIMIT ?`,
+            [pattern, perBook],
+          );
+          results.push({
+            editionId,
+            title: titles.get(editionId) ?? editionId,
+            matchCount: count,
+            pages: hits.map((row) => ({
+              pageId: row.page_id,
+              sequenceNum: row.sequence_num,
+              printedPageNum: row.printed_page_num ?? null,
+              snippet: snippetAround(row.body_plain, marker),
+            })),
+          });
+        } finally {
+          if (!wasOpen) this.#db.closeBook(editionId);
+        }
+        if (results.length >= limit) break;
+      }
+
+      results.sort((a, b) => b.matchCount - a.matchCount);
+      return {
+        results,
+        total,
+        scanned: scanning.length,
+        installed: installed.length,
+        skipped: Math.max(0, installed.length - scanning.length),
+        term: needle,
+      };
+    });
+  }
+
+  // ------------------------------------------------------ gestion des livres
+
+  /**
+   * Table de gestion des téléchargements : une page du catalogue enrichie de ce
+   * que la file et le disque savent. C'est la même requête que l'exploration —
+   * filtres, tri, pagination — plus la taille réellement occupée.
+   */
+  getManagedBooks(query = {}) {
+    return this.#guard('lecture des livres gérés', async () => {
+      const { books, total, bytes } = await this.exploreBooks({ limit: 25, ...query });
+      const user = await this.#db.user();
+      const ids = books.map((book) => book.editionId);
+
+      const stateById = new Map(
+        ids.length
+          ? all(
+              user,
+              `SELECT edition_id, download_status, downloaded_at, last_opened_at,
+                      progress_percent, current_sequence_num
+                 FROM downloaded_books WHERE edition_id IN (${ids.map(() => '?').join(',')})`,
+              ids,
+            ).map((row) => [row.edition_id, row])
+          : [],
+      );
+
+      const catalog = await this.#db.catalog();
+      const sizeById = new Map(
+        ids.length
+          ? all(
+              catalog,
+              `SELECT edition_id, compressed_size, uncompressed_size, page_count
+                 FROM book_releases
+                WHERE is_active = 1 AND edition_id IN (${ids.map(() => '?').join(',')})`,
+              ids,
+            ).map((row) => [row.edition_id, row])
+          : [],
+      );
+
+      const jobs = new Map((this.#downloads?.snapshot() ?? []).map((job) => [job.editionId, job]));
+      const booksDir = path.join(this.#db.root, 'books');
+
+      return {
+        total,
+        bytes,
+        rows: books.map((book) => {
+          const state = stateById.get(book.editionId) ?? {};
+          const size = sizeById.get(book.editionId) ?? {};
+          const job = jobs.get(book.editionId) ?? null;
+          let localBytes = 0;
+          try {
+            localBytes = fs.statSync(path.join(booksDir, `${book.editionId}.sqlite`)).size;
+          } catch {
+            localBytes = 0; // pas installé, ou effacé à la main
+          }
+          return {
+            ...book,
+            downloadStatus: job?.status ?? state.download_status ?? null,
+            percent: job?.percent ?? 0,
+            error: job?.error ?? null,
+            compressedSize: size.compressed_size ?? 0,
+            uncompressedSize: size.uncompressed_size ?? 0,
+            localBytes,
+            pageCount: book.pageCount ?? size.page_count ?? null,
+            downloadedAt: state.downloaded_at ?? null,
+            lastOpenedAt: state.last_opened_at ?? null,
+            progressPercent: state.progress_percent ?? 0,
+          };
+        }),
+      };
+    });
+  }
+
+  /** Supprime un lot de livres : la table de gestion agit sur une sélection. */
+  deleteBooks(editionIds = [], { keepProgress = true } = {}) {
+    return this.#guard('suppression des livres', async () => {
+      let removed = 0;
+      for (const editionId of editionIds) {
+        if (this.#downloads?.isBusy(editionId)) continue;
+        await this.deleteBook(editionId, { keepProgress });
+        removed += 1;
+      }
+      return removed;
+    });
+  }
+
   // --------------------------------------------------------------- réglages
 
   /** Efface tous les fichiers de livres, en conservant les progressions. */
@@ -1265,4 +1735,15 @@ export const REPOSITORY_METHODS = [
   'deleteAllBooks',
   'setDownloadBaseUrl',
   'getAbout',
+  'getBookAnnotations',
+  'getAnnotations',
+  'saveHighlight',
+  'deleteHighlight',
+  'saveNote',
+  'deleteNote',
+  'toggleBookmark',
+  'deleteBookmark',
+  'searchLibrary',
+  'getManagedBooks',
+  'deleteBooks',
 ];

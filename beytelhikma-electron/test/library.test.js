@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   AppDatabase,
   BookNotInstalledError,
+  USER_DB_SCHEMA_VERSION,
   all,
   resolveLibrarySource,
 } from '../src/main/app-database.js';
@@ -93,7 +94,10 @@ test('user.sqlite porte user_version, sinon sqflite refuse de l\'ouvrir', async 
   try {
     await database.initialize();
     const user = await database.user();
-    assert.equal(all(user, 'PRAGMA user_version')[0].user_version, 1);
+    assert.equal(
+      all(user, 'PRAGMA user_version')[0].user_version,
+      USER_DB_SCHEMA_VERSION,
+    );
   } finally {
     database.close();
     fs.rmSync(root, { recursive: true, force: true });

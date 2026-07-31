@@ -1,3 +1,4 @@
+import { describeSelection, paintHighlights } from '../annotations.js';
 import { renderBookHtml } from '../content-html.js';
 import { h } from '../dom.js';
 import { arabicNumber } from '../format.js';
@@ -5,6 +6,7 @@ import { icon } from '../icons.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
+import { confirmDialog, noteDialog, shortcutsDialog } from '../components/modal.js';
 import { errorView, loadingView } from '../components/states.js';
 import { arabicSearchPattern } from '../../../shared/arabic.js';
 
@@ -12,6 +14,12 @@ const PAGE_WINDOW = 20;
 const MIN_FONT = 16;
 const MAX_FONT = 34;
 const HINT_DELAY = 4000;
+
+/** Défilement continu : pages gardées de part et d'autre, et seuils de recharge. */
+const FLOW_KEEP = 40;
+const FLOW_STEP = 3;
+const NEAR_START = 600;
+const NEAR_END = 900;
 
 const THEMES = [
   { key: 'paper', label: 'رق إفتراضي', swatch: '#fbf9f4', dot: '#001614' },
@@ -28,11 +36,58 @@ const FONTS = [
   { key: 'sans', label: 'حديث (شاشة)', family: "'IBM Plex Sans Arabic', sans-serif" },
 ];
 
-const HIGHLIGHTS = ['#f2c744', '#e2604c', '#5fa877', '#5b8bd0'];
+/**
+ * Deux façons de parcourir un livre : la page imprimée, une par écran — c'est
+ * le défaut, et c'est ce que le corpus décrit — ou le fil continu, où les pages
+ * s'enchaînent et où le pied de page ne fait plus que séparer.
+ */
+const MODES = [
+  { key: 'page', label: 'صفحة صفحة', hint: 'كما في المطبوع', icon: 'book' },
+  { key: 'scroll', label: 'تمرير متصل', hint: 'الصفحات تتوالى', icon: 'rows' },
+];
 
 /**
- * Lecteur : une page imprimée par écran, sélection de texte native, taille de
- * police réglable, ambiances, progression écrite dans `user.sqlite`.
+ * Palette « Serene Heritage » : les quatre teintes sortent des jetons du
+ * projet (or antique, émeraude, argile, graphite) plutôt que d'un nuancier de
+ * surligneur. Posées à faible opacité, elles teintent le fond sans jamais
+ * toucher l'encre — le texte garde son contraste dans les trois ambiances.
+ */
+const HIGHLIGHTS = [
+  { color: '#d9b26a', label: 'ذهبي' },
+  { color: '#6a9e88', label: 'زمردي' },
+  { color: '#c58a6b', label: 'طيني' },
+  { color: '#8f9aa6', label: 'حجري' },
+];
+
+/** Onglets du panneau « ملاحظاتي » : le même vocabulaire que l'écran global. */
+const ANNOTATION_KINDS = [
+  { value: 'all', label: 'الكل', icon: 'notes' },
+  { value: 'highlight', label: 'تظليل', icon: 'highlight' },
+  { value: 'note', label: 'ملاحظات', icon: 'noteAdd' },
+  { value: 'bookmark', label: 'علامات', icon: 'bookmark' },
+];
+
+const SHORTCUTS = [
+  { keys: ['←'], label: 'الصفحة التالية' },
+  { keys: ['→'], label: 'الصفحة السابقة' },
+  { keys: ['Page ↓', 'Page ↑'], sep: '/', label: 'تنقّل بالصفحات' },
+  { keys: ['Home', 'End'], sep: '/', label: 'أول الكتاب / آخره' },
+  { keys: ['Ctrl', '+'], label: 'تكبير الخط' },
+  { keys: ['Ctrl', '−'], label: 'تصغير الخط' },
+  { keys: ['Ctrl', 'عجلة الفأرة'], label: 'حجم الخط' },
+  { keys: ['Ctrl', 'F'], label: 'بحث في الكتاب' },
+  { keys: ['B'], label: 'إشارة مرجعية على هذه الصفحة' },
+  { keys: ['N'], label: 'لوحة ملاحظاتي' },
+  { keys: ['C'], label: 'فهرس المحتويات' },
+  { keys: ['V'], label: 'تبديل نمط القراءة (صفحة / تمرير)' },
+  { keys: ['F11'], label: 'ملء الشاشة' },
+  { keys: ['؟'], label: 'هذه اللائحة' },
+  { keys: ['Esc'], label: 'إغلاق أو الخروج' },
+];
+
+/**
+ * Lecteur : page imprimée par écran ou fil continu, sélection de texte native,
+ * taille de police réglable, ambiances, progression écrite dans `user.sqlite`.
  * Disposition et jeu d'icônes calqués sur `ui-examples/reader V2.html`.
  */
 export function readerView(host, params) {
@@ -51,12 +106,36 @@ class Reader {
   #index = 0;
   #toc = [];
   #title = '';
-  #prefs = { size: 22, theme: 'paper', font: 'serif' };
+  #prefs = { size: 22, theme: 'paper', font: 'serif', mode: 'page' };
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
   /** Motif du terme cherché, réappliqué à chaque page affichée. */
   #highlight = null;
+  /** Annotations du livre entier, chargées une fois puis tenues à jour. */
+  #annotations = { highlights: [], notes: [], bookmarks: [] };
+  /** Onglet courant du panneau des annotations. */
+  #annotationKind = 'all';
+  /**
+   * Pages montées à l'écran, par position dans le livre. En mode page il n'y en
+   * a qu'une ; en mode timer continu, une tranche glissante autour de la lecture.
+   */
+  #blocks = new Map();
+  #first = 0;
+  #last = -1;
+  /** Une seule extension du fil à la fois, sinon les bornes se marchent dessus. */
+  #extending = false;
+  /** Page affichée, pour ancrer une annotation sans la rechercher. */
+  #page = null;
+  /**
+   * Sélection décrite au moment où elle est faite : cliquer dans le menu la
+   * défait, il est trop tard pour la mesurer. La page est retenue avec, car en
+   * fil continu la sélection n'est pas forcément sur la page courante.
+   */
+  #pendingSelection = null;
+  #pendingPage = null;
+  /** Ferme la fiche des raccourcis, tant qu'elle est ouverte. */
+  #closeShortcuts = null;
   #keyHandler = (event) => this.#onKey(event);
   #fullscreenHandler = () => this.#syncFullscreen();
 
@@ -76,12 +155,16 @@ class Reader {
         return;
       }
 
-      const [count, toc, saved, prefs] = await Promise.all([
+      const [count, toc, saved, prefs, annotations] = await Promise.all([
         repository.getPageCount(this.#editionId),
         repository.getToc(this.#editionId).catch(() => []),
         repository.getProgress(this.#editionId),
         settings(),
+        repository
+          .getBookAnnotations(this.#editionId)
+          .catch(() => ({ highlights: [], notes: [], bookmarks: [] })),
       ]);
+      this.#annotations = annotations;
 
       this.#title = detail.summary.title;
       this.#pageCount = count;
@@ -90,6 +173,9 @@ class Reader {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
         theme: prefs['reader.theme'] ?? 'paper',
         font: prefs['reader.font'] ?? 'serif',
+        mode: MODES.some((mode) => mode.key === prefs['reader.mode'])
+          ? prefs['reader.mode']
+          : 'page',
       };
 
       let index = (saved?.sequenceNum ?? 1) - 1;
@@ -121,39 +207,41 @@ class Reader {
     document.removeEventListener('fullscreenchange', this.#fullscreenHandler);
     clearTimeout(this.#saveTimer);
     clearTimeout(this.#hintTimer);
+    this.#closeShortcuts?.();
+    this.#closeShortcuts = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
   // ------------------------------------------------------------- structure
 
   #build() {
-    // --- la page elle-même : entête discret, chapitre, texte, pied de page ---
-    const page = h('article', { class: 'reader__page' });
-    const footnotes = h('aside', { class: 'reader__footnotes' });
-    const chapter = h('h2', { class: 'reader__chapter' });
+    // --- la page elle-même : entête discret, puis le fil des pages montées ---
     const pageHead = h(
       'div',
       { class: 'reader__page-head' },
       h('p', { class: 'headline-md' }, this.#title),
       h('span', { class: 'reader__hairline' }),
     );
-    const pageFoot = h('div', { class: 'reader__page-foot label-sm' });
+    const flow = h('div', { class: 'reader__flow' });
 
-    const scroll = h(
-      'div',
-      { class: 'reader__scroll no-scrollbar' },
-      pageHead,
-      chapter,
-      page,
-      footnotes,
-      pageFoot,
-    );
+    const scroll = h('div', { class: 'reader__scroll no-scrollbar' }, pageHead, flow);
 
     // --- barre haute : outils à droite (départ RTL), titre et fermeture à gauche ---
-    const tool = (name, title, onclick) =>
-      h('button', { class: 'reader__tool', title, onclick }, icon(name, { size: 20 }));
+    // `data-tool` est le point d'accroche stable des captures et des tests :
+    // les infobulles portent maintenant leur raccourci, elles bougent.
+    const tool = (key, name, title, onclick) =>
+      h(
+        'button',
+        { class: 'reader__tool', 'data-tool': key, title, onclick },
+        icon(name, { size: 20 }),
+      );
 
-    const fullscreenButton = tool('fullscreen', 'ملء الشاشة', () => this.#toggleFullscreen());
+    const fullscreenButton = tool('fullscreen', 'fullscreen', 'ملء الشاشة', () =>
+      this.#toggleFullscreen(),
+    );
+    const bookmarkButton = tool('bookmark', 'bookmark', 'إشارة مرجعية (B)', () =>
+      this.#toggleBookmark(),
+    );
 
     const header = h(
       'header',
@@ -164,19 +252,21 @@ class Reader {
         h(
           'div',
           { class: 'reader__tools' },
-          tool('moreVertical', 'خيارات أخرى', () => toast('خيارات إضافية قيد الإنجاز')),
-          tool('help', 'اختصارات القراءة', () => this.#showShortcuts()),
-          tool('bookmark', 'إشارة مرجعية', () => toast('الإشارات المرجعية قيد الإنجاز')),
-          tool('bookOpen', 'فهرس المحتويات', () => this.#togglePanel('toc')),
-          tool('formatSize', 'إعدادات القراءة', () => this.#togglePanel('settings')),
-          tool('search', 'بحث في الكتاب', () => this.#togglePanel('search')),
+          tool('help', 'help', 'اختصارات القراءة (؟)', () => this.#showShortcuts()),
+          tool('annotations', 'notes', 'ملاحظاتي في هذا الكتاب (N)', () =>
+            this.#togglePanel('annotations'),
+          ),
+          bookmarkButton,
+          tool('toc', 'bookOpen', 'فهرس المحتويات (C)', () => this.#togglePanel('toc')),
+          tool('settings', 'formatSize', 'إعدادات القراءة', () => this.#togglePanel('settings')),
+          tool('search', 'search', 'بحث في الكتاب (Ctrl+F)', () => this.#togglePanel('search')),
           fullscreenButton,
         ),
         h(
           'div',
           { class: 'reader__titles' },
           h('h1', { class: 'truncate' }, this.#title),
-          tool('close', 'العودة للمكتبة', () => back()),
+          tool('close', 'close', 'العودة للمكتبة', () => back()),
         ),
       ),
     );
@@ -192,8 +282,8 @@ class Reader {
       oninput: (event) => this.#show(Number(event.target.value) - 1),
     });
 
-    const previous = tool('chevronRight', 'الصفحة السابقة', () => this.#move(-1));
-    const next = tool('chevronLeft', 'الصفحة التالية', () => this.#move(1));
+    const previous = tool('previous', 'chevronRight', 'الصفحة السابقة', () => this.#move(-1));
+    const next = tool('next', 'chevronLeft', 'الصفحة التالية', () => this.#move(1));
     const pagerLabel = h('span', { class: 'reader__pager-label label-md' });
     const percent = h('span', { class: 'reader__percent label-sm' });
 
@@ -220,12 +310,15 @@ class Reader {
     const panel = this.#settingsPanel(refs);
     const tocPanel = this.#tocPanel();
     const searchPanel = this.#searchPanel(refs);
+    const annotationsPanel = this.#annotationsPanel(refs);
     const selection = this.#selectionMenu();
 
     const root = h(
       'div',
       {
-        class: `reader reader--${this.#prefs.theme} reader--font-${this.#prefs.font}`,
+        class:
+          `reader reader--${this.#prefs.theme} reader--font-${this.#prefs.font}` +
+          ` reader--${this.#prefs.mode}`,
         style: { '--reader-size': `${this.#prefs.size}px` },
       },
       header,
@@ -235,6 +328,7 @@ class Reader {
       panel,
       tocPanel,
       searchPanel,
+      annotationsPanel,
       selection,
     );
 
@@ -245,10 +339,8 @@ class Reader {
 
     this.#nodes = {
       root,
-      page,
-      footnotes,
-      chapter,
-      pageFoot,
+      flow,
+      pageHead,
       pagerLabel,
       percent,
       slider,
@@ -261,8 +353,10 @@ class Reader {
       panel,
       tocPanel,
       searchPanel,
+      annotationsPanel,
       selection,
       fullscreenButton,
+      bookmarkButton,
       lastScroll: 0,
       ...refs,
     };
@@ -292,6 +386,24 @@ class Reader {
       ),
     );
 
+    const modeButtons = MODES.map((mode) =>
+      h(
+        'button',
+        {
+          class: mode.key === this.#prefs.mode ? 'is-active' : '',
+          title: mode.hint,
+          onclick: () => this.#setMode(mode.key),
+        },
+        icon(mode.icon, { size: 18 }),
+        h(
+          'span',
+          {},
+          h('span', { class: 'label-md' }, mode.label),
+          h('span', { class: 'label-sm muted' }, mode.hint),
+        ),
+      ),
+    );
+
     const fontButtons = FONTS.map((font) =>
       h(
         'button',
@@ -304,7 +416,7 @@ class Reader {
       ),
     );
 
-    Object.assign(refs, { sizeValue, sizeSlider, themeButtons, fontButtons });
+    Object.assign(refs, { sizeValue, sizeSlider, themeButtons, fontButtons, modeButtons });
 
     return h(
       'aside',
@@ -326,6 +438,12 @@ class Reader {
       h(
         'div',
         { class: 'reader__panel-body' },
+        h(
+          'div',
+          {},
+          h('label', { class: 'label-md' }, 'نمط القراءة'),
+          h('div', { class: 'mode-choices' }, modeButtons),
+        ),
         h(
           'div',
           {},
@@ -399,6 +517,398 @@ class Reader {
       ),
       h('div', { class: 'reader__panel-body reader__toc-list' }, body),
     );
+  }
+
+  /**
+   * Panneau des annotations du livre : surlignages, notes et marques-pages,
+   * dans l'ordre des pages. Il se redessine à chaque écriture plutôt que d'être
+   * reconstruit — le panneau peut rester ouvert pendant qu'on annote.
+   */
+  #annotationsPanel(refs) {
+    const tabs = h('div', { class: 'reader__annotation-tabs' });
+    const list = h('div', { class: 'reader__panel-body reader__annotations' });
+    refs.annotationsList = list;
+    refs.annotationsTabs = tabs;
+
+    return h(
+      'aside',
+      { class: 'reader__annotations-panel reader__panel' },
+      h(
+        'div',
+        { class: 'reader__panel-head' },
+        h('h2', { class: 'title-md' }, 'ملاحظاتي'),
+        h(
+          'button',
+          { class: 'reader__tool', title: 'إغلاق', onclick: () => this.#closePanels() },
+          icon('close', { size: 20 }),
+        ),
+      ),
+      tabs,
+      list,
+    );
+  }
+
+  /** Toutes les annotations du livre, page par page, dans un seul flux. */
+  #drawAnnotations() {
+    const list = this.#nodes.annotationsList;
+    if (!list) return;
+
+    const notesByHighlight = new Map(
+      this.#annotations.notes
+        .filter((note) => note.highlightId)
+        .map((note) => [note.highlightId, note]),
+    );
+
+    const entries = [
+      ...this.#annotations.highlights.map((highlight) => ({
+        kind: 'highlight',
+        pageId: highlight.pageId,
+        highlight,
+        note: notesByHighlight.get(highlight.highlightId) ?? null,
+      })),
+      ...this.#annotations.notes
+        .filter((note) => !note.highlightId)
+        .map((note) => ({ kind: 'note', pageId: note.pageId, note })),
+      ...this.#annotations.bookmarks.map((bookmark) => ({
+        kind: 'bookmark',
+        pageId: bookmark.pageId,
+        bookmark,
+      })),
+    ].sort((a, b) => (a.pageId ?? 0) - (b.pageId ?? 0));
+
+    this.#drawAnnotationTabs(entries);
+
+    // Un surlignage commenté compte pour les deux onglets : c'est la même
+    // chose vue de deux côtés, la cacher sous « ملاحظات » serait un piège.
+    const shown = entries.filter((entry) => {
+      if (this.#annotationKind === 'all') return true;
+      if (this.#annotationKind === 'note') return Boolean(entry.note ?? entry.kind === 'note');
+      return entry.kind === this.#annotationKind;
+    });
+
+    if (!shown.length) {
+      list.replaceChildren(
+        h(
+          'p',
+          { class: 'label-md muted' },
+          entries.length
+            ? 'لا شيء من هذا النوع في هذا الكتاب.'
+            : 'لا ملاحظات بعد. حدِّد نصًّا في الصفحة لتظليله أو للتعليق عليه.',
+        ),
+      );
+      return;
+    }
+
+    list.replaceChildren(...shown.map((entry) => this.#annotationCard(entry)));
+  }
+
+  #drawAnnotationTabs(entries) {
+    const tabs = this.#nodes.annotationsTabs;
+    if (!tabs) return;
+
+    const counts = {
+      all: entries.length,
+      highlight: entries.filter((entry) => entry.kind === 'highlight').length,
+      note: entries.filter((entry) => Boolean(entry.note) || entry.kind === 'note').length,
+      bookmark: entries.filter((entry) => entry.kind === 'bookmark').length,
+    };
+
+    tabs.replaceChildren(
+      ...ANNOTATION_KINDS.map((kind) =>
+        h(
+          'button',
+          {
+            class: `reader__annotation-tab${kind.value === this.#annotationKind ? ' is-active' : ''}`,
+            title: kind.label,
+            onclick: () => {
+              this.#annotationKind = kind.value;
+              this.#drawAnnotations();
+            },
+          },
+          icon(kind.icon, { size: 16 }),
+          h('span', { class: 'label-sm' }, arabicNumber(counts[kind.value] ?? 0)),
+        ),
+      ),
+    );
+  }
+
+  /** Une entrée du panneau : ce qu'on a marqué, où, et de quoi l'amender. */
+  #annotationCard(entry) {
+    const open = () => entry.pageId != null && this.#goToPage(entry.pageId);
+    const actions = h('div', { class: 'reader__annotation-actions' });
+    const color = entry.highlight?.color ?? null;
+
+    if (entry.kind === 'bookmark') {
+      actions.append(
+        this.#annotationAction('trash', 'حذف', async () => {
+          try {
+            await repository.deleteBookmark(entry.bookmark.bookmarkId);
+          } catch (error) {
+            toast(error?.message ?? 'تعذّر حذف الإشارة');
+            return;
+          }
+          this.#annotations.bookmarks = this.#annotations.bookmarks.filter(
+            (item) => item.bookmarkId !== entry.bookmark.bookmarkId,
+          );
+          this.#afterAnnotationChange();
+        }),
+      );
+    } else if (entry.kind === 'highlight') {
+      actions.append(
+        this.#annotationAction('noteAdd', entry.note ? 'تعديل الملاحظة' : 'إضافة ملاحظة', () =>
+          this.#editNote(entry.highlight, entry.note),
+        ),
+        this.#annotationAction('trash', 'حذف التظليل', () =>
+          this.#removeHighlight(entry.highlight),
+        ),
+      );
+    } else {
+      actions.append(
+        this.#annotationAction('noteAdd', 'تعديل', () => this.#editNote(null, entry.note)),
+        this.#annotationAction('trash', 'حذف', () => this.#removeNote(entry.note)),
+      );
+    }
+
+    // Entête : de quoi il s'agit, puis la page — la même grammaire pour les
+    // trois types, pour qu'une liste mêlée se lise d'un coup d'œil.
+    const head = h(
+      'div',
+      { class: 'reader__annotation-head' },
+      color
+        ? h('span', { class: 'reader__annotation-dot', style: { background: color } })
+        : icon(entry.kind === 'bookmark' ? 'bookmark' : 'noteAdd', { size: 14 }),
+      h(
+        'span',
+        { class: 'label-sm' },
+        entry.kind === 'bookmark' ? 'علامة' : entry.note ? 'ملاحظة' : 'تظليل',
+      ),
+      h('span', { class: 'reader__annotation-page label-sm' }, this.#pageLabelFor(entry.pageId)),
+    );
+
+    const body =
+      entry.kind === 'bookmark'
+        ? h('p', { class: 'body-md' }, entry.bookmark.label ?? 'موضع محفوظ')
+        : h(
+            'div',
+            { class: 'reader__annotation-text' },
+            entry.highlight &&
+              h(
+                'p',
+                {
+                  class: 'reader__annotation-quote',
+                  style: { '--highlight-color': entry.highlight.color },
+                },
+                entry.highlight.selectedText,
+              ),
+            entry.note && h('p', { class: 'body-md' }, entry.note.content),
+          );
+
+    return h(
+      'article',
+      { class: `reader__annotation is-${entry.kind}` },
+      h('button', { class: 'reader__annotation-open', onclick: open }, head, body),
+      actions,
+    );
+  }
+
+  #annotationAction(name, title, onclick) {
+    return h(
+      'button',
+      { class: 'button--icon', title, 'aria-label': title, onclick },
+      icon(name, { size: 18 }),
+    );
+  }
+
+  /**
+   * Numéro affichable d'une page à partir de son identifiant. Le sommaire porte
+   * déjà la correspondance ; `pageId` lui-même ne se montre jamais.
+   */
+  #pageLabelFor(pageId) {
+    if (pageId == null) return '';
+    const entry = this.#toc.find((item) => item.pageId === pageId);
+    const printed = entry?.printedPageNum ?? entry?.pageSequenceNum;
+    if (printed != null) return `ص ${arabicNumber(printed)}`;
+    const cached = [...this.#pages.values()].find((page) => page.pageId === pageId);
+    const number = cached?.printedPageNum ?? cached?.sequenceNum;
+    return number == null ? '' : `ص ${arabicNumber(number)}`;
+  }
+
+  // ----------------------------------------------------------- annotations
+
+  /** Surlignages d'une page, marqués s'ils portent une note. */
+  #highlightsFor(pageId) {
+    const noted = new Set(
+      this.#annotations.notes.map((note) => note.highlightId).filter(Boolean),
+    );
+    return this.#annotations.highlights
+      .filter((highlight) => highlight.pageId === pageId)
+      .map((highlight) => ({ ...highlight, hasNote: noted.has(highlight.highlightId) }));
+  }
+
+  /** Redessine les pages montées et le panneau après toute écriture. */
+  #afterAnnotationChange() {
+    this.#drawAnnotations();
+    this.#syncBookmark();
+    for (const block of this.#blocks.values()) this.#paintBlock(block);
+  }
+
+  /** Repeint le contenu d'une page montée : recherche puis annotations. */
+  #paintBlock(block) {
+    block.body.replaceChildren(renderBookHtml(block.page.bodyHtml));
+    this.#applyHighlight(block.body);
+    paintHighlights(block.body, this.#highlightsFor(block.page.pageId), {
+      onClick: (highlight) => this.#openHighlight(highlight),
+    });
+  }
+
+  /** Clic sur un passage surligné : sa note, sinon l'occasion d'en écrire une. */
+  #openHighlight(highlight) {
+    const note = this.#annotations.notes.find(
+      (item) => item.highlightId === highlight.highlightId,
+    );
+    this.#editNote(highlight, note ?? null);
+  }
+
+  async #addHighlight(color) {
+    const selected = this.#pendingSelection;
+    const page = this.#pendingPage;
+    this.#hideSelection();
+    if (!selected || !page) return null;
+
+    try {
+      const saved = await repository.saveHighlight({
+        editionId: this.#editionId,
+        pageId: page.pageId,
+        ...selected,
+        color,
+      });
+      this.#annotations.highlights = [
+        ...this.#annotations.highlights.filter((item) => item.highlightId !== saved.highlightId),
+        saved,
+      ];
+      this.#afterAnnotationChange();
+      return saved;
+    } catch (error) {
+      toast(error?.message ?? 'تعذّر حفظ التظليل');
+      return null;
+    }
+  }
+
+  /**
+   * Écrit ou modifie une note. Une note attachée à un surlignage disparaît avec
+   * lui ; une note de page vit seule.
+   */
+  async #editNote(highlight, existing) {
+    const content = await noteDialog({
+      title: existing ? 'تعديل الملاحظة' : 'إضافة ملاحظة',
+      quote: highlight?.selectedText ?? null,
+      value: existing?.content ?? '',
+      canDelete: Boolean(existing),
+    });
+    if (content === null) return;
+    if (content === '') {
+      if (existing) await this.#removeNote(existing);
+      return;
+    }
+
+    try {
+      const saved = await repository.saveNote({
+        noteId: existing?.noteId ?? null,
+        editionId: this.#editionId,
+        pageId: highlight?.pageId ?? existing?.pageId ?? this.#page?.pageId ?? null,
+        highlightId: highlight?.highlightId ?? existing?.highlightId ?? null,
+        content,
+      });
+      this.#annotations.notes = [
+        ...this.#annotations.notes.filter((note) => note.noteId !== saved.noteId),
+        saved,
+      ];
+      this.#afterAnnotationChange();
+      toast('حُفظت الملاحظة');
+    } catch (error) {
+      toast(error?.message ?? 'تعذّر حفظ الملاحظة');
+    }
+  }
+
+  async #removeNote(note) {
+    try {
+      await repository.deleteNote(note.noteId);
+    } catch (error) {
+      toast(error?.message ?? 'تعذّر حذف الملاحظة');
+      return;
+    }
+    this.#annotations.notes = this.#annotations.notes.filter(
+      (item) => item.noteId !== note.noteId,
+    );
+    this.#afterAnnotationChange();
+  }
+
+  async #removeHighlight(highlight) {
+    const hasNote = this.#annotations.notes.some(
+      (note) => note.highlightId === highlight.highlightId,
+    );
+    if (hasNote) {
+      const choice = await confirmDialog({
+        title: 'حذف التظليل؟',
+        message: 'الملاحظة المرتبطة به ستُحذف أيضًا.',
+        actions: [{ value: 'go', label: 'حذف', variant: 'danger' }],
+      });
+      if (choice !== 'go') return;
+    }
+    try {
+      await repository.deleteHighlight(highlight.highlightId);
+    } catch (error) {
+      toast(error?.message ?? 'تعذّر حذف التظليل');
+      return;
+    }
+    this.#annotations.highlights = this.#annotations.highlights.filter(
+      (item) => item.highlightId !== highlight.highlightId,
+    );
+    this.#annotations.notes = this.#annotations.notes.filter(
+      (note) => note.highlightId !== highlight.highlightId,
+    );
+    this.#afterAnnotationChange();
+  }
+
+  async #toggleBookmark() {
+    if (!this.#page) return;
+    const page = this.#page;
+    try {
+      const result = await repository.toggleBookmark({
+        editionId: this.#editionId,
+        pageId: page.pageId,
+        label: this.#chapterFor(page) ?? `ص ${arabicNumber(page.printedPageNum ?? page.sequenceNum)}`,
+      });
+      this.#annotations.bookmarks = result.added
+        ? [...this.#annotations.bookmarks, result.bookmark]
+        : this.#annotations.bookmarks.filter((item) => item.pageId !== page.pageId);
+      this.#afterAnnotationChange();
+      toast(result.added ? 'أُضيفت إشارة مرجعية' : 'أُزيلت الإشارة المرجعية');
+    } catch (error) {
+      toast(error?.message ?? 'تعذّر حفظ الإشارة');
+    }
+  }
+
+  #isBookmarked(pageId) {
+    return this.#annotations.bookmarks.some((item) => item.pageId === pageId);
+  }
+
+  /**
+   * L'icône dit si la page courante porte une marque, et chaque page montée
+   * arbore son signet : sans repère dans le texte, le bouton avait l'air de
+   * ne rien faire.
+   */
+  #syncBookmark() {
+    for (const block of this.#blocks.values()) {
+      block.root.classList.toggle('is-bookmarked', this.#isBookmarked(block.page.pageId));
+    }
+
+    const button = this.#nodes.bookmarkButton;
+    if (!button || !this.#page) return;
+    const marked = this.#isBookmarked(this.#page.pageId);
+    button.classList.toggle('is-active', marked);
+    button.replaceChildren(icon('bookmark', { size: 20, fill: marked }));
+    button.title = marked ? 'إزالة الإشارة المرجعية (B)' : 'إشارة مرجعية (B)';
   }
 
   /**
@@ -524,7 +1034,9 @@ class Reader {
         if (match.index > cursor) {
           fragment.append(document.createTextNode(text.slice(cursor, match.index)));
         }
-        fragment.append(h('mark', {}, match[0]));
+        // Classé : sans cela le fond de recherche l'emporterait, par
+        // spécificité, sur la couleur choisie pour un surlignage.
+        fragment.append(h('mark', { class: 'reader__match' }, match[0]));
         cursor = match.index + match[0].length;
         // Un motif capable de correspondre au vide bouclerait sans fin.
         if (match[0].length === 0) this.#highlight.lastIndex += 1;
@@ -548,34 +1060,43 @@ class Reader {
     return h(
       'aside',
       { class: 'reader__selection' },
-      item('noteAdd', 'إضافة ملاحظة', () => {
-        toast('الملاحظات قيد الإنجاز');
-        this.#hideSelection();
+      // Une note sans surlignage flotterait sans ancre : on pose d'abord le
+      // passage, puis on écrit dessus.
+      item('noteAdd', 'إضافة ملاحظة', async () => {
+        const highlight = await this.#addHighlight(HIGHLIGHTS[0].color);
+        if (highlight) this.#editNote(highlight, null);
       }),
       item('copy', 'نسخ', () => this.#copySelection()),
       item('translate', 'ترجمة', () => {
         toast('الترجمة قيد الإنجاز');
         this.#hideSelection();
       }),
-      item('search', 'بحث في الكتاب', () => {
-        toast('البحث قيد الإنجاز');
-        this.#hideSelection();
-      }),
+      item('search', 'بحث في الكتاب', () => this.#searchSelection()),
       h(
         'div',
         { class: 'reader__highlights' },
-        HIGHLIGHTS.map((color) =>
+        HIGHLIGHTS.map((entry) =>
           h('button', {
-            title: 'تظليل',
-            style: { background: color },
-            onclick: () => {
-              toast('التظليل قيد الإنجاز');
-              this.#hideSelection();
-            },
+            title: `تظليل ${entry.label}`,
+            'aria-label': `تظليل ${entry.label}`,
+            style: { background: entry.color },
+            onclick: () => this.#addHighlight(entry.color),
           }),
         ),
       ),
     );
+  }
+
+  /** Le texte sélectionné devient le terme cherché, panneau ouvert. */
+  #searchSelection() {
+    const term = this.#pendingSelection?.selectedText?.trim() ?? '';
+    this.#hideSelection();
+    if (!term) return;
+    if (!this.#nodes.searchPanel.classList.contains('is-open')) this.#togglePanel('search');
+    const field = this.#nodes.searchField;
+    if (!field) return;
+    field.value = term;
+    field.dispatchEvent(new Event('input'));
   }
 
   // ---------------------------------------------------------------- pages
@@ -591,49 +1112,232 @@ class Reader {
     return this.#pages.get(index) ?? null;
   }
 
-  async #show(index, { save = true } = {}) {
-    const bounded = clamp(index, 0, Math.max(0, this.#pageCount - 1));
-    this.#index = bounded;
-    const page = await this.#pageAt(bounded);
-    if (!page) return;
+  /**
+   * Monte une page : titre de chapitre quand il change, corps, notes de bas de
+   * page, puis le pied imprimé — qui sert aussi de séparateur en fil continu.
+   */
+  #makeBlock(index, page) {
+    const body = h('article', { class: 'reader__page' });
+    const footnotes = h('aside', { class: 'reader__footnotes' });
+    const chapter = h('h2', { class: 'reader__chapter' });
+    const foot = h('div', { class: 'reader__page-foot label-sm' });
+    const ribbon = h(
+      'span',
+      { class: 'reader__block-mark', title: 'صفحة معلَّمة', 'aria-hidden': 'true' },
+      icon('bookmark', { size: 16, fill: true }),
+    );
 
-    const { page: pageNode, footnotes, chapter, pageFoot, slider } = this.#nodes;
-    pageNode.replaceChildren(renderBookHtml(page.bodyHtml));
-    this.#applyHighlight(pageNode);
+    const root = h(
+      'section',
+      { class: 'reader__block', 'data-index': String(index) },
+      ribbon,
+      chapter,
+      body,
+      footnotes,
+      foot,
+    );
+
+    const block = { index, page, root, body, chapter, footnotes, foot };
+
+    // Le titre de chapitre ne se répète pas d'une page à l'autre dans le fil :
+    // il n'annonce que ce qui commence.
+    const title = this.#chapterFor(page);
+    const previous = this.#pages.get(index - 1);
+    const repeated =
+      this.#prefs.mode === 'scroll' && previous && this.#chapterFor(previous) === title;
+    chapter.textContent = title ?? '';
+    chapter.style.display = title && !repeated ? '' : 'none';
 
     if (page.footnotes) {
       footnotes.replaceChildren(document.createTextNode(page.footnotes));
-      footnotes.style.display = '';
     } else {
-      footnotes.replaceChildren();
       footnotes.style.display = 'none';
     }
 
-    const title = this.#chapterFor(page);
-    chapter.textContent = title ?? '';
-    chapter.style.display = title ? '' : 'none';
-    slider.value = String(bounded + 1);
-
-    // `printed` est le numéro imprimé dans l'édition papier, `bounded` la
+    // `printed` est le numéro imprimé dans l'édition papier, `index` la
     // position dans le fichier : les deux diffèrent presque toujours, on ne
     // les mélange donc jamais dans un même « N sur M ».
     const printed = page.printedPageNum ?? page.sequenceNum;
-    pageFoot.textContent =
-      `صفحة ${arabicNumber(bounded + 1)} من ${arabicNumber(this.#pageCount)}` +
+    foot.textContent =
+      `صفحة ${arabicNumber(index + 1)} من ${arabicNumber(this.#pageCount)}` +
       ` · المطبوعة ${arabicNumber(printed)}`;
+
+    root.classList.toggle('is-bookmarked', this.#isBookmarked(page.pageId));
+    this.#paintBlock(block);
+    return block;
+  }
+
+  // ------------------------------------------------------------- affichage
+
+  #show(index, options = {}) {
+    const bounded = clamp(index, 0, Math.max(0, this.#pageCount - 1));
+    return this.#prefs.mode === 'scroll'
+      ? this.#showInFlow(bounded, options)
+      : this.#showAlone(bounded, options);
+  }
+
+  /** Mode page : une page monte, l'ancienne s'en va. */
+  async #showAlone(index, { save = true } = {}) {
+    const page = await this.#pageAt(index);
+    if (!page) return;
+
+    const block = this.#makeBlock(index, page);
+    this.#blocks = new Map([[index, block]]);
+    this.#first = index;
+    this.#last = index;
+    this.#nodes.flow.replaceChildren(block.root);
+    this.#nodes.scroll.scrollTop = 0;
+    this.#nodes.lastScroll = 0;
+    this.#setCurrent(index, page, { save });
+  }
+
+  /**
+   * Mode fil continu : si la page demandée est déjà montée on s'y rend, sinon
+   * on repart d'elle. Le fil reste borné — `FLOW_KEEP` pages autour de la
+   * lecture — parce que sql.js tient tout le livre en mémoire et qu'un fil sans
+   * fin ferait enfler la page autant que le processus.
+   */
+  async #showInFlow(index, { save = true, jump = true } = {}) {
+    const known = this.#blocks.get(index);
+    if (!known) {
+      const page = await this.#pageAt(index);
+      if (!page) return;
+      const block = this.#makeBlock(index, page);
+      this.#blocks = new Map([[index, block]]);
+      this.#first = index;
+      this.#last = index;
+      this.#nodes.flow.replaceChildren(block.root);
+      this.#nodes.scroll.scrollTop = 0;
+      this.#nodes.lastScroll = 0;
+      this.#setCurrent(index, page, { save });
+      await this.#fill();
+      return;
+    }
+
+    if (jump) {
+      const scroll = this.#nodes.scroll;
+      scroll.scrollTop += known.root.getBoundingClientRect().top
+        - scroll.getBoundingClientRect().top
+        - 24;
+      this.#nodes.lastScroll = scroll.scrollTop;
+    }
+    this.#setCurrent(index, known.page, { save });
+  }
+
+  /** Complète le fil jusqu'à ce qu'il déborde de l'écran, dans les deux sens. */
+  async #fill() {
+    const scroll = this.#nodes.scroll;
+    for (let round = 0; round < 8; round += 1) {
+      const room = scroll.scrollHeight - scroll.clientHeight;
+      if (room > NEAR_END && scroll.scrollTop > NEAR_START) break;
+      const grew = (await this.#extendEnd()) || (await this.#extendStart());
+      if (!grew) break;
+    }
+  }
+
+  async #extendEnd() {
+    if (this.#extending) return false;
+    this.#extending = true;
+    try {
+      let grew = false;
+      for (let step = 0; step < FLOW_STEP; step += 1) {
+        const next = this.#last + 1;
+        if (next >= this.#pageCount) break;
+        const page = await this.#pageAt(next);
+        if (!page) break;
+        const block = this.#makeBlock(next, page);
+        this.#nodes.flow.append(block.root);
+        this.#blocks.set(next, block);
+        this.#last = next;
+        grew = true;
+      }
+      if (grew) this.#trim('start');
+      return grew;
+    } finally {
+      this.#extending = false;
+    }
+  }
+
+  async #extendStart() {
+    if (this.#extending) return false;
+    this.#extending = true;
+    try {
+      const scroll = this.#nodes.scroll;
+      let grew = false;
+      for (let step = 0; step < FLOW_STEP; step += 1) {
+        const previous = this.#first - 1;
+        if (previous < 0) break;
+        const page = await this.#pageAt(previous);
+        if (!page) break;
+        const block = this.#makeBlock(previous, page);
+        const before = scroll.scrollHeight;
+        this.#nodes.flow.prepend(block.root);
+        // Le contenu ajouté au-dessus décalerait la lecture : on lui rend
+        // exactement la hauteur qu'il vient de perdre.
+        scroll.scrollTop += scroll.scrollHeight - before;
+        this.#blocks.set(previous, block);
+        this.#first = previous;
+        grew = true;
+      }
+      if (grew) {
+        this.#trim('end');
+        this.#nodes.lastScroll = scroll.scrollTop;
+      }
+      return grew;
+    } finally {
+      this.#extending = false;
+    }
+  }
+
+  /** Élague le fil par le bout opposé au sens de lecture. */
+  #trim(side) {
+    const scroll = this.#nodes.scroll;
+    while (this.#blocks.size > FLOW_KEEP) {
+      const index = side === 'start' ? this.#first : this.#last;
+      if (index === this.#index) break;
+      const block = this.#blocks.get(index);
+      if (!block) break;
+      if (side === 'start') {
+        const before = scroll.scrollHeight;
+        block.root.remove();
+        scroll.scrollTop -= before - scroll.scrollHeight;
+        this.#first += 1;
+      } else {
+        block.root.remove();
+        this.#last -= 1;
+      }
+      this.#blocks.delete(index);
+    }
+  }
+
+  /** Synchronise la barre basse, le signet et la progression sur [index]. */
+  #setCurrent(index, page, { save = true } = {}) {
+    const changed = this.#index !== index || this.#page?.pageId !== page.pageId;
+    this.#index = index;
+    this.#page = page;
+
+    for (const block of this.#blocks.values()) {
+      block.root.classList.toggle('is-current', block.index === index);
+    }
+
+    this.#nodes.slider.value = String(index + 1);
     this.#nodes.pagerLabel.textContent =
-      `${arabicNumber(bounded + 1)} / ${arabicNumber(this.#pageCount)}`;
+      `${arabicNumber(index + 1)} / ${arabicNumber(this.#pageCount)}`;
     const done = Math.round(this.#percent() * 100);
     this.#nodes.percent.textContent = `${arabicNumber(done)}٪`;
     // Le rail n'a pas de remplissage natif une fois `appearance: none` posé :
     // c'est un dégradé, mis à jour ici, qui joue ce rôle.
     this.#nodes.root.style.setProperty('--reader-fill', `${done}%`);
-    this.#nodes.previous.disabled = bounded === 0;
-    this.#nodes.next.disabled = bounded >= this.#pageCount - 1;
+    this.#nodes.previous.disabled = index === 0;
+    this.#nodes.next.disabled = index >= this.#pageCount - 1;
 
-    this.#nodes.scroll.scrollTop = 0;
-    this.#hideSelection();
-    this.#showChrome();
+    this.#syncBookmark();
+    if (changed) {
+      this.#pendingSelection = null;
+      this.#pendingPage = null;
+      this.#hideSelection();
+    }
+    if (this.#prefs.mode === 'page') this.#showChrome();
     if (save) this.#scheduleSave(page);
     else this.#save(page);
   }
@@ -716,14 +1420,36 @@ class Reader {
     setSetting('reader.font', key);
   }
 
+  /** Bascule page ↔ fil continu : le fil est remonté depuis la page courante. */
+  #setMode(key) {
+    if (!MODES.some((mode) => mode.key === key) || key === this.#prefs.mode) return;
+    this.#prefs.mode = key;
+    for (const mode of MODES) {
+      this.#nodes.root.classList.toggle(`reader--${mode.key}`, mode.key === key);
+    }
+    this.#nodes.modeButtons?.forEach((button, index) =>
+      button.classList.toggle('is-active', MODES[index].key === key),
+    );
+    setSetting('reader.mode', key);
+
+    // Le fil est reconstruit autour de la page lue : ni la position ni la
+    // progression ne bougent, seule la façon de tourner change.
+    this.#blocks = new Map();
+    this.#nodes.flow.replaceChildren();
+    this.#first = this.#index;
+    this.#last = this.#index - 1;
+    this.#show(this.#index, { save: false });
+  }
+
   // ------------------------------------------------------------- panneaux
 
-  /** Les trois panneaux sont exclusifs : ouvrir l'un referme les autres. */
+  /** Les panneaux sont exclusifs : ouvrir l'un referme les autres. */
   #panelNodes() {
     return {
       settings: this.#nodes.panel,
       toc: this.#nodes.tocPanel,
       search: this.#nodes.searchPanel,
+      annotations: this.#nodes.annotationsPanel,
     };
   }
 
@@ -735,19 +1461,30 @@ class Reader {
       if (key !== which) node.classList.remove('is-open');
     }
     const opened = target.classList.toggle('is-open');
+    this.#nodes.root.classList.toggle('has-panel', opened);
     if (opened && which === 'search') this.#nodes.searchField?.focus();
+    if (opened && which === 'annotations') this.#drawAnnotations();
   }
 
   #closePanels() {
     for (const node of Object.values(this.#panelNodes())) node.classList.remove('is-open');
+    this.#nodes.root.classList.remove('has-panel');
   }
 
   #panelsOpen() {
     return Object.values(this.#panelNodes()).some((node) => node.classList.contains('is-open'));
   }
 
+  /**
+   * La fiche est posée sur `body` : un changement de route ne l'emporterait
+   * pas, c'est au lecteur de la ranger quand il s'en va.
+   */
   #showShortcuts() {
-    toast('◀ ▶ للتنقّل • Ctrl + / − لحجم الخط • Esc للخروج');
+    this.#closeShortcuts?.();
+    this.#closeShortcuts = shortcutsDialog({
+      title: 'اختصارات القراءة',
+      shortcuts: SHORTCUTS,
+    });
   }
 
   #toggleFullscreen() {
@@ -765,13 +1502,30 @@ class Reader {
 
   // ------------------------------------------------------------ sélection
 
+  /** La page montée qui contient [node], ou `null`. */
+  #blockOf(node) {
+    for (const block of this.#blocks.values()) {
+      if (block.body.contains(node)) return block;
+    }
+    return null;
+  }
+
   #onSelection() {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       this.#hideSelection();
       return;
     }
-    if (!this.#nodes.scroll.contains(selection.anchorNode)) return;
+
+    // En fil continu la sélection n'est pas forcément sur la page courante :
+    // c'est la page qui la porte qui ancre l'annotation.
+    const block = this.#blockOf(selection.anchorNode);
+    if (!block) return;
+
+    // Mesurée maintenant : le premier clic dans le menu défait la sélection.
+    this.#pendingSelection = describeSelection(block.body);
+    if (!this.#pendingSelection) return;
+    this.#pendingPage = block.page;
 
     const rect = selection.getRangeAt(0).getBoundingClientRect();
     if (!rect.width && !rect.height) return;
@@ -792,7 +1546,8 @@ class Reader {
   }
 
   async #copySelection() {
-    const text = window.getSelection()?.toString() ?? '';
+    const text =
+      window.getSelection()?.toString() || this.#pendingSelection?.selectedText || '';
     this.#hideSelection();
     if (!text.trim()) return;
     try {
@@ -826,6 +1581,7 @@ class Reader {
     }
     // Les raccourcis de navigation ne doivent pas voler la frappe du champ.
     if (event.target instanceof HTMLInputElement) return;
+    if (event.target instanceof HTMLTextAreaElement) return;
     if (event.ctrlKey && (event.key === '+' || event.key === '=')) {
       event.preventDefault();
       this.#setSize(this.#prefs.size + 2);
@@ -834,6 +1590,45 @@ class Reader {
     if (event.ctrlKey && event.key === '-') {
       event.preventDefault();
       this.#setSize(this.#prefs.size - 2);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    // Lettres nues : les gestes qu'on répète le plus, dits par la fiche « ؟ ».
+    switch (event.key.toLowerCase()) {
+      case 'b':
+        event.preventDefault();
+        this.#toggleBookmark();
+        return;
+      case 'n':
+        event.preventDefault();
+        this.#togglePanel('annotations');
+        return;
+      case 'c':
+        event.preventDefault();
+        this.#togglePanel('toc');
+        return;
+      case 'v':
+        event.preventDefault();
+        this.#setMode(this.#prefs.mode === 'page' ? 'scroll' : 'page');
+        return;
+      case '?':
+      case '؟':
+        event.preventDefault();
+        this.#showShortcuts();
+        return;
+      default:
+        break;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      this.#show(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      this.#show(this.#pageCount - 1);
       return;
     }
     // Sens de lecture arabe : la page suivante est à gauche.
@@ -868,6 +1663,31 @@ class Reader {
       this.#showChrome();
     }
     this.#nodes.lastScroll = top;
+    if (this.#prefs.mode !== 'scroll') return;
+
+    const current = this.#visibleBlock();
+    if (current && current.index !== this.#index) {
+      this.#setCurrent(current.index, current.page);
+    }
+    if (scroll.scrollHeight - top - scroll.clientHeight < NEAR_END) this.#extendEnd();
+    else if (top < NEAR_START) this.#extendStart();
+  }
+
+  /** La page montée que l'on est en train de lire : celle sous le haut d'écran. */
+  #visibleBlock() {
+    const line = this.#nodes.scroll.getBoundingClientRect().top + 140;
+    let best = null;
+    let bestGap = Infinity;
+    for (const block of this.#blocks.values()) {
+      const rect = block.root.getBoundingClientRect();
+      if (rect.top <= line && rect.bottom > line) return block;
+      const gap = Math.abs(rect.top - line);
+      if (gap < bestGap) {
+        best = block;
+        bestGap = gap;
+      }
+    }
+    return best;
   }
 
   #showChrome() {

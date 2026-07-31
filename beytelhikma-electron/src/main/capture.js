@@ -66,24 +66,27 @@ async function shoot(window, name, route, selector, outDir, problems) {
   console.log(`écrit : ${file} (${image.getSize().width}×${image.getSize().height})`);
 }
 
-/* Le lecteur cache trois états derrière un clic : le sommaire, les réglages et
-   le menu de sélection. On les rejoue ici, sinon aucune capture ne les montre. */
+/* Les outils du lecteur s'accrochent par `data-tool` : les infobulles portent
+   leur raccourci et changent, l'attribut est le contrat. */
+const tool = (key) => `document.querySelector('[data-tool="${key}"]').click()`;
+
+/* Le lecteur cache plusieurs états derrière un clic : sommaire, réglages,
+   recherche, notes, menu de sélection, fiche des raccourcis et fil continu. On
+   les rejoue ici, sinon aucune capture ne les montre. */
 const READER_STATES = [
-  ['reader-toc', `document.querySelector('[title="فهرس المحتويات"]').click()`],
-  ['reader-settings', `document.querySelector('[title="إعدادات القراءة"]').click()`],
+  ['reader-toc', tool('toc')],
+  ['reader-settings', tool('settings')],
   [
     'reader-search',
-    `document.querySelector('[title="بحث في الكتاب"]').click();
+    `${tool('search')};
      const field = document.querySelector('.reader__search-field');
      // Les deux premiers mots d'une page réelle : le terme existe forcément.
      field.value = (document.querySelector('.reader__page p')?.textContent ?? '')
        .trim().split(/\\s+/).find((word) => word.length >= 4) ?? 'الله';
      field.dispatchEvent(new Event('input', { bubbles: true }));`,
   ],
-  [
-    'reader-annotations',
-    `document.querySelector('[title="ملاحظاتي في هذا الكتاب"]').click()`,
-  ],
+  ['reader-annotations', tool('annotations')],
+  ['reader-shortcuts', tool('help')],
   [
     'reader-selection',
     `const paragraph = document.querySelector('.reader__page p');
@@ -142,7 +145,7 @@ async function shootAnnotationState(window, editionId, outDir, problems) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       document.querySelector('.reader__highlights button').click();
       await new Promise((resolve) => setTimeout(resolve, 500));
-      document.querySelector('[title="ملاحظاتي في هذا الكتاب"]').click();
+      ${tool('annotations')};
     })()`);
   } catch (error) {
     problems.push(`reader-highlight : ${error?.message ?? error}`);
@@ -172,6 +175,64 @@ async function shootAnnotationState(window, editionId, outDir, problems) {
   for (const id of created) {
     await contents.executeJavaScript(
       `window.beytelhikma.repository.deleteHighlight(${JSON.stringify(id)})`,
+    );
+  }
+}
+
+/**
+ * Le fil continu. C'est un réglage persistant : on note celui de l'utilisateur,
+ * on bascule, on capture, puis on le remet — sans quoi toutes les captures
+ * suivantes, et sa prochaine lecture, se feraient dans un mode qu'il n'a pas
+ * choisi.
+ */
+async function shootScrollMode(window, editionId, outDir, problems) {
+  const contents = window.webContents;
+  const before = await contents.executeJavaScript(
+    `window.beytelhikma.repository.getSettings().then((all) => all['reader.mode'] ?? 'page')`,
+  );
+
+  try {
+    await contents.executeJavaScript(`location.hash = '#/home'`);
+    await waitForSelector(contents, '.home');
+    await contents.executeJavaScript(
+      `location.hash = ${JSON.stringify(`#/reader/${editionId}`)}`,
+    );
+    if (!(await waitForSelector(contents, '.reader__page p'))) {
+      problems.push("reader-scroll : le lecteur n'est jamais monté");
+      return;
+    }
+    await wait(400);
+    await contents.executeJavaScript(`(() => {
+      ${tool('settings')};
+      // Deuxième bouton de « نمط القراءة » : le fil continu.
+      document.querySelectorAll('.mode-choices button')[1].click();
+      document.querySelector('.reader__settings .reader__tool').click();
+    })()`);
+    // Le fil se remplit page par page : il lui faut plus qu'une frame.
+    await wait(1200);
+    await contents.executeJavaScript(
+      `document.querySelector('.reader__scroll').scrollTop = 900`,
+    );
+    await wait(800);
+    const image = await contents.capturePage();
+    fs.writeFileSync(path.join(outDir, 'reader-scroll.png'), image.toPNG());
+    console.log(`écrit : ${path.join(outDir, 'reader-scroll.png')}`);
+  } catch (error) {
+    problems.push(`reader-scroll : ${error?.message ?? error}`);
+  } finally {
+    // Remis par l'interface, pas seulement en base : le renderer garde les
+    // réglages en cache, une écriture directe le laisserait mentir jusqu'à la
+    // fin de la session.
+    await contents
+      .executeJavaScript(`(() => {
+        const index = ${JSON.stringify(before)} === 'scroll' ? 1 : 0;
+        ${tool('settings')};
+        document.querySelectorAll('.mode-choices button')[index].click();
+        document.querySelector('.reader__settings .reader__tool').click();
+      })()`)
+      .catch(() => {});
+    await contents.executeJavaScript(
+      `window.beytelhikma.repository.saveSetting('reader.mode', ${JSON.stringify(before)})`,
     );
   }
 }
@@ -231,6 +292,7 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   }
 
   await shootReaderStates(window, editionId, outDir, problems);
+  await shootScrollMode(window, editionId, outDir, problems);
   await shootAnnotationState(window, editionId, outDir, problems);
 
   // La recherche transversale n'a d'écran que quand elle a cherché : sans

@@ -46,6 +46,17 @@ const METHODS = [
   'deleteAllBooks',
   'setDownloadBaseUrl',
   'getAbout',
+  'getBookAnnotations',
+  'getAnnotations',
+  'saveHighlight',
+  'deleteHighlight',
+  'saveNote',
+  'deleteNote',
+  'toggleBookmark',
+  'deleteBookmark',
+  'searchLibrary',
+  'getManagedBooks',
+  'deleteBooks',
 ];
 
 const repository = {};

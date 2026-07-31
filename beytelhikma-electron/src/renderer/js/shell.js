@@ -3,11 +3,18 @@ import { icon } from './icons.js';
 import { onDownloadsChanged, repository } from './repository.js';
 import { navigate } from './router.js';
 
+/**
+ * Navigation. `primary` marque les cinq entrées de la barre du bas : sur un
+ * écran étroit, sept onglets deviennent illisibles — le rail complet reste
+ * accessible dès que la fenêtre s'élargit.
+ */
 const NAV = [
-  { key: 'home', path: '/home', label: 'الرئيسية', icon: 'home' },
-  { key: 'library', path: '/library', label: 'مكتبتي', icon: 'bookOpen' },
-  { key: 'downloads', path: '/downloads', label: 'التنزيلات', icon: 'download' },
-  { key: 'explore', path: '/explore', label: 'استكشاف', icon: 'compass' },
+  { key: 'home', path: '/home', label: 'الرئيسية', icon: 'home', primary: true },
+  { key: 'library', path: '/library', label: 'مكتبتي', icon: 'bookOpen', primary: true },
+  { key: 'downloads', path: '/downloads', label: 'التنزيلات', icon: 'download', primary: true },
+  { key: 'explore', path: '/explore', label: 'استكشاف', icon: 'compass', primary: true },
+  { key: 'search', path: '/search', label: 'بحث في النصوص', icon: 'search' },
+  { key: 'notes', path: '/notes', label: 'ملاحظاتي', icon: 'notes', primary: true },
   { key: 'authors', path: '/authors', label: 'المؤلفون', icon: 'pen' },
 ];
 
@@ -138,14 +145,20 @@ function rail(active) {
  * de notifications — l'application est locale, il n'y a personne à notifier.
  */
 function topbar() {
+  // Deux destinations pour un même champ : `Entrée` cherche un livre dans le
+  // catalogue, `Ctrl+Entrée` (ou le bouton) cherche le terme dans le texte des
+  // livres installés. Chercher un titre et chercher un passage ne se mélangent
+  // pas dans une même liste de résultats.
+  const term = () => field.value.trim();
+  const go = (base) => navigate(`${base}${term() ? `?text=${encodeURIComponent(term())}` : ''}`);
+
   const field = h('input', {
     type: 'search',
     'aria-label': 'البحث في المكتبة',
     placeholder: 'البحث عن كتاب، مؤلف، طبعة…',
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
-      const term = field.value.trim();
-      navigate(`/explore${term ? `?text=${encodeURIComponent(term)}` : ''}`);
+      go(event.ctrlKey || event.metaKey ? '/search' : '/explore');
     },
   });
   searchField = field;
@@ -164,6 +177,15 @@ function topbar() {
       { class: 'topbar__search' },
       icon('search', { size: 20 }),
       field,
+      h(
+        'button',
+        {
+          class: 'topbar__in-text label-sm',
+          title: 'البحث في نصوص الكتب المنزَّلة (Ctrl + Enter)',
+          onclick: () => go('/search'),
+        },
+        'في النصوص',
+      ),
       h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
     ),
     h(
@@ -187,7 +209,7 @@ function bottomNav(active) {
   return h(
     'nav',
     { class: 'bottom-nav' },
-    NAV.map((item) =>
+    NAV.filter((item) => item.primary).map((item) =>
       h(
         'a',
         {

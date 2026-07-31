@@ -72,7 +72,15 @@ Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`
 
 ## État par implémentation
 
-Le portage Electron est en avance sur le client Flutter. Écrans livrés côté Electron : accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`), **collections** (`/collection/:id`), **réglages** (`/settings`).
+Le portage Electron est en avance sur le client Flutter. Écrans livrés côté Electron : accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`, file + table paginée de tout le catalogue avec taille, pages, statut, suppression par lot), **collections** (`/collection/:id`), **recherche transversale** (`/search`), **mes notes** (`/notes`), **réglages** (`/settings`).
+
+**Annotations.** `user.sqlite` porte les trois tables de `DATAMODEL.md` — `bookmarks`, `highlights`, `notes` — depuis la version de schéma **2**. La migration est additive et rejouée à l'ouverture des deux côtés (`AppDatabase.#migrateUser` en Electron, `onUpgrade` en Flutter) : les deux clients doivent lire le même `user_version`, sinon ils ne peuvent plus partager une racine de bibliothèque. Un surlignage s'ancre sur des décalages du texte rendu **et** sur le passage avec son contexte : les décalages seuls ne survivraient pas à une réédition (voir `src/renderer/js/annotations.js`).
+
+Les quatre teintes de surlignage sortent des jetons du projet (`HIGHLIGHTS` dans `views/reader.js`) et se posent à opacité variable selon l'ambiance (`--highlight-strength`) : une pastille claire sur fond de nuit mangerait l'encre. Le fond de recherche porte la classe `reader__match` et **jamais** le sélecteur `.reader__page mark` — celui-ci l'emportait par spécificité sur `.reader__highlight` et repeignait en jaune toutes les couleurs choisies.
+
+**Deux modes de lecture** (`reader.mode`, persisté) : `page`, une page imprimée par écran, et `scroll`, un fil continu. Le fil ne garde qu'une tranche bornée de pages autour de la lecture — sql.js charge déjà le livre entier en mémoire. Une annotation s'ancre sur la page qui porte la sélection, pas sur la page « courante » : en fil continu, ce n'est pas la même.
+
+Les outils de la barre haute s'accrochent par `data-tool` : les infobulles portent leur raccourci et changent, l'attribut est le contrat que `src/main/capture.js` et les tests suivent.
 
 **Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire pour le client Flutter, mais ce portage ne les interroge jamais. La recherche s'appuie à la place sur :
 
@@ -81,7 +89,9 @@ Le portage Electron est en avance sur le client Flutter. Écrans livrés côté 
 
 `src/shared/arabic.js` est le **reflet exact** de `normalize_ar` de `tools/_common.py` : c'est ce contrat qui a produit les colonnes normalisées. `test/arabic.test.js` porte une table de parité — sans elle, les deux implémentations divergeraient en silence et la recherche se dégraderait sans qu'aucun test n'échoue.
 
-Reste à faire : alignement du client Flutter sur le téléchargement et l'exploration ; recherche transversale à tous les livres installés.
+La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
+
+Reste à faire : alignement du client Flutter sur le téléchargement, l'exploration et les annotations.
 
 ## i18n / RTL (critique)
 

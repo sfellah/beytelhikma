@@ -7,7 +7,9 @@ import { downloadsView } from './views/downloads.js';
 import { exploreView } from './views/explore.js';
 import { homeView } from './views/home.js';
 import { collectionView, libraryView } from './views/library.js';
+import { notesView } from './views/notes.js';
 import { readerView } from './views/reader.js';
+import { searchView } from './views/search.js';
 import { settingsView } from './views/settings.js';
 
 defineRoutes(
@@ -22,6 +24,8 @@ defineRoutes(
     '/era/:id': collectionView('era'),
     '/collection/:id': collectionDetailView,
     '/explore': exploreView,
+    '/search': searchView,
+    '/notes': notesView,
     '/authors': authorsView,
     '/settings': settingsView,
   },

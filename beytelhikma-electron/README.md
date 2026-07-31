@@ -81,8 +81,10 @@ Règles reprises de l'application Flutter :
 
 L'interface est en arabe : `dir="rtl"` et propriétés logiques partout
 (`inset-inline-start`, `margin-inline`, `border-inline-end`). Une seule
-exception, commentée : le panneau de réglages du lecteur glisse via
-`transform`, qui ignore le sens d'écriture.
+exception, commentée : les panneaux du lecteur glissent via `transform`, qui
+ignore le sens d'écriture — ils sont donc ancrés au bord **physique droit**,
+celui où la barre haute pose ses outils en RTL, et le texte leur cède la place
+plutôt que de se lire par-dessous (`.reader.has-panel`).
 
 Les polices de la maquette (Playfair Display, Source Serif 4, Inter) sont
 servies par Google Fonts, indisponible hors ligne : les piles retombent sur les
@@ -112,14 +114,51 @@ tâches.
    tri, bascule grille/liste, progression par livre.
 3. **Fiche livre** — métadonnées présentes uniquement, auteur, sommaire
    hiérarchique cliquable, œuvres de la même discipline.
-4. **Lecteur** — une page imprimée par écran, sélection de texte native, taille
-   de police (curseur, boutons, `Ctrl`+molette), ambiances ورقي / أبيض / ليلي,
-   police serif ou sans, progression écrite dans `user.sqlite`.
+4. **Lecteur** — deux façons de parcourir un livre, au choix dans les réglages
+   (`نمط القراءة`) : **صفحة صفحة**, une page imprimée par écran, ou **تمرير
+   متصل**, le fil continu où les pages s'enchaînent et où le pied imprimé ne
+   fait plus que séparer. Le fil ne garde qu'une tranche de pages autour de la
+   lecture (`FLOW_KEEP`) : sql.js tient déjà tout le livre en mémoire, un fil
+   sans fin ferait enfler la page autant que le processus. Sélection de texte
+   native, taille de police (curseur, boutons, `Ctrl`+molette), ambiances
+   ورقي / أبيض / ليلي, police serif ou sans, progression écrite dans
+   `user.sqlite`. Le menu de sélection surligne (quatre teintes de la palette du
+   projet), commente et cherche le passage ; un panneau liste les annotations du
+   livre, filtrables par type, et un bouton pose une marque-page — le signet se
+   voit alors sur la page comme dans la barre haute.
+5. **Téléchargements** — la file en cours, puis **tout le catalogue en table
+   paginée** : titre, discipline, nombre de pages, taille, statut. On y
+   télécharge, annule, ouvre et supprime, livre par livre ou par sélection.
+6. **Recherche dans les textes** (`/search`) — le terme est cherché dans le
+   contenu de tous les livres **installés**, puis dans les annotations. Le
+   catalogue, lui, se cherche depuis l'exploration : trouver un livre et
+   trouver un passage sont deux gestes, ils ne se mélangent pas dans une même
+   liste. `Entrée` dans la barre du haut mène au catalogue, `Ctrl+Entrée` aux
+   textes.
+7. **Mes notes** (`/notes`) — notes, surlignages et marques-pages de tous les
+   livres, filtrables par type et par texte ; chaque entrée rouvre sa page.
 
 Navigation clavier du lecteur : `←` page suivante, `→` page précédente,
-`Échap` ferme le panneau ou revient en arrière.
+`Début`/`Fin` les deux bouts, `B` marque-page, `N` mes notes, `C` sommaire,
+`V` bascule le mode de lecture, `Ctrl+F` recherche, `F11` plein écran, `؟` la
+fiche des raccourcis, `Échap` ferme le panneau ou revient en arrière. La fiche
+(`؟`) est la source à tenir à jour : c'est elle que l'utilisateur lit, la
+constante `SHORTCUTS` de `views/reader.js` en est le texte.
+
+### Ancrage des annotations
+
+Un surlignage garde ses décalages **dans le texte rendu** de la page, plus le
+passage lui-même et son contexte (`prefix_text` / `suffix_text`). À
+l'affichage, les décalages sont essayés d'abord ; s'ils ne retombent pas sur le
+même texte — livre réédité, rendu modifié — l'occurrence la plus proche est
+retenue. Un passage devenu introuvable n'est pas dessiné mais reste en base et
+dans la liste des annotations : rien n'est perdu en silence. Voir
+`src/renderer/js/annotations.js`.
 
 ## Hors périmètre
 
-Recherche plein texte (FTS5 est indexé dans les bases mais non exposé) et
-gestionnaire de téléchargement — comme dans la version Flutter.
+FTS5 reste inexploitable ici (le build sql.js embarqué ne contient que FTS4) :
+la recherche s'appuie sur les colonnes normalisées `pages.body_search` et
+`toc.title_normalized`. Le balayage transversal ouvre les livres un par un et
+referme ceux qu'il a ouverts ; il est borné (`maxBooks`) et dit ce qu'il n'a
+pas parcouru.

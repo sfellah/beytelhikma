@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
+import { copyField } from '../components/copy-field.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { asyncView } from '../components/states.js';
@@ -138,7 +139,17 @@ function storageSection(usage, refresh) {
         icon('download', { size: 18 }),
         h('span', {}, 'فتح'),
       ),
-      'التنزيلات الجارية والمتعثّرة',
+      'التنزيلات الجارية وجدول كل الكتب',
+    ),
+    row(
+      'ملاحظاتي',
+      h(
+        'button',
+        { class: 'button button--tonal', onclick: () => navigate('/notes') },
+        icon('notes', { size: 18 }),
+        h('span', {}, 'فتح'),
+      ),
+      'الملاحظات والتظليلات والعلامات المرجعية',
     ),
     row(
       'حذف كل الكتب',
@@ -205,10 +216,17 @@ function serverSection(prefs, refresh) {
   );
 }
 
+/**
+ * Les deux premières lignes portent des chemins absolus : ils débordaient de la
+ * grille. Ils passent par `copyField`, qui les tient sur une ligne et les rend
+ * copiables — c'est ce qu'on en fait quand on rapporte un problème.
+ */
 function aboutSection(about, usage) {
-  const rows = [
+  const paths = [
     ['مصدر المكتبة', about.librarySource],
     ['مجلد البيانات', about.storageRoot],
+  ];
+  const facts = [
     ['عدد الطبعات في الفهرس', String(about.editionCount)],
     ['عدد التخصصات', String(about.categoryCount)],
     ['إصدار قاعدة المستخدم', String(about.schemaVersion)],
@@ -220,8 +238,15 @@ function aboutSection(about, usage) {
     null,
     h(
       'dl',
+      { class: 'meta-grid meta-grid--paths' },
+      paths.map(([label, value]) =>
+        h('div', {}, h('dt', {}, label), h('dd', {}, copyField(value, { label }))),
+      ),
+    ),
+    h(
+      'dl',
       { class: 'meta-grid' },
-      rows.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))),
+      facts.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))),
     ),
   );
 }

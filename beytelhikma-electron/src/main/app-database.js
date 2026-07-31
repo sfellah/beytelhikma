@@ -14,7 +14,7 @@ function engine() {
   return enginePromise;
 }
 
-export const USER_DB_SCHEMA_VERSION = 1;
+export const USER_DB_SCHEMA_VERSION = 2;
 
 /**
  * Au-delà de cette taille, `new SQL.Database(buffer)` charge le livre entier en
@@ -23,6 +23,60 @@ export const USER_DB_SCHEMA_VERSION = 1;
  * planter sans explication.
  */
 const BOOK_SIZE_WARNING = 128 * 1024 * 1024;
+
+/**
+ * Annotations personnelles (`DATAMODEL.md`, §4). Trois tables plutôt qu'une :
+ * une note peut exister sans surlignage (note de page), un surlignage sans note,
+ * et une note peut commenter un surlignage — `notes.highlight_id` porte ce lien.
+ *
+ * `start_offset` / `end_offset` comptent les caractères du **texte rendu** de la
+ * page. `selected_text`, `prefix_text` et `suffix_text` permettent de retrouver
+ * le passage si le rendu bouge : les décalages seuls seraient trop fragiles.
+ */
+const ANNOTATION_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS bookmarks (
+     bookmark_id TEXT PRIMARY KEY,
+     edition_id  TEXT NOT NULL,
+     page_id     INTEGER NOT NULL,
+     text_offset INTEGER,
+     label       TEXT,
+     created_at  TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS highlights (
+     highlight_id  TEXT PRIMARY KEY,
+     edition_id    TEXT NOT NULL,
+     page_id       INTEGER NOT NULL,
+     start_offset  INTEGER NOT NULL DEFAULT 0,
+     end_offset    INTEGER NOT NULL DEFAULT 0,
+     selected_text TEXT NOT NULL,
+     prefix_text   TEXT,
+     suffix_text   TEXT,
+     color         TEXT NOT NULL,
+     created_at    TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS notes (
+     note_id      TEXT PRIMARY KEY,
+     edition_id   TEXT NOT NULL,
+     page_id      INTEGER,
+     highlight_id TEXT,
+     content      TEXT NOT NULL,
+     created_at   TEXT NOT NULL,
+     updated_at   TEXT NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_bookmarks_edition  ON bookmarks (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_highlights_edition ON highlights (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_edition      ON notes (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_highlight    ON notes (highlight_id)`,
+];
+
+/**
+ * Migrations de `user.sqlite`, indexées par la version qu'elles produisent.
+ * Une base fraîche part de `USER_SCHEMA` et saute directement à la version
+ * courante ; une base existante rejoue les paliers manquants.
+ */
+const USER_MIGRATIONS = {
+  2: ANNOTATION_SCHEMA,
+};
 
 const USER_SCHEMA = [
   `CREATE TABLE downloaded_books (
@@ -57,6 +111,7 @@ const USER_SCHEMA = [
      key   TEXT PRIMARY KEY,
      value TEXT NOT NULL
    )`,
+  ...ANNOTATION_SCHEMA,
   `CREATE TABLE user_info (schema_version INTEGER NOT NULL)`,
   `INSERT INTO user_info (schema_version) VALUES (${USER_DB_SCHEMA_VERSION})`,
   // sqflite, côté Flutter, se fie à `user_version` pour décider s'il doit créer
@@ -230,6 +285,11 @@ export class AppDatabase {
     return db;
   }
 
+  /** Le livre est-il déjà chargé en mémoire ? */
+  isBookOpen(editionId) {
+    return this.#books.has(editionId);
+  }
+
   /** Ferme un livre et le retire du cache : préalable à sa suppression. */
   closeBook(editionId) {
     const db = this.#books.get(editionId);
@@ -255,12 +315,35 @@ export class AppDatabase {
     const file = path.join(this.#root, 'user.sqlite');
     if (fs.existsSync(file)) {
       this.#user = new SQL.Database(fs.readFileSync(file));
+      if (this.#migrateUser()) this.#persistUser();
     } else {
       this.#user = new SQL.Database();
       for (const statement of USER_SCHEMA) this.#user.run(statement);
       this.#persistUser();
     }
     return this.#user;
+  }
+
+  /**
+   * Rejoue les paliers manquants sur une base existante. `user_version` fait
+   * foi : c'est aussi ce que lit sqflite côté Flutter, les deux clients doivent
+   * donc voir la même valeur après migration.
+   */
+  #migrateUser() {
+    const db = this.#user;
+    const version = all(db, 'PRAGMA user_version')[0]?.user_version ?? 0;
+    if (version >= USER_DB_SCHEMA_VERSION) return false;
+
+    for (let step = version + 1; step <= USER_DB_SCHEMA_VERSION; step += 1) {
+      for (const statement of USER_MIGRATIONS[step] ?? []) db.run(statement);
+    }
+    db.run(`PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`);
+    // `user_info` est propre à ce portage : une base créée par le client Flutter
+    // ne l'a pas, et son absence ne doit pas faire échouer la migration.
+    if (first(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='user_info'")) {
+      db.run('UPDATE user_info SET schema_version = ?', [USER_DB_SCHEMA_VERSION]);
+    }
+    return true;
   }
 
   /** Réécrit `user.sqlite` sur disque : sql.js ne connaît que la mémoire. */

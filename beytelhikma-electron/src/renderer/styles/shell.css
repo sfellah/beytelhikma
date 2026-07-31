@@ -157,7 +157,7 @@
 .topbar__search input {
   width: 100%;
   padding-block: 11px;
-  padding-inline: 46px 84px;
+  padding-inline: 46px 158px;
   background: var(--surface-container-high);
   border: none;
   border-radius: var(--radius-pill);
@@ -189,8 +189,31 @@
   pointer-events: none;
 }
 
-.topbar__search input:focus + .topbar__hint {
+/* Le champ n'est plus le frère immédiat du raccourci : le bouton « في النصوص »
+   s'est glissé entre les deux. On vise donc le conteneur. */
+.topbar__search:focus-within .topbar__hint {
   opacity: 0;
+}
+
+/* Second geste du même champ : chercher le terme dans le texte des livres
+   installés plutôt qu'un titre dans le catalogue. */
+.topbar__in-text {
+  position: absolute;
+  inset-inline-end: 76px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  cursor: pointer;
+}
+
+.topbar__in-text:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .topbar__actions {

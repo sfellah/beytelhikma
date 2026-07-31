@@ -31,7 +31,10 @@ class AppDatabase {
 
   static const catalogAsset = 'assets/sample/catalog.sqlite';
   static const booksAssetDir = 'assets/sample/books';
-  static const userDbSchemaVersion = 1;
+  /// Version 2 : annotations personnelles (`bookmarks`, `highlights`, `notes`).
+  /// Le portage Electron applique la même migration — les deux clients peuvent
+  /// partager une racine de bibliothèque, ils doivent lire le même schéma.
+  static const userDbSchemaVersion = 2;
 
   Database? _catalog;
   Database? _user;
@@ -115,6 +118,7 @@ class AppDatabase {
       options: OpenDatabaseOptions(
         version: userDbSchemaVersion,
         onCreate: (db, _) async => _createUserSchema(db),
+        onUpgrade: (db, from, to) async => _upgradeUserSchema(db, from, to),
         singleInstance: true,
       ),
     );
@@ -162,6 +166,66 @@ class AppDatabase {
         value TEXT NOT NULL
       )
     ''');
+    for (final statement in _annotationSchema) {
+      batch.execute(statement);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Annotations personnelles (`DATAMODEL.md`, §4). `selected_text`,
+  /// `prefix_text` et `suffix_text` accompagnent les décalages : ceux-ci seuls
+  /// ne survivraient pas à une réédition du livre.
+  static const _annotationSchema = [
+    '''
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        bookmark_id TEXT PRIMARY KEY,
+        edition_id  TEXT NOT NULL,
+        page_id     INTEGER NOT NULL,
+        text_offset INTEGER,
+        label       TEXT,
+        created_at  TEXT NOT NULL
+      )
+    ''',
+    '''
+      CREATE TABLE IF NOT EXISTS highlights (
+        highlight_id  TEXT PRIMARY KEY,
+        edition_id    TEXT NOT NULL,
+        page_id       INTEGER NOT NULL,
+        start_offset  INTEGER NOT NULL DEFAULT 0,
+        end_offset    INTEGER NOT NULL DEFAULT 0,
+        selected_text TEXT NOT NULL,
+        prefix_text   TEXT,
+        suffix_text   TEXT,
+        color         TEXT NOT NULL,
+        created_at    TEXT NOT NULL
+      )
+    ''',
+    '''
+      CREATE TABLE IF NOT EXISTS notes (
+        note_id      TEXT PRIMARY KEY,
+        edition_id   TEXT NOT NULL,
+        page_id      INTEGER,
+        highlight_id TEXT,
+        content      TEXT NOT NULL,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+      )
+    ''',
+    'CREATE INDEX IF NOT EXISTS idx_bookmarks_edition  ON bookmarks (edition_id, page_id)',
+    'CREATE INDEX IF NOT EXISTS idx_highlights_edition ON highlights (edition_id, page_id)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_edition      ON notes (edition_id, page_id)',
+    'CREATE INDEX IF NOT EXISTS idx_notes_highlight    ON notes (highlight_id)',
+  ];
+
+  /// Bases créées par une version antérieure — ou par le portage Electron avant
+  /// sa propre migration : les paliers manquants sont rejoués un par un.
+  static Future<void> _upgradeUserSchema(Database db, int from, int to) async {
+    final batch = db.batch();
+    if (from < 2) {
+      for (final statement in _annotationSchema) {
+        batch.execute(statement);
+      }
+    }
     await batch.commit(noResult: true);
   }
 

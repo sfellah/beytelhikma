@@ -476,3 +476,152 @@
   border: 1px solid var(--rule);
   background: var(--surface-container-lowest);
 }
+
+/* ------------------------------------------------- saisie d'une note */
+
+.modal__quote {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-inline-start: 3px solid var(--secondary);
+  background: var(--gold-veil);
+  border-radius: var(--radius);
+  color: var(--on-surface-variant);
+  font-family: var(--font-body);
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.modal__textarea {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  resize: vertical;
+}
+
+.modal__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Fiche des raccourcis : deux colonnes, la touche puis ce qu'elle fait. La
+   grille est en `start`/`end` — en arabe la touche se lit à droite. */
+.modal__panel--wide {
+  width: min(34rem, calc(100vw - 2 * var(--space-lg)));
+}
+
+.modal__shortcuts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 6px var(--space-md);
+  margin: 0;
+  max-height: min(72vh, 42rem);
+  overflow-y: auto;
+}
+
+.modal__shortcuts dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.modal__shortcuts dd {
+  margin: 0;
+  color: var(--on-surface-variant);
+}
+
+.modal__shortcuts kbd {
+  display: inline-block;
+  min-width: 1.75rem;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  line-height: 1.6;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--on-surface);
+}
+
+.modal__key-sep {
+  color: var(--outline);
+  font-size: var(--text-label-sm);
+}
+
+/* ------------------------------------------------------- valeur copiable */
+
+/* Un chemin absolu déborde de toute grille : il tient sur une ligne, se
+   sélectionne, et se copie d'un bouton. */
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.copy-field__value {
+  flex: 1;
+  min-width: 0;
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  text-overflow: ellipsis;
+  cursor: text;
+}
+
+.copy-field__value:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.copy-field__button {
+  flex: none;
+}
+
+/* ------------------------------------------------------------ pagination */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--rule);
+}
+
+.pagination__steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.pagination__size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--outline);
+}
+
+.pagination__size select,
+.downloads__select {
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+}

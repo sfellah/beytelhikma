@@ -5,7 +5,7 @@ import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { AppDatabase, all } from '../src/main/app-database.js';
+import { AppDatabase, USER_DB_SCHEMA_VERSION, all } from '../src/main/app-database.js';
 import { BookRepository, RepositoryError } from '../src/main/book-repository.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -390,7 +390,7 @@ test('les informations d’application décrivent la bibliothèque installée', 
   const about = await repository.getAbout();
   assert.equal(about.editionCount, 5);
   assert.ok(about.categoryCount >= 5);
-  assert.equal(about.schemaVersion, 1);
+  assert.equal(about.schemaVersion, USER_DB_SCHEMA_VERSION);
   assert.ok(about.librarySource.endsWith('sample'));
 });
 
