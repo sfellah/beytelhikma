@@ -101,14 +101,41 @@ class PublishTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             client = FakeS3()
-            publish(client, src=root, bucket="b", public_base="http://x/b", dry_run=True)
+            report = publish(
+                client, src=root, bucket="b", public_base="http://x/b", dry_run=True
+            )
             self.assertEqual(client.puts, [])
+            self.assertEqual(report["uploaded"], 0)
+            # Un essai à blanc doit dire ce qui partirait, pas se taire.
+            self.assertEqual(report["planned"], 2)
             con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
             (url,) = con.execute(
                 "SELECT download_url FROM book_releases WHERE release_id='rel-a'"
             ).fetchone()
             con.close()
             self.assertEqual(url, "local://books/ed-a.sqlite")
+
+    def test_dry_run_ne_compresse_rien(self):
+        """Compresser pendant un essai à blanc écrirait des dizaines de mégaoctets
+        et durerait des minutes, pour ne rien envoyer ensuite."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            os.remove(os.path.join(root, "books", "ed-a.sqlite.zst"))
+            with open(os.path.join(root, "books", "ed-a.sqlite"), "wb") as fh:
+                fh.write(b"SQLite format 3\0" * 500)
+
+            client = FakeS3()
+            report = publish(
+                client, src=root, bucket="b", public_base="http://x/b", dry_run=True
+            )
+
+            self.assertEqual(report["would_compress"], 1)
+            self.assertEqual(report["compressed"], 0)
+            self.assertEqual(report["planned"], 2)
+            self.assertFalse(
+                os.path.exists(os.path.join(root, "books", "ed-a.sqlite.zst")),
+                "aucune archive ne doit être écrite",
+            )
 
     def test_livre_sans_archive_ni_source_est_signale(self):
         with tempfile.TemporaryDirectory() as root:

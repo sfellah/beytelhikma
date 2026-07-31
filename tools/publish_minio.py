@@ -49,6 +49,9 @@ def _archive(books_dir: str, edition_id: str, report: dict) -> str | None:
     L'import ne produit les `.zst` qu'avec `--compress`, et sa reprise saute la
     compression des livres déjà bâtis : sans ce repli, un `dist/` importé sans
     l'option serait impubliable sans tout refaire.
+
+    Jamais appelée en essai à blanc : compresser coûte des minutes et des
+    dizaines de mégaoctets, ce qu'un `--dry-run` ne doit pas faire.
     """
     packed = os.path.join(books_dir, f"{edition_id}.sqlite.zst")
     if os.path.exists(packed):
@@ -83,7 +86,7 @@ def manifest_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/manifest.json"
 
 
-def _upload(client, bucket, key, body, content_type, metadata, force, dry_run, report):
+def _upload(client, bucket, key, body, content_type, metadata, force, report):
     """Envoie [body] sous [key], sauf si un objet de même taille est déjà là."""
     if not force:
         try:
@@ -93,8 +96,6 @@ def _upload(client, bucket, key, body, content_type, metadata, force, dry_run, r
                 return
         except Exception:
             pass  # absent ou illisible : on envoie
-    if dry_run:
-        return
     client.put_object(
         Bucket=bucket,
         Key=key,
@@ -107,7 +108,16 @@ def _upload(client, bucket, key, body, content_type, metadata, force, dry_run, r
 
 def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
     """Monte les livres puis réécrit `download_url`. Renvoie un compte rendu."""
-    report = {"uploaded": 0, "skipped": 0, "updated": 0, "compressed": 0, "missing": []}
+    report = {
+        "uploaded": 0,
+        "skipped": 0,
+        "updated": 0,
+        "compressed": 0,
+        # Essai à blanc : ce qui *serait* fait, puisque rien ne l'est.
+        "planned": 0,
+        "would_compress": 0,
+        "missing": [],
+    }
     catalog_path = os.path.join(src, "catalog.sqlite")
     if not os.path.exists(catalog_path):
         raise SystemExit(f"catalogue introuvable : {catalog_path}")
@@ -121,6 +131,21 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
     updates = []
     for release_id, edition_id, content_version in releases:
         manifest_path = os.path.join(books_dir, f"{edition_id}.manifest.json")
+
+        if dry_run:
+            # Un essai à blanc n'ouvre ni ne compresse aucun fichier : il se
+            # contente de dire ce qui partirait. Compresser d'abord pour ne rien
+            # envoyer ensuite serait le pire des deux mondes.
+            has_archive = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite.zst"))
+            has_source = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite"))
+            if not has_archive and not has_source:
+                report["missing"].append(edition_id)
+                continue
+            report["planned"] += 2  # l'archive et son manifest
+            if not has_archive:
+                report["would_compress"] += 1
+            continue
+
         packed = _archive(books_dir, edition_id, report)
         if packed is None:
             report["missing"].append(edition_id)
@@ -145,7 +170,6 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
                 "uncompressed-size": str(manifest.get("size", 0)),
             },
             force,
-            dry_run,
             report,
         )
         _upload(
@@ -156,12 +180,11 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
             "application/json",
             {},
             force,
-            dry_run,
             report,
         )
         updates.append((f"{public_base.rstrip('/')}/{key}", len(body), release_id))
 
-    if not dry_run and updates:
+    if updates and not dry_run:
         con.executemany(
             "UPDATE book_releases SET download_url = ?, compressed_size = ? WHERE release_id = ?",
             updates,
@@ -238,10 +261,17 @@ def main(argv=None):
         force=args.force,
         dry_run=args.dry_run,
     )
-    print(
-        f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
-        f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
-    )
+    if args.dry_run:
+        print(
+            f"essai à blanc — objets à envoyer : {report['planned']} • "
+            f"à compresser : {report['would_compress']} • "
+            f"livres sans fichier : {len(report['missing'])}"
+        )
+    else:
+        print(
+            f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
+            f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
+        )
     return 0
 
 

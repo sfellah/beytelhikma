@@ -92,10 +92,27 @@ app.whenReady().then(async () => {
   if (process.env.BEYT_CAPTURE) {
     const { captureRoutes } = await import('./capture.js');
     window.webContents.once('did-finish-load', async () => {
-      await captureRoutes(window, {
-        outDir: path.join(projectRoot, 'build', 'screenshots'),
-      });
-      app.quit();
+      // La sortie doit être atteinte quoi qu'il arrive : sans ce `finally`, une
+      // capture qui échoue laisse Electron pendu indéfiniment et un
+      // `npm run shot` en intégration continue se bloque au lieu d'échouer.
+      let failed = false;
+      try {
+        const problems = await captureRoutes(window, {
+          outDir: path.join(projectRoot, 'build', 'screenshots'),
+        });
+        // Les erreurs de console doivent teinter le code de sortie, sinon la
+        // campagne « réussit » en rapportant des écrans cassés.
+        failed = problems.length > 0;
+      } catch (error) {
+        console.error('[beytelhikma] capture interrompue :', error);
+        failed = true;
+      } finally {
+        // `app.exit` et non `app.quit` : ce dernier sort toujours par zéro et
+        // ignore `process.exitCode`. Il court-circuite `window-all-closed`, donc
+        // la base est fermée ici.
+        database?.close();
+        app.exit(failed ? 1 : 0);
+      }
     });
   }
 

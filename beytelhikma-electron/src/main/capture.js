@@ -15,8 +15,10 @@ function routesFor(editionId) {
   return [
     ['home', '/home', '.home'],
     ['library', '/library', '.library__grid'],
-    ['downloads', '/downloads', '.downloads'],
+    ['downloads', '/downloads', '.books-table'],
     ['explore', '/explore', '.explore__grid'],
+    ['search', '/search', '.search__field'],
+    ['notes', '/notes', '.notes__tabs'],
     ['settings', '/settings', '.settings__group'],
     ['collections', '/library', '.collections__row'],
     ['authors', '/authors', '.author-grid'],
@@ -79,6 +81,10 @@ const READER_STATES = [
      field.dispatchEvent(new Event('input', { bubbles: true }));`,
   ],
   [
+    'reader-annotations',
+    `document.querySelector('[title="ملاحظاتي في هذا الكتاب"]').click()`,
+  ],
+  [
     'reader-selection',
     `const paragraph = document.querySelector('.reader__page p');
      const range = document.createRange();
@@ -91,6 +97,84 @@ const READER_STATES = [
        .dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));`,
   ],
 ];
+
+/**
+ * Le seul état qui n'existe qu'après une écriture : un passage surligné, sa
+ * note, et le panneau qui les liste.
+ *
+ * L'annotation est créée par le chemin normal — sélection, menu, couleur — puis
+ * **retirée** à la fin : une campagne de captures tourne sur les vraies données
+ * de l'utilisateur, elle n'a pas à y laisser de traces.
+ */
+async function shootAnnotationState(window, editionId, outDir, problems) {
+  const contents = window.webContents;
+  const idsOf = () =>
+    contents.executeJavaScript(
+      `window.beytelhikma.repository
+         .getBookAnnotations(${JSON.stringify(editionId)})
+         .then((all) => all.highlights.map((item) => item.highlightId))`,
+    );
+
+  await contents.executeJavaScript(`location.hash = '#/home'`);
+  await waitForSelector(contents, '.home');
+  await contents.executeJavaScript(
+    `location.hash = ${JSON.stringify(`#/reader/${editionId}`)}`,
+  );
+  if (!(await waitForSelector(contents, '.reader__page p'))) {
+    problems.push("reader-highlight : le lecteur n'est jamais monté");
+    return;
+  }
+  await wait(400);
+
+  let before = [];
+  try {
+    before = await idsOf();
+    await contents.executeJavaScript(`(async () => {
+      const paragraph = document.querySelector('.reader__page p');
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      const selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document
+        .querySelector('.reader__scroll')
+        .dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      document.querySelector('.reader__highlights button').click();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      document.querySelector('[title="ملاحظاتي في هذا الكتاب"]').click();
+    })()`);
+  } catch (error) {
+    problems.push(`reader-highlight : ${error?.message ?? error}`);
+    return;
+  }
+
+  await wait(500);
+  const image = await contents.capturePage();
+  fs.writeFileSync(path.join(outDir, 'reader-highlight.png'), image.toPNG());
+  console.log(`écrit : ${path.join(outDir, 'reader-highlight.png')}`);
+
+  // Tant que l'annotation existe, l'écran transversal a quelque chose à montrer.
+  await contents.executeJavaScript(`location.hash = '#/notes'`);
+  if (await waitForSelector(contents, '.note-card')) {
+    await wait(400);
+    const notes = await contents.capturePage();
+    fs.writeFileSync(path.join(outDir, 'notes-filled.png'), notes.toPNG());
+    console.log(`écrit : ${path.join(outDir, 'notes-filled.png')}`);
+  } else {
+    problems.push("notes-filled : l'annotation créée n'apparaît pas dans « ملاحظاتي »");
+  }
+
+  // Ne retirer que ce que la capture a créé : les annotations de l'utilisateur
+  // ne sont pas les nôtres.
+  const after = await idsOf();
+  const created = after.filter((id) => !before.includes(id));
+  for (const id of created) {
+    await contents.executeJavaScript(
+      `window.beytelhikma.repository.deleteHighlight(${JSON.stringify(id)})`,
+    );
+  }
+}
 
 async function shootReaderStates(window, editionId, outDir, problems) {
   for (const [name, script] of READER_STATES) {
@@ -105,7 +189,16 @@ async function shootReaderStates(window, editionId, outDir, problems) {
       problems.push(`${name} : le lecteur n'est jamais monté`);
     }
     await wait(400);
-    await window.webContents.executeJavaScript(`(() => { ${script} })()`);
+    // Un état du lecteur s'ouvre en cliquant un bouton. Si la page n'est pas
+    // celle qu'on croit — livre absent du disque, par exemple — le sélecteur ne
+    // trouve rien et `executeJavaScript` rejette : on le note et on continue,
+    // plutôt que d'interrompre toute la campagne de captures.
+    try {
+      await window.webContents.executeJavaScript(`(() => { ${script} })()`);
+    } catch (error) {
+      problems.push(`${name} : ${error?.message ?? error}`);
+      continue;
+    }
     await wait(500);
     const image = await window.webContents.capturePage();
     fs.writeFileSync(path.join(outDir, `${name}.png`), image.toPNG());
@@ -138,12 +231,33 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   }
 
   await shootReaderStates(window, editionId, outDir, problems);
+  await shootAnnotationState(window, editionId, outDir, problems);
+
+  // La recherche transversale n'a d'écran que quand elle a cherché : sans
+  // terme, la capture ne montre qu'un champ vide.
+  await window.webContents.executeJavaScript(`location.hash = '#/search'`);
+  if (await waitForSelector(window.webContents, '.search__field')) {
+    await window.webContents.executeJavaScript(`(() => {
+      const field = document.querySelector('.search__field');
+      field.value = 'الله';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    // Le balayage ouvre chaque livre installé : il lui faut plus qu'une frame.
+    await wait(6000);
+    const image = await window.webContents.capturePage();
+    fs.writeFileSync(path.join(outDir, 'search-results.png'), image.toPNG());
+    console.log(`écrit : ${path.join(outDir, 'search-results.png')}`);
+  } else {
+    problems.push("search-results : l'écran de recherche n'est jamais monté");
+  }
 
   // Fenêtre haute : l'accueil entier, jusqu'aux disciplines et à l'auteur.
   window.setContentSize(width, 2700);
   await wait(500);
   await shoot(window, 'home-full', '/home', '.featured', outDir, problems);
   await shoot(window, 'authors-full', '/authors', '.author-grid', outDir, problems);
+  // Les chemins de « عن التطبيق » sont sous la ligne de flottaison en 900 px.
+  await shoot(window, 'settings-full', '/settings', '.meta-grid--paths', outDir, problems);
 
   // Fenêtre étroite : le rail cède la place aux barres haute et basse.
   window.setContentSize(430, 900);
