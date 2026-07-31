@@ -308,6 +308,58 @@ export class BookRepository {
     });
   }
 
+  getDownloads() {
+    return this.#guard('lecture des téléchargements', async () => this.#downloads?.snapshot() ?? []);
+  }
+
+  clearFailedDownloads() {
+    return this.#guard('nettoyage des téléchargements échoués', async () => {
+      this.#downloads?.clearFailed();
+    });
+  }
+
+  getStorageUsage() {
+    return this.#guard("lecture de l'espace occupé", async () => {
+      const dir = path.join(this.#db.root, 'books');
+      const ids = this.#db.installedBooks();
+      let bytes = 0;
+      for (const editionId of ids) {
+        try {
+          bytes += fs.statSync(path.join(dir, `${editionId}.sqlite`)).size;
+        } catch {
+          // Fichier disparu entre le listage et la mesure : il ne compte pas.
+        }
+      }
+      return { bookCount: ids.length, bytes };
+    });
+  }
+
+  /**
+   * Joint le statut d'installation aux résumés d'une page de résultats.
+   * Une seule requête `user.sqlite` par appel, pas une par livre.
+   */
+  async #withDownloadStatus(summaries) {
+    if (!summaries.length) return summaries;
+    const user = await this.#db.user();
+    const ids = summaries.map((book) => book.editionId);
+    const placeholders = ids.map(() => '?').join(',');
+    const byId = new Map(
+      all(
+        user,
+        `SELECT edition_id, download_status FROM downloaded_books
+          WHERE edition_id IN (${placeholders})`,
+        ids,
+      ).map((row) => [row.edition_id, row.download_status]),
+    );
+    const live = new Map(
+      (this.#downloads?.snapshot() ?? []).map((job) => [job.editionId, job.status]),
+    );
+    for (const book of summaries) {
+      book.downloadStatus = live.get(book.editionId) ?? byId.get(book.editionId) ?? null;
+    }
+    return summaries;
+  }
+
   // --------------------------------------------------------------- catalogue
 
   getCategories() {
@@ -333,35 +385,41 @@ export class BookRepository {
   getRecentBooks({ limit = 12 } = {}) {
     return this.#guard('lecture des nouveautés', async () => {
       const db = await this.#db.catalog();
-      return all(
-        db,
-        `${SUMMARY_SELECT} GROUP BY e.edition_id
-         ORDER BY r.published_at DESC, e.title_ar LIMIT ?`,
-        [limit],
-      ).map(bookSummary);
+      return this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} GROUP BY e.edition_id
+           ORDER BY r.published_at DESC, e.title_ar LIMIT ?`,
+          [limit],
+        ).map(bookSummary),
+      );
     });
   }
 
   getBooks({ offset = 0, limit = 20 } = {}) {
     return this.#guard('lecture du catalogue', async () => {
       const db = await this.#db.catalog();
-      return all(
-        db,
-        `${SUMMARY_SELECT} GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ? OFFSET ?`,
-        [limit, offset],
-      ).map(bookSummary);
+      return this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ? OFFSET ?`,
+          [limit, offset],
+        ).map(bookSummary),
+      );
     });
   }
 
   getBooksByCategory(categoryId, { limit = 20 } = {}) {
     return this.#guard('lecture de la catégorie', async () => {
       const db = await this.#db.catalog();
-      return all(
-        db,
-        `${SUMMARY_SELECT} AND e.category_id = ? GROUP BY e.edition_id
-         ORDER BY e.title_ar LIMIT ?`,
-        [categoryId, limit],
-      ).map(bookSummary);
+      return this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} AND e.category_id = ? GROUP BY e.edition_id
+           ORDER BY e.title_ar LIMIT ?`,
+          [categoryId, limit],
+        ).map(bookSummary),
+      );
     });
   }
 
@@ -404,6 +462,23 @@ export class BookRepository {
         [meta.work_id ?? summary.workId, editionId],
       ).map(bookSummary);
 
+      const release = await this.#activeRelease(editionId);
+      const user = await this.#db.user();
+      const stored = first(
+        user,
+        'SELECT download_status FROM downloaded_books WHERE edition_id = ?',
+        [editionId],
+      );
+      const job = (this.#downloads?.snapshot() ?? []).find((item) => item.editionId === editionId);
+      const download = {
+        status: job?.status ?? stored?.download_status ?? null,
+        percent: job?.percent ?? 0,
+        error: job?.error ?? null,
+        compressedSize: release?.compressedSize ?? 0,
+        uncompressedSize: release?.uncompressedSize ?? 0,
+        releaseId: release?.releaseId ?? null,
+      };
+
       // Le fichier du livre peut ne pas être installé : la fiche reste lisible.
       let volumes = [];
       try {
@@ -420,6 +495,7 @@ export class BookRepository {
         authors,
         volumes,
         otherEditions,
+        download,
         bibliographyText: meta.bibliography_text ?? null,
         publisher: meta.publisher_ar ?? null,
         editionLabel: meta.edition_label_ar ?? null,
@@ -494,32 +570,36 @@ export class BookRepository {
   getBooksByCentury(century, { limit = 60 } = {}) {
     return this.#guard('lecture du siècle', async () => {
       const db = await this.#db.catalog();
-      return all(
-        db,
-        `${SUMMARY_SELECT} AND e.edition_id IN (
-           SELECT ea.edition_id
-           FROM edition_authors ea
-           JOIN authors a ON a.author_id = ea.author_id
-           WHERE a.death_year_hijri IS NOT NULL
-             AND (a.death_year_hijri - 1) / 100 + 1 = ?
-         )
-         GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ?`,
-        [Number(century), limit],
-      ).map(bookSummary);
+      return this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} AND e.edition_id IN (
+             SELECT ea.edition_id
+             FROM edition_authors ea
+             JOIN authors a ON a.author_id = ea.author_id
+             WHERE a.death_year_hijri IS NOT NULL
+               AND (a.death_year_hijri - 1) / 100 + 1 = ?
+           )
+           GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ?`,
+          [Number(century), limit],
+        ).map(bookSummary),
+      );
     });
   }
 
   getBooksByAuthor(authorId, { limit = 10 } = {}) {
     return this.#guard("lecture des livres de l'auteur", async () => {
       const db = await this.#db.catalog();
-      return all(
-        db,
-        `${SUMMARY_SELECT} AND e.edition_id IN (
-           SELECT edition_id FROM edition_authors WHERE author_id = ?
-         )
-         GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ?`,
-        [authorId, limit],
-      ).map(bookSummary);
+      return this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} AND e.edition_id IN (
+             SELECT edition_id FROM edition_authors WHERE author_id = ?
+           )
+           GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ?`,
+          [authorId, limit],
+        ).map(bookSummary),
+      );
     });
   }
 
@@ -694,6 +774,9 @@ export const REPOSITORY_METHODS = [
   'cancelDownload',
   'retryDownload',
   'deleteBook',
+  'getDownloads',
+  'clearFailedDownloads',
+  'getStorageUsage',
   'getCategories',
   'getRecentBooks',
   'getBooks',

@@ -153,6 +153,26 @@ test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne',
   assert.ok(library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
 });
 
+test('les résumés portent le statut de téléchargement', async () => {
+  const books = await repository.getBooks({ limit: 50 });
+  const installed = books.filter((book) => book.downloadStatus === 'installed');
+  assert.ok(installed.length >= 1);
+  assert.ok(books.every((book) => 'downloadStatus' in book));
+});
+
+test('la fiche livre porte l’état de téléchargement et la taille', async () => {
+  const detail = await repository.getBookDetail('ed-muqaddima-01');
+  assert.equal(detail.download.status, 'installed');
+  assert.ok(detail.download.compressedSize > 0);
+  assert.ok(detail.download.releaseId);
+});
+
+test('l’espace occupé compte les fichiers réellement présents', async () => {
+  const usage = await repository.getStorageUsage();
+  assert.equal(usage.bookCount, database.installedBooks().length);
+  assert.ok(usage.bytes > 0);
+});
+
 test('supprimer en gardant la progression efface le fichier, pas la position', async () => {
   await repository.saveProgress({
     editionId: 'ed-risala-01',
