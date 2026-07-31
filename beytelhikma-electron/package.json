@@ -1,0 +1,24 @@
+{
+  "name": "beytelhikma-electron",
+  "version": "0.1.0",
+  "description": "Beyt El Hikma — bibliothèque numérique arabe, portage Electron",
+  "private": true,
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "shot": "node tools/capture-cli.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  },
+  "allowScripts": {
+    "electron@38.8.6": true
+  }
+}

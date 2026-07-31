@@ -6,6 +6,8 @@ Guidance pour Claude Code sur ce projet.
 
 **Beyt El Hikma** — application mobile Flutter/Dart de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). Voir `README.md` pour l'objectif complet et la structure cible.
 
+Deux implémentations coexistent, mêmes bases et mêmes règles : `beytelhikma/` (Flutter, référence) et `beytelhikma-electron/` (portage bureau Electron, voir son `README.md`).
+
 ## Commandes
 
 ```bash

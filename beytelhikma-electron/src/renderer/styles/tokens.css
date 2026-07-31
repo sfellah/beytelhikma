@@ -1,0 +1,86 @@
+/* Jetons repris de la configuration Tailwind des maquettes `ui-examples/`. */
+:root {
+  /* Couleurs */
+  --parchment-bg: #fbf9f4;
+  --surface: #fbf9f4;
+  --surface-bright: #fbf9f4;
+  --surface-dim: #dbdad5;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f5f3ee;
+  --surface-container: #f0eee9;
+  --surface-container-high: #eae8e3;
+  --surface-container-highest: #e4e2dd;
+  --surface-variant: #e4e2dd;
+
+  --on-surface: #1b1c19;
+  --on-surface-variant: #414847;
+  --outline: #717977;
+  --outline-variant: #c0c8c6;
+
+  --primary: #001614;
+  --primary-container: #002d29;
+  --on-primary: #ffffff;
+  --deep-emerald: #002d29;
+  --inverse-primary: #a5cfc8;
+
+  --secondary: #735a35;
+  --secondary-container: #fddaac;
+  --on-secondary-container: #785e39;
+  --antique-gold: #735a35;
+  --secondary-fixed-dim: #e2c194;
+
+  --tertiary-container: #0d2b34;
+  --slate-teal: #0c2a33;
+  --tertiary-fixed: #cae7f3;
+
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error: #ffffff;
+
+  /* Espacements */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-gutter: 20px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --container-max: 1200px;
+
+  /* Rayons — la maquette est volontairement peu arrondie */
+  --radius: 2px;
+  --radius-lg: 4px;
+  --radius-xl: 8px;
+  --radius-full: 12px;
+  --radius-pill: 999px;
+
+  /* Familles : les polices de la maquette (Playfair, Source Serif, Inter) ne
+     sont pas embarquées ; on retombe sur les serifs arabes du système. */
+  --font-display:
+    'Playfair Display', 'Amiri', 'Traditional Arabic', 'Times New Roman', serif;
+  --font-body:
+    'Source Serif 4', 'Amiri', 'Traditional Arabic', Georgia, serif;
+  --font-label: 'Inter', 'Segoe UI', 'Noto Kufi Arabic', system-ui, sans-serif;
+
+  /* Échelle typographique */
+  --text-display-lg: 48px;
+  --leading-display-lg: 56px;
+  --text-headline-lg: 32px;
+  --leading-headline-lg: 40px;
+  --text-headline-mobile: 28px;
+  --text-title-md: 20px;
+  --leading-title-md: 28px;
+  --text-body-lg: 18px;
+  --leading-body-lg: 30px;
+  --text-body-md: 16px;
+  --leading-body-md: 26px;
+  --text-label-md: 14px;
+  --leading-label-md: 20px;
+  --text-label-sm: 12px;
+  --leading-label-sm: 16px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 2px rgb(0 45 41 / 8%);
+  --shadow-md: 0 4px 14px rgb(0 45 41 / 12%);
+  --shadow-lg: 0 12px 32px rgb(0 45 41 / 16%);
+}

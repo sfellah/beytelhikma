@@ -1,0 +1,332 @@
+/* ------------------------------------------------------------- boutons */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 12px var(--space-lg);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s, transform 0.1s;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button--filled {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.button--filled:hover {
+  background: var(--primary-container);
+}
+
+.button--tonal {
+  background: var(--surface-container-low);
+  color: var(--deep-emerald);
+  border: 1px solid rgb(192 200 198 / 30%);
+}
+
+.button--tonal:hover {
+  background: var(--surface-container-high);
+}
+
+.button--icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  display: grid;
+  place-items: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.button--icon:hover {
+  background: var(--surface-container-low);
+  color: var(--deep-emerald);
+}
+
+.button--icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  letter-spacing: 0.03em;
+}
+
+.chip--muted {
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  border: 1px solid rgb(192 200 198 / 30%);
+}
+
+/* ------------------------------------------------- couverture générée */
+
+/* Les données d'exemple n'embarquent pas d'images : la couverture est
+   composée (dégradé déterministe + titre) comme dans l'application Flutter. */
+.cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-md);
+  color: #f6f1e6;
+  background: linear-gradient(160deg, var(--cover-from), var(--cover-to));
+  box-shadow: var(--shadow-sm);
+}
+
+.cover::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgb(226 193 148 / 45%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.cover__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 30%);
+}
+
+.cover__author {
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  opacity: 0.8;
+}
+
+.cover__progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgb(255 255 255 / 25%);
+}
+
+.cover__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--inverse-primary);
+}
+
+/* --------------------------------------------------------- carte livre */
+
+.book-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.book-card__media {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.book-card:hover .book-card__media {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
+}
+
+.book-card__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 35%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.book-card:hover .book-card__overlay {
+  opacity: 1;
+}
+
+.book-card__overlay > span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.book-card__title {
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  font-weight: 700;
+}
+
+.book-card__author {
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  color: var(--on-surface-variant);
+}
+
+.book-card__badge {
+  position: absolute;
+  top: var(--space-sm);
+  inset-inline-end: var(--space-sm);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------- progression */
+
+.progress {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-variant);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--deep-emerald);
+}
+
+/* ------------------------------------------------------ titres section */
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.section-header h2 {
+  color: var(--deep-emerald);
+}
+
+.section-header p {
+  margin-top: var(--space-xs);
+  color: var(--on-surface-variant);
+}
+
+.section-header__actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* ------------------------------------------- défilement horizontal */
+
+.scroller {
+  display: flex;
+  gap: var(--space-lg);
+  overflow-x: auto;
+  padding-bottom: var(--space-lg);
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+}
+
+.scroller > * {
+  scroll-snap-align: start;
+  flex: none;
+  width: 192px;
+}
+
+.scroller__more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgb(192 200 198 / 30%);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding: var(--space-md);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+}
+
+/* ------------------------------------------------------------- états */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xxl) var(--space-md);
+  text-align: center;
+  color: var(--on-surface-variant);
+}
+
+.state__title {
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  color: var(--on-surface);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--outline-variant);
+  border-top-color: var(--deep-emerald);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    90deg,
+    var(--surface-container) 25%,
+    var(--surface-container-high) 37%,
+    var(--surface-container) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
