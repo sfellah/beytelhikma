@@ -1,5 +1,6 @@
 import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
+import { authorsView } from './views/authors.js';
 import { bookDetailView } from './views/book-detail.js';
 import { homeView } from './views/home.js';
 import { collectionView, libraryView } from './views/library.js';
@@ -13,26 +14,18 @@ defineRoutes(
     '/reader/:id': readerView,
     '/category/:id': collectionView('category'),
     '/author/:id': collectionView('author'),
+    '/era/:id': collectionView('era'),
     // Hors périmètre v1 : la recherche et le gestionnaire de téléchargement.
     '/explore': placeholderView(
       'استكشاف',
       'الاستكشاف والبحث خارج نطاق هذه النسخة: الفهرس النصي جاهز في قواعد البيانات لكنه غير معروض بعد.',
       'explore',
     ),
-    '/authors': placeholderView(
-      'المؤلفون',
-      'صفحة المؤلفين قيد الإنجاز. يمكنك الوصول إلى أعمال كل مؤلف من صفحة الكتاب.',
-      'authors',
-    ),
+    '/authors': authorsView,
     '/settings': placeholderView(
       'الإعدادات',
       'إعدادات القراءة متاحة داخل القارئ نفسه (حجم الخط، المظهر، نوع الخط).',
       'settings',
-    ),
-    '/logout': placeholderView(
-      'الحساب',
-      'التطبيق يعمل محليًا بالكامل: لا حساب ولا اتصال بالشبكة.',
-      'logout',
     ),
   },
   {

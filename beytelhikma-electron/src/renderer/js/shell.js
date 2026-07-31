@@ -28,15 +28,41 @@ export function renderShell(host, { active }) {
   return content;
 }
 
+/* Le champ de recherche est reconstruit à chaque navigation : un seul écouteur
+   global qui vise le champ courant, plutôt qu'un écouteur par vue. */
+let searchField = null;
+
+addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+  if (!searchField?.isConnected) return;
+  event.preventDefault();
+  searchField.focus();
+  searchField.select();
+});
+
+/**
+ * Marque de l'application : le monogramme sert de logo partout (rail, barre
+ * supérieure, écrans vides) pour qu'il n'y ait qu'une seule identité à tenir.
+ */
+export function brandMark(size = 36) {
+  return h(
+    'span',
+    { class: 'brand-mark', style: { '--mark-size': `${size}px` } },
+    icon('book', { size: Math.round(size * 0.55) }),
+  );
+}
+
 function railItem({ key, path, label, icon: name }, active) {
+  const current = key === active;
   return h(
     'a',
     {
-      class: `rail__item${key === active ? ' is-active' : ''}`,
+      class: `rail__item${current ? ' is-active' : ''}`,
       href: `#${path}`,
       title: label,
+      'aria-current': current ? 'page' : null,
     },
-    icon(name, { size: 22 }),
+    h('span', { class: 'rail__item-icon' }, icon(name, { size: 22 })),
     h('span', {}, label),
   );
 }
@@ -44,11 +70,16 @@ function railItem({ key, path, label, icon: name }, active) {
 function rail(active) {
   return h(
     'nav',
-    { class: 'rail' },
+    { class: 'rail', 'aria-label': 'التنقل الرئيسي' },
     h(
       'div',
       { class: 'rail__brand' },
-      h('a', { href: '#/home', title: 'بيت الحكمة' }, icon('book', { size: 30 })),
+      h(
+        'a',
+        { href: '#/home', title: 'بيت الحكمة' },
+        brandMark(40),
+        h('span', { class: 'rail__wordmark' }, 'بيت الحكمة'),
+      ),
     ),
     h(
       'div',
@@ -62,23 +93,25 @@ function rail(active) {
         { key: 'settings', path: '/settings', label: 'الإعدادات', icon: 'sliders' },
         active,
       ),
-      railItem(
-        { key: 'logout', path: '/logout', label: 'خروج', icon: 'logout' },
-        active,
-      ),
     ),
   );
 }
 
+/**
+ * Barre supérieure : la marque, la recherche, les réglages. Pas de compte ni
+ * de notifications — l'application est locale, il n'y a personne à notifier.
+ */
 function topbar() {
   const field = h('input', {
     type: 'search',
+    'aria-label': 'البحث في المكتبة',
     placeholder: 'البحث عن كتاب، مؤلف، طبعة…',
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
       toast('البحث غير مفعَّل في هذه النسخة');
     },
   });
+  searchField = field;
 
   return h(
     'header',
@@ -86,30 +119,29 @@ function topbar() {
     h(
       'a',
       { class: 'topbar__brand', href: '#/home' },
-      icon('book', { size: 28 }),
+      brandMark(34),
       h('span', {}, 'بيت الحكمة'),
     ),
-    h('div', { class: 'topbar__search' }, icon('search', { size: 20 }), field),
+    h(
+      'div',
+      { class: 'topbar__search' },
+      icon('search', { size: 20 }),
+      field,
+      h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
+    ),
     h(
       'div',
       { class: 'topbar__actions' },
       h(
-        'button',
+        'a',
         {
           class: 'topbar__icon-button',
-          title: 'التنبيهات',
-          onclick: () => toast('لا توجد تنبيهات'),
+          href: '#/settings',
+          title: 'الإعدادات',
+          'aria-label': 'الإعدادات',
         },
-        icon('bell', { size: 22 }),
-        h('span', { class: 'topbar__badge' }),
+        icon('sliders', { size: 22 }),
       ),
-      h(
-        'div',
-        { class: 'topbar__user' },
-        h('span', { class: 'label-md' }, 'قارئ ضيف'),
-        h('div', { class: 'avatar' }, icon('user', { size: 18 })),
-      ),
-      h('div', { class: 'avatar topbar__avatar-mobile' }, icon('user', { size: 18 })),
     ),
   );
 }

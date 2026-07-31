@@ -57,8 +57,16 @@ button {
   padding: 0;
 }
 
+/* Anneau de focus unique pour tout ce qui se prend au clavier : le contour
+   natif disparaît sur les surfaces sombres, celui-ci non. */
+:focus-visible {
+  outline: 2px solid var(--deep-emerald);
+  outline-offset: 3px;
+  border-radius: var(--radius-lg);
+}
+
 ::selection {
-  background: rgb(115 90 53 / 30%);
+  background: var(--gold-veil);
   color: var(--primary);
 }
 
@@ -110,6 +118,13 @@ button {
   font-weight: 600;
 }
 
+.headline-md {
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
+  font-weight: 500;
+}
+
 .title-md {
   font-family: var(--font-display);
   font-size: var(--text-title-md);
@@ -154,7 +169,8 @@ button {
 }
 
 .clamp-1,
-.clamp-2 {
+.clamp-2,
+.clamp-4 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -166,4 +182,35 @@ button {
 
 .clamp-2 {
   -webkit-line-clamp: 2;
+}
+
+.clamp-4 {
+  -webkit-line-clamp: 4;
+}
+
+/* Entrée de bloc : l'état par défaut est celui qui est *visible*. `is-pending`
+   n'est posé que lorsque l'animation peut réellement être retirée (voir
+   `views/home.js`), pour qu'un échec laisse la page lisible. */
+.is-pending {
+  opacity: 0;
+  transform: translateY(14px);
+  filter: blur(6px);
+}
+
+[data-reveal] {
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms),
+    filter 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

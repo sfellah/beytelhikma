@@ -1,116 +1,488 @@
 /* =========================================================== accueil == */
 
-.home section {
-  margin-bottom: var(--space-xxl);
-}
-
-.hero {
+/* Une seule règle de césure pour toute la page : un filet pleine largeur et
+   une respiration franche au-dessus du titre. C'est ce qui distingue les
+   sections les unes des autres, sans fond ni cadre supplémentaire. */
+.home {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xl);
-  align-items: stretch;
 }
 
-.hero__intro h1 {
-  color: var(--deep-emerald);
-  margin-bottom: var(--space-md);
+.section-block {
+  padding-top: clamp(40px, 6vw, 72px);
+  margin-top: clamp(32px, 5vw, 56px);
+  border-top: 1px solid var(--rule-strong);
 }
 
-.hero__intro p {
-  color: var(--on-surface-variant);
+.section-block > .section-header {
   margin-bottom: var(--space-xl);
 }
 
+/* ------------------------------------------------------- héros (bento) */
+
+/* Grille de 12 colonnes : la reprise occupe 8, la colonne d'appoint 4. */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.bento > .continue-card {
+  grid-column: span 12;
+}
+
+.bento__side {
+  grid-column: span 12;
+  display: grid;
+  gap: var(--space-lg);
+}
+
+@media (min-width: 1024px) {
+  .bento > .continue-card {
+    grid-column: span 8;
+  }
+
+  .bento__side {
+    grid-column: span 4;
+    align-content: stretch;
+  }
+}
+
+.link-action {
+  color: var(--primary);
+  align-self: center;
+}
+
+.link-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ---------------------------------------------------- carte de reprise */
+
 .continue-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--space-xl);
+  align-items: center;
   padding: var(--space-lg);
-  background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 30%);
+  background: var(--surface-container-lowest);
   border-radius: var(--radius-xl);
-  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* Voile émeraude au survol : la carte s'anime sans bouger de sa grille. */
+.continue-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--emerald-veil);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.continue-card:hover::before {
+  opacity: 1;
 }
 
 .continue-card__cover {
-  width: 128px;
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: clamp(128px, 34%, 192px);
   flex: none;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.continue-card:hover .continue-card__cover {
+  transform: scale(1.04);
 }
 
 .continue-card__body {
-  flex: 1;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-}
-
-.continue-card__head {
-  display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
 }
 
 .continue-card__title {
   color: var(--primary);
   font-weight: 700;
-  margin-bottom: 2px;
+  margin-top: var(--space-md);
 }
 
 .continue-card__author {
   color: var(--on-surface-variant);
-  margin-bottom: var(--space-md);
+  margin-top: var(--space-xs);
 }
 
-.quote {
-  border-inline-start: 4px solid var(--antique-gold);
-  padding-inline-start: var(--space-md);
-  font-style: italic;
-  margin-bottom: var(--space-lg);
+.continue-card .button {
+  margin-top: var(--space-xl);
 }
 
-.bento {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-lg);
-}
-
-.bento h2 {
-  color: var(--deep-emerald);
-  margin-bottom: var(--space-lg);
-}
-
-/* Comme la maquette : deux colonnes en étroit, trois dès qu'il y a la place. */
-.disciplines {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-md);
-}
-
-@media (min-width: 640px) {
-  .disciplines {
-    grid-template-columns: repeat(3, 1fr);
+@media (min-width: 720px) {
+  .continue-card {
+    flex-direction: row;
+    padding: var(--space-lg) var(--space-xl);
   }
 }
 
+.quote {
+  margin-top: var(--space-md);
+  border-inline-start: 1px solid var(--secondary-fixed-dim);
+  padding-inline-start: var(--space-md);
+  font-style: italic;
+  color: var(--on-surface-variant);
+}
+
+/* ------------------------------------------ jauge « tasbih » (sable → émeraude) */
+
+.meter {
+  width: 100%;
+  margin-top: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.meter__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.meter__value {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.meter__track {
+  height: 8px;
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-container);
+  overflow: hidden;
+}
+
+/* Remplissage par `scaleX` et non par `width` : l'animation reste sur le
+   compositeur. L'origine est à droite — c'est le début de ligne en RTL. */
+.meter__track > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: 100% 50%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ------------------------------------------------- colonne d'appoint */
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-card__mark {
+  display: flex;
+  align-self: flex-end;
+  color: var(--on-primary-container);
+}
+
+.stat-card__label {
+  opacity: 0.8;
+}
+
+.stat-card__value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 42px;
+  font-weight: 700;
+}
+
+.stat-card__note {
+  margin-top: auto;
+  color: var(--primary-fixed-dim);
+}
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-high);
+  transition: background-color 0.2s;
+}
+
+.quick-card:hover {
+  background: var(--secondary-container);
+}
+
+.quick-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quick-card__title {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.quick-card__go {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-lowest);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quick-card:hover .quick-card__go {
+  box-shadow: var(--shadow-md);
+  transform: translateX(-4px);
+}
+
+/* ------------------------------------------------------- votre étagère */
+
+/* Des rangées, pas des cartes : l'étagère se lit en colonne (titre,
+   progression, action) là où les nouveautés se regardent en couverture. */
+.shelf__list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--surface-container-lowest);
+}
+
+.shelf__list > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.shelf-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  transition: background-color 0.2s;
+}
+
+.shelf-row:hover {
+  background: var(--surface-container-low);
+}
+
+.shelf-row__cover {
+  display: block;
+  width: 44px;
+  flex: none;
+}
+
+.shelf-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelf-row__title {
+  color: var(--primary);
+}
+
+.shelf-row__meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  grid-column: 2;
+}
+
+.shelf-row__state {
+  color: var(--on-surface-variant);
+}
+
+.shelf-row__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--deep-emerald);
+  grid-column: 2;
+}
+
+.shelf-row__action .icon {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shelf-row:hover .shelf-row__action .icon {
+  transform: translateX(-4px);
+}
+
+@media (min-width: 720px) {
+  .shelf-row {
+    grid-template-columns: auto minmax(0, 1fr) minmax(120px, 200px) auto;
+    gap: var(--space-lg);
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .shelf-row__meter,
+  .shelf-row__action {
+    grid-column: auto;
+  }
+}
+
+/* ------------------------------------------------- siècles (frise) */
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-md);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.era {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--rule-strong);
+  transition: border-color 0.25s;
+}
+
+.era:hover {
+  border-color: var(--antique-gold);
+}
+
+/* La barre porte l'information : combien de livres, relativement au siècle le
+   mieux fourni. Elle n'est pas décorative. */
+.era__bar {
+  display: block;
+  height: 4px;
+  width: var(--fill, 0%);
+  min-width: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--deep-emerald);
+  transform-origin: 100% 50%;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.era:hover .era__bar {
+  transform: scaleY(2);
+}
+
+.era__name {
+  color: var(--primary);
+}
+
+/* ---------------------------------------------------------- nouveautés */
+
+/* Les cartes qui sortent du cadre s'estompent au lieu d'être tranchées. */
+.scroller-frame {
+  --fade: 40px;
+
+  position: relative;
+  margin-inline: calc(var(--space-md) * -1);
+  padding-inline: var(--space-md);
+}
+
+/* Le dégradé est physique (gauche/droite), la liste est logique : on annule
+   donc le voile du côté déjà atteint en tenant compte du sens d'écriture. */
+.scroller {
+  --fade-left: var(--fade);
+  --fade-right: var(--fade);
+
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+[dir='rtl'] .scroller--at-start,
+html:not([dir='rtl']) .scroller--at-end {
+  --fade-right: 0px;
+}
+
+[dir='rtl'] .scroller--at-end,
+html:not([dir='rtl']) .scroller--at-start {
+  --fade-left: 0px;
+}
+
+.scroller > [role='listitem'] {
+  scroll-snap-align: start;
+  flex: none;
+  width: clamp(148px, 20vw, 200px);
+}
+
+/* -------------------------------------------------------- disciplines */
+
+.disciplines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--space-md);
+}
+
 .discipline {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  padding: var(--space-md);
-  min-height: 132px;
+  padding: var(--space-lg) var(--space-md);
+  min-height: 148px;
   text-align: center;
   background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-xl);
-  transition: background-color 0.2s;
+  transition: background-color 0.25s, border-color 0.25s,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .discipline:hover {
-  background: var(--surface-container);
+  background: var(--surface-container-lowest);
+  border-color: var(--gold);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.discipline__label {
+  color: var(--primary);
+}
+
+.discipline--more {
+  background: transparent;
+  border-style: dashed;
 }
 
 .discipline__bubble {
@@ -119,30 +491,37 @@
   width: 48px;
   height: 48px;
   border-radius: var(--radius-pill);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.discipline:hover .discipline__bubble {
+  transform: scale(1.08);
 }
 
 .discipline__bubble--teal {
-  background: rgb(13 43 52 / 10%);
+  background: var(--teal-veil);
   color: var(--slate-teal);
 }
 
 .discipline__bubble--gold {
-  background: rgb(253 218 172 / 45%);
+  background: var(--gold-veil);
   color: var(--secondary);
 }
 
 .discipline__bubble--emerald {
-  background: rgb(0 45 41 / 10%);
+  background: var(--emerald-veil);
   color: var(--deep-emerald);
 }
 
+/* --------------------------------------------------- auteur en vedette */
+
 .author-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: var(--space-lg);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg) clamp(24px, 4vw, 48px);
+  padding: clamp(20px, 3vw, 32px);
   background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-xl);
 }
 
@@ -150,7 +529,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  margin-bottom: var(--space-md);
 }
 
 .author-card__portrait {
@@ -169,15 +547,18 @@
 
 .author-card__bio {
   color: var(--on-surface-variant);
-  margin-bottom: var(--space-lg);
-  flex: 1;
+  max-width: 68ch;
 }
 
 .author-card__works {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  margin-top: auto;
+}
+
+.author-card__works-title {
+  color: var(--on-surface-variant);
+  margin-bottom: var(--space-sm);
 }
 
 .author-work {
@@ -187,11 +568,10 @@
   padding: var(--space-sm);
   border-radius: var(--radius-lg);
   transition: background-color 0.2s;
-  cursor: pointer;
 }
 
 .author-work:hover {
-  background: var(--surface-container);
+  background: var(--surface-container-high);
 }
 
 .author-work__tile {
@@ -201,32 +581,379 @@
   height: 40px;
   flex: none;
   border-radius: var(--radius);
-  background: rgb(13 43 52 / 12%);
+  background: var(--teal-veil);
   color: var(--slate-teal);
 }
 
+.author-work__chevron {
+  display: flex;
+  margin-inline-start: auto;
+  color: var(--outline);
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.author-work:hover .author-work__chevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
 @media (min-width: 900px) {
-  .hero {
-    flex-direction: row;
-    gap: var(--space-xxl);
+  .author-card {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.6fr);
+    align-items: start;
   }
 
-  .hero__intro {
-    width: 33%;
-    padding-top: var(--space-xl);
+  .author-card__head {
+    grid-column: 1;
   }
 
-  .hero__card {
-    width: 67%;
+  .author-card__bio {
+    grid-column: 1;
+    margin-top: calc(var(--space-lg) * -1 + var(--space-xs));
   }
 
-  .continue-card {
-    flex-direction: row;
+  .author-card__works {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* =========================================================== auteurs == */
+
+.authors {
+  display: flex;
+  flex-direction: column;
+}
+
+.authors__title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 4.6vw, 52px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: var(--deep-emerald);
+  margin-bottom: var(--space-sm);
+}
+
+.authors__lede {
+  max-width: 58ch;
+  color: var(--on-surface-variant);
+}
+
+/* Portrait : les données n'ont pas d'image, l'initiale tient le rôle. Le
+   cercle doré est la constante qui identifie « un auteur » partout. */
+.portrait {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--antique-gold);
+  background: var(--surface-container-high);
+  color: var(--deep-emerald);
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s;
+}
+
+.portrait--sm {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  border-width: 1px;
+}
+
+.portrait--lg {
+  width: clamp(72px, 9vw, 104px);
+  height: clamp(72px, 9vw, 104px);
+  font-size: clamp(30px, 4vw, 42px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ------------------------------------------------------ le plus présent */
+
+.lead-card {
+  display: grid;
+  gap: clamp(20px, 3vw, 32px);
+  padding: clamp(20px, 3vw, 36px);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.lead-card__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.lead-card__names {
+  min-width: 0;
+}
+
+.lead-card__name {
+  color: var(--deep-emerald);
+  margin-bottom: 2px;
+}
+
+.lead-card__meta {
+  color: var(--on-surface-variant);
+  margin-top: var(--space-sm);
+}
+
+.lead-card__bio {
+  color: var(--on-surface-variant);
+  max-width: 70ch;
+}
+
+/* `auto-fill` et non `auto-fit` : avec une seule œuvre, `auto-fit` étirerait la
+   couverture sur toute la colonne. */
+.lead-card__works {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 128px));
+  justify-content: start;
+  align-content: start;
+  gap: var(--space-md);
+}
+
+.work-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.work-tile__cover {
+  display: block;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s;
+}
+
+.work-tile:hover .work-tile__cover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+}
+
+.work-tile__title {
+  color: var(--primary);
+}
+
+.lead-card__cta {
+  justify-self: start;
+}
+
+@media (min-width: 940px) {
+  .lead-card {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 38%);
+    align-items: start;
+    align-content: start;
   }
 
-  .bento {
-    grid-template-columns: 2fr 1fr;
+  .lead-card__identity,
+  .lead-card__bio,
+  .lead-card__cta {
+    grid-column: 1;
   }
+
+  .lead-card__works {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+}
+
+/* ---------------------------------------------------------- médaillons */
+
+.medallions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+  gap: var(--space-md);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.medallion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  height: 100%;
+  padding: var(--space-md);
+  background: var(--surface-container-low);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  transition: background-color 0.25s, border-color 0.25s,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.medallion:hover {
+  background: var(--surface-container-lowest);
+  border-color: var(--gold);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.medallion:hover .portrait {
+  transform: scale(1.05);
+}
+
+.medallion__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.medallion__name {
+  color: var(--primary);
+}
+
+/* Combien de livres, relativement au mieux fourni de la liste. */
+.medallion__bar {
+  display: block;
+  height: 3px;
+  width: var(--fill, 0%);
+  min-width: 10px;
+  margin-block: var(--space-xs) 2px;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-fixed-dim);
+}
+
+/* ------------------------------------------------------ couches (siècles) */
+
+.layers {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.layer {
+  display: grid;
+  gap: var(--space-md);
+  padding-block: var(--space-lg);
+  border-top: 1px solid var(--rule);
+}
+
+.layer:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.layer__label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.layer__century {
+  color: var(--deep-emerald);
+}
+
+.layer__century:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.layer__people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.person-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface-container-low);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  color: var(--on-surface);
+  transition: background-color 0.2s, border-color 0.2s, transform 0.25s;
+}
+
+.person-chip:hover {
+  background: var(--secondary-container);
+  border-color: transparent;
+  transform: translateY(-2px);
+}
+
+.person-chip__year {
+  font-size: var(--text-label-sm);
+  color: var(--on-surface-variant);
+}
+
+@media (min-width: 800px) {
+  .layer {
+    grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: baseline;
+  }
+
+  .layer__label {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+/* ---------------------------------------------------------------- index */
+
+.author-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-sm) var(--space-md);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.author-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-sm);
+  padding-inline: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-xl);
+  border: 1px solid transparent;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.author-tile:hover {
+  background: var(--surface-container-low);
+  border-color: var(--rule);
+}
+
+.author-tile__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.author-tile__name {
+  color: var(--primary);
+}
+
+.author-tile__chevron {
+  display: flex;
+  color: var(--outline);
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.author-tile:hover .author-tile__chevron {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 /* ======================================================== bibliothèque == */
@@ -256,7 +983,7 @@
   padding: 4px;
   gap: 4px;
   background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
 }
 
@@ -284,7 +1011,7 @@
   gap: 4px;
   padding: 4px;
   background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
 }
 
@@ -330,7 +1057,7 @@
   gap: var(--space-md);
   padding: var(--space-sm);
   border-radius: var(--radius-xl);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   background: var(--surface-container-low);
 }
 
@@ -386,7 +1113,7 @@
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  border: 1px solid rgb(192 200 198 / 20%);
+  border: 1px solid var(--rule);
 }
 
 .detail__actions {
@@ -435,15 +1162,16 @@
   width: 48px;
   height: 48px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgb(115 90 53 / 50%);
+  border: 1px solid var(--gold);
   background: var(--surface-container-high);
   color: var(--deep-emerald);
   font-family: var(--font-display);
 }
 
+/* Or *lisible* et non or décoratif : c'est du texte, il lui faut 4.5:1. */
 .detail__author-link {
   margin-inline-start: auto;
-  color: var(--antique-gold);
+  color: var(--gold-ink);
   text-decoration: underline;
   text-underline-offset: 4px;
   font-family: var(--font-label);
@@ -463,7 +1191,7 @@
   gap: var(--space-md);
   padding: var(--space-lg);
   background: var(--surface-container-low);
-  border: 1px solid rgb(192 200 198 / 20%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-xl);
 }
 
@@ -488,7 +1216,7 @@
   color: var(--deep-emerald);
   padding-bottom: var(--space-sm);
   margin-bottom: var(--space-md);
-  border-bottom: 1px solid rgb(192 200 198 / 30%);
+  border-bottom: 1px solid var(--rule);
 }
 
 .toc__list {
@@ -498,14 +1226,14 @@
   max-height: 320px;
   overflow-y: auto;
   padding: var(--space-sm);
-  background: rgb(245 243 238 / 50%);
-  border: 1px solid rgb(192 200 198 / 20%);
+  background: var(--sink);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
 }
 
 .toc__chapter {
   background: var(--surface);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -543,8 +1271,8 @@
   flex-direction: column;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-xl);
-  background: rgb(245 243 238 / 40%);
-  border-top: 1px solid rgb(192 200 198 / 20%);
+  background: var(--sink);
+  border-top: 1px solid var(--rule);
   color: var(--on-surface-variant);
 }
 
@@ -562,7 +1290,7 @@
 }
 
 .detail__related {
-  border-top: 1px solid rgb(192 200 198 / 30%);
+  border-top: 1px solid var(--rule);
   padding-top: var(--space-xl);
 }
 
@@ -579,12 +1307,14 @@
 /* ============================================================ lecteur == */
 
 .reader {
-  --reader-bg: var(--parchment-bg);
-  --reader-fg: #1b1c19;
-  --reader-muted: #414847;
-  --reader-rule: rgb(192 200 198 / 40%);
+  --reader-bg: var(--page);
+  --reader-fg: var(--ink);
+  --reader-muted: var(--ink-soft);
+  --reader-rule: var(--rule-strong);
+  --reader-accent: var(--primary);
   --reader-font: var(--font-body);
   --reader-size: 22px;
+  --reader-fill: 0%;
 
   position: fixed;
   inset: 0;
@@ -595,30 +1325,46 @@
 }
 
 .reader--white {
-  --reader-bg: #ffffff;
-  --reader-fg: #14150f;
-  --reader-muted: #4b514f;
+  --reader-bg: var(--surface-container-lowest);
+  --reader-fg: #131315;
+  --reader-muted: #404944;
+  --reader-rule: var(--outline-variant);
 }
 
+/* Nuit : le graphite de la palette, l'émeraude claire pour les repères. */
 .reader--night {
-  --reader-bg: #14150f;
-  --reader-fg: #e6e3da;
-  --reader-muted: #a7a89f;
-  --reader-rule: rgb(230 227 218 / 18%);
+  --reader-bg: #1a1c1a;
+  --reader-fg: #e6e3de;
+  --reader-muted: #b2b2ae;
+  --reader-rule: rgb(230 227 222 / 16%);
+  --reader-accent: var(--primary-fixed-dim);
 }
 
-.reader--sans {
+/* Trois grains de lecture : Amiri (naskh de bibliothèque), Noto Naskh (plus
+   ouvert donc plus lisible en petit corps), IBM Plex Sans Arabic (écran). */
+.reader--font-serif {
+  --reader-font: var(--font-body);
+}
+
+.reader--font-naskh {
+  --reader-font: var(--font-naskh);
+}
+
+.reader--font-sans {
   --reader-font: var(--font-label);
 }
 
+/* Les deux barres sont des *voiles* posés sur le texte : translucides, floutées,
+   elles s'effacent en opacité autant qu'en position pour que la page ne bouge
+   jamais sous l'œil. */
 .reader__header,
 .reader__footer {
   position: absolute;
   inset-inline: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--reader-bg) 92%, transparent);
-  backdrop-filter: blur(12px);
-  transition: transform 0.3s;
+  background: color-mix(in srgb, var(--reader-bg) 90%, transparent);
+  backdrop-filter: blur(14px);
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .reader__header {
@@ -628,68 +1374,37 @@
 
 .reader__header.is-hidden {
   transform: translateY(-100%);
+  opacity: 0;
 }
 
 .reader__footer {
   bottom: 0;
   border-top: 1px solid var(--reader-rule);
-  padding: var(--space-sm) var(--space-md);
 }
 
 .reader__footer.is-hidden {
   transform: translateY(100%);
+  opacity: 0;
 }
 
-.reader__bar {
-  position: relative;
+/* Maquette V2 : outils groupés au départ de la ligne, titre et fermeture à
+   l'autre bout — une seule hauteur de barre (56 px) en haut comme en bas. */
+.reader__bar,
+.reader__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
+  height: 56px;
   max-width: var(--container-max);
   margin-inline: auto;
-  padding: var(--space-md) var(--space-lg);
-}
-
-.reader__back {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--reader-muted);
-}
-
-.reader__back:hover {
-  color: var(--reader-fg);
-}
-
-/* Fenêtre étroite : l'icône suffit, le titre du livre doit garder la place. */
-@media (max-width: 640px) {
-  .reader__back span {
-    display: none;
-  }
-}
-
-.reader__titles {
-  text-align: center;
-  min-width: 0;
-}
-
-.reader__titles h1 {
-  font-family: var(--font-display);
-  font-size: var(--text-title-md);
-  line-height: var(--leading-title-md);
-  color: var(--reader-fg);
-}
-
-.reader__titles p {
-  margin-top: 2px;
-  color: var(--reader-muted);
+  padding-inline: var(--space-md);
 }
 
 .reader__tools {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   color: var(--reader-muted);
 }
 
@@ -706,38 +1421,122 @@
   color: var(--reader-fg);
 }
 
+.reader__tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+  background: none;
+}
+
+.reader__titles {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  color: var(--reader-muted);
+}
+
+.reader__titles h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-label-md);
+  line-height: var(--leading-label-md);
+  font-weight: 700;
+  color: var(--reader-accent);
+}
+
+/* Fenêtre étroite : le titre du livre reste en page, la barre garde ses outils
+   et la jauge récupère la place laissée par le pourcentage. */
+@media (max-width: 640px) {
+  .reader__titles h1,
+  .reader__percent {
+    display: none;
+  }
+
+  .reader__bar,
+  .reader__toolbar {
+    padding-inline: var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  .reader__tools {
+    gap: 0;
+  }
+
+  .reader__progress {
+    margin-inline: var(--space-sm);
+  }
+
+  .reader__pager-label {
+    min-width: 64px;
+  }
+}
+
 .reader__scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 96px var(--space-md) 128px;
+  padding: clamp(96px, 14vh, 160px) var(--space-gutter) 160px;
+  cursor: text;
 }
 
+/* Entête de page : le titre du livre, presque effacé, puis un filet. */
+.reader__page-head {
+  max-width: 750px;
+  margin: 0 auto var(--space-xxl);
+  text-align: center;
+  opacity: 0.4;
+}
+
+.reader__hairline {
+  display: block;
+  width: 96px;
+  height: 1px;
+  margin: var(--space-sm) auto 0;
+  background: currentcolor;
+  opacity: 0.25;
+}
+
+.reader__chapter {
+  max-width: 750px;
+  margin: 0 auto var(--space-xl);
+  font-family: var(--font-display);
+  font-size: var(--text-headline-lg);
+  line-height: 1.6;
+  font-weight: 600;
+  text-align: center;
+  color: var(--reader-accent);
+}
+
+/* 750px : la longueur de ligne que `DESIGN.md` fixe pour la lecture (8 colonnes
+   sur 12), et l'interligne 2.2 qui laisse respirer le tachkil. */
 .reader__page {
-  max-width: 46rem;
+  max-width: 750px;
   margin-inline: auto;
   font-family: var(--reader-font);
   font-size: var(--reader-size);
-  line-height: 1.85;
+  line-height: 2.2;
 }
 
 .reader__page p {
-  margin-bottom: 1.4em;
+  margin-bottom: 1.5em;
   text-align: justify;
 }
 
+/* Titre de chapitre : centré, émeraude, isolé — c'est le seul repère fort. */
 .reader__page h1,
 .reader__page h2,
 .reader__page h3 {
   font-family: var(--font-display);
-  font-size: 1.18em;
-  margin-bottom: 0.9em;
-  color: var(--reader-fg);
+  font-size: 1.14em;
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 1.6em;
+  color: var(--reader-accent);
 }
 
 .reader__page blockquote {
   margin: 0 0 1.4em;
   padding-inline-start: var(--space-md);
-  border-inline-start: 3px solid var(--antique-gold);
+  border-inline-start: 1px solid var(--reader-accent);
   font-style: italic;
 }
 
@@ -748,12 +1547,12 @@
 
 .reader__page sup.fn {
   font-size: 0.62em;
-  color: var(--antique-gold);
+  color: var(--reader-accent);
   vertical-align: super;
 }
 
 .reader__footnotes {
-  max-width: 46rem;
+  max-width: 750px;
   margin: var(--space-xl) auto 0;
   padding-top: var(--space-md);
   border-top: 1px solid var(--reader-rule);
@@ -764,49 +1563,95 @@
   white-space: pre-line;
 }
 
+/* Pied de page imprimé : « صفحة ١٤ من ١٥٦ », discret comme dans un livre. */
+.reader__page-foot {
+  max-width: 750px;
+  margin: var(--space-xxl) auto 0;
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--reader-rule);
+  text-align: center;
+  opacity: 0.4;
+}
+
 .reader__pager {
-  max-width: 46rem;
-  margin: var(--space-xl) auto 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   color: var(--reader-muted);
 }
 
-.reader__pager .button--icon {
-  border-color: var(--reader-rule);
+.reader__pager-label {
+  min-width: 88px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__percent {
   color: var(--reader-muted);
+  min-width: 44px;
+  text-align: end;
 }
 
 .reader__progress {
-  max-width: 46rem;
-  margin-inline: auto;
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
+  align-items: center;
+  margin-inline: var(--space-lg);
 }
 
-.reader__progress input[type='range'] {
+/* Jauge de lecture : rail sable, remplissage émeraude depuis la droite (sens
+   de lecture), poignée ronde — la « tasbih » de `DESIGN.md`. */
+.reader__rail {
   width: 100%;
-  accent-color: var(--deep-emerald);
   height: 4px;
+  appearance: none;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to left,
+    var(--reader-accent) 0 var(--reader-fill),
+    color-mix(in srgb, var(--reader-rule) 60%, transparent) var(--reader-fill) 100%
+  );
+  cursor: pointer;
 }
 
-.reader__progress-info {
-  display: flex;
-  justify-content: space-between;
-  color: var(--reader-muted);
+.reader__rail::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--reader-accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+  cursor: pointer;
 }
 
-/* Le panneau glisse depuis le bord gauche *visuel* : `transform` ignore le sens
-   d'écriture, on ancre donc volontairement en physique plutôt qu'en logique. */
-.reader__settings {
+/* Bulle d'aide au premier écran : elle dit comment escamoter l'interface,
+   puis s'efface d'elle-même. */
+.reader__hint {
+  position: absolute;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+  color: color-mix(in srgb, var(--reader-fg) 45%, transparent);
+  pointer-events: none;
+  transition: opacity 0.7s ease;
+}
+
+.reader__hint.is-gone {
+  opacity: 0;
+}
+
+/* Les panneaux glissent depuis le bord gauche *visuel* : `transform` ignore le
+   sens d'écriture, on ancre donc volontairement en physique. */
+.reader__panel {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 260px;
+  width: 300px;
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -817,19 +1662,24 @@
   transition: transform 0.3s ease-in-out;
 }
 
-.reader__settings.is-open {
+.reader__panel.is-open {
   transform: translateX(0);
 }
 
-.reader__settings-head {
+.reader__panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-md);
   border-bottom: 1px solid var(--reader-rule);
+  color: var(--reader-muted);
 }
 
-.reader__settings-body {
+.reader__panel-head h2 {
+  color: var(--reader-fg);
+}
+
+.reader__panel-body {
   flex: 1;
   overflow-y: auto;
   display: flex;
@@ -838,10 +1688,98 @@
   padding: var(--space-md);
 }
 
-.reader__settings-body label {
+.reader__panel-body label {
   display: block;
   margin-bottom: var(--space-sm);
   color: var(--reader-muted);
+}
+
+.reader__toc-list {
+  gap: 2px;
+}
+
+.reader__toc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  text-align: start;
+  color: var(--reader-fg);
+}
+
+/* « ص ٩٩ » ne doit jamais se casser en deux lignes derrière un titre long. */
+.reader__toc-item > span:last-child {
+  white-space: nowrap;
+}
+
+.reader__toc-item.is-child {
+  padding-inline-start: var(--space-xl);
+  color: var(--reader-muted);
+}
+
+.reader__toc-item:hover {
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+}
+
+/* Menu de sélection (V2) : il suit le texte sélectionné, sans jamais le couvrir. */
+.reader__selection {
+  position: absolute;
+  z-index: 40;
+  width: 256px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--reader-rule);
+  border-radius: var(--radius-xl);
+  background: var(--reader-bg);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.reader__selection.is-open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.reader__selection-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-rule) 50%, transparent);
+  text-align: start;
+  color: var(--reader-muted);
+}
+
+.reader__selection-item:hover {
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+  color: var(--reader-fg);
+}
+
+.reader__highlights {
+  display: flex;
+  justify-content: space-around;
+  padding: var(--space-sm) var(--space-md);
+  background: color-mix(in srgb, var(--reader-fg) 4%, transparent);
+}
+
+.reader__highlights button {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+}
+
+.reader__highlights button:hover {
+  border-color: var(--reader-accent);
 }
 
 .font-size-control {
@@ -855,7 +1793,7 @@
 
 .font-size-control input {
   flex: 1;
-  accent-color: var(--deep-emerald);
+  accent-color: var(--reader-accent);
 }
 
 .font-size-control button {
@@ -885,7 +1823,7 @@
 }
 
 .theme-choices button.is-active {
-  border: 2px solid var(--deep-emerald);
+  border: 2px solid var(--reader-accent);
 }
 
 .theme-choices button > span {
@@ -913,6 +1851,6 @@
 
 .font-choices button.is-active {
   background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
-  border-color: rgb(0 45 41 / 25%);
+  border-color: var(--reader-rule);
   color: var(--reader-fg);
 }

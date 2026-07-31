@@ -29,7 +29,7 @@
 .button--tonal {
   background: var(--surface-container-low);
   color: var(--deep-emerald);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
 }
 
 .button--tonal:hover {
@@ -73,7 +73,7 @@
 .chip--muted {
   background: var(--surface-container-low);
   color: var(--on-surface-variant);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
 }
 
 /* ------------------------------------------------- couverture générée */
@@ -99,7 +99,7 @@
   content: '';
   position: absolute;
   inset: 6px;
-  border: 1px solid rgb(226 193 148 / 45%);
+  border: 1px solid rgb(217 184 113 / 45%);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -218,18 +218,43 @@
   background: var(--deep-emerald);
 }
 
+/* ------------------------------------------------- action de téléchargement */
+
+.download-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.download-action .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.download-action__error {
+  color: var(--error);
+}
+
 /* ------------------------------------------------------ titres section */
 
 .section-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-end;
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
 }
 
+.section-header__text {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
 .section-header h2 {
   color: var(--deep-emerald);
+  text-wrap: balance;
 }
 
 .section-header p {
@@ -256,7 +281,7 @@
 .scroller > * {
   scroll-snap-align: start;
   flex: none;
-  width: 192px;
+  width: clamp(148px, 20vw, 200px);
 }
 
 .scroller__more {
@@ -267,7 +292,7 @@
   gap: var(--space-sm);
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-lg);
-  border: 1px solid rgb(192 200 198 / 30%);
+  border: 1px solid var(--rule);
   background: var(--surface-container-high);
   color: var(--on-surface-variant);
   text-align: center;

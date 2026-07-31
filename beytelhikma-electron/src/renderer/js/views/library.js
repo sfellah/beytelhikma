@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { ordinal } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -137,10 +138,19 @@ function render(entries) {
  */
 export function collectionView(kind) {
   return (host, params) => {
-    const content = renderShell(host, { active: kind === 'category' ? 'home' : 'authors' });
+    const content = renderShell(host, { active: kind === 'author' ? 'authors' : 'home' });
     asyncView(
       content,
       async () => {
+        if (kind === 'era') {
+          const century = Number(params.id);
+          const books = await repository.getBooksByCentury(century, { limit: 60 });
+          return {
+            title: `${ordinal(century)} الهجري`,
+            subtitle: `${books.length} كتاب لمؤلفين توفّوا في هذا القرن`,
+            books,
+          };
+        }
         if (kind === 'category') {
           const categories = await repository.getCategories();
           const category = categories.find(

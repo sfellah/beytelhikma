@@ -3,9 +3,10 @@ import { initial } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
-import { renderShell, toast } from '../shell.js';
+import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { cover } from '../components/cover.js';
+import { downloadAction } from '../components/download-action.js';
 import { asyncView } from '../components/states.js';
 
 /** Fiche livre : métadonnées présentes, volumes, sommaire hiérarchique. */
@@ -52,43 +53,16 @@ function render({ detail, toc, progress, related }) {
         h(
           'div',
           { class: 'detail__actions' },
-          h(
-            'button',
-            { class: 'button button--filled', onclick: () => openReader() },
-            icon('bookOpen', { size: 20 }),
-            h('span', {}, progress ? 'متابعة القراءة' : 'ابدأ القراءة'),
-          ),
-          h(
-            'div',
-            { class: 'detail__actions-row' },
-            h(
-              'button',
-              {
-                class: 'button button--tonal',
-                onclick: () => toast('التحميل غير متاح في هذه النسخة'),
-              },
-              icon('download', { size: 20 }),
-              h('span', {}, 'تحميل PDF'),
-            ),
-            h(
-              'button',
-              {
-                class: 'button--icon',
-                title: 'إضافة للمفضلة',
-                onclick: () => toast('المفضلة قيد الإنجاز'),
-              },
-              icon('bookmark', { size: 20 }),
-            ),
-            h(
-              'button',
-              {
-                class: 'button--icon',
-                title: 'مشاركة',
-                onclick: () => toast('المشاركة قيد الإنجاز'),
-              },
-              icon('share', { size: 20 }),
-            ),
-          ),
+          downloadAction({
+            book,
+            download: detail.download,
+            progress,
+            onOpen: () => openReader(progress?.pageId ?? null),
+            onDelete: async () => {
+              await repository.deleteBook(book.editionId, { keepProgress: true });
+              navigate(`/book/${book.editionId}`);
+            },
+          }),
           progress &&
             h(
               'div',
