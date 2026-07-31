@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from publish_minio import ensure_bucket, object_key, publish
+from publish_minio import CACHE_CONTROL, configure_bucket, ensure_bucket, object_key, publish
 
 
 class FakeS3:
@@ -16,8 +16,11 @@ class FakeS3:
     def __init__(self, buckets=()):
         self.objects = {}
         self.puts = []
+        self.put_kwargs = {}
         self.buckets = set(buckets)
         self.policies = {}
+        self.settings = {}
+        self.create_kwargs = {}
 
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
@@ -27,6 +30,7 @@ class FakeS3:
     def put_object(self, Bucket, Key, Body, **kwargs):
         self.objects[Key] = Body
         self.puts.append(Key)
+        self.put_kwargs[Key] = kwargs
 
     def head_bucket(self, Bucket):
         if Bucket not in self.buckets:
@@ -35,9 +39,25 @@ class FakeS3:
 
     def create_bucket(self, Bucket, **kwargs):
         self.buckets.add(Bucket)
+        self.create_kwargs = kwargs
 
     def put_bucket_policy(self, Bucket, Policy):
         self.policies[Bucket] = Policy
+
+    def put_bucket_ownership_controls(self, Bucket, OwnershipControls):
+        self.settings["ownership"] = OwnershipControls
+
+    def put_public_access_block(self, Bucket, PublicAccessBlockConfiguration):
+        self.settings["access_block"] = PublicAccessBlockConfiguration
+
+    def put_bucket_encryption(self, Bucket, ServerSideEncryptionConfiguration):
+        self.settings["encryption"] = ServerSideEncryptionConfiguration
+
+    def put_bucket_cors(self, Bucket, CORSConfiguration):
+        self.settings["cors"] = CORSConfiguration
+
+    def put_bucket_lifecycle_configuration(self, Bucket, LifecycleConfiguration):
+        self.settings["lifecycle"] = LifecycleConfiguration
 
 
 def build_src(root):
@@ -170,6 +190,67 @@ class PublishTest(unittest.TestCase):
         self.assertTrue(ensure_bucket(client, "beytelhikma"), "créé au premier appel")
         self.assertIn("beytelhikma", client.buckets)
         self.assertFalse(ensure_bucket(client, "beytelhikma"), "déjà là au second")
+
+    def test_objet_marque_immutable(self):
+        """Le chemin porte la `content_version` : le contenu ne change jamais
+        sous une clé donnée, donc le client peut le garder sans revalider."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            client = FakeS3()
+            publish(client, src=root, bucket="b", public_base="http://x/b")
+            kwargs = client.put_kwargs[object_key("ed-a", 1)]
+            self.assertEqual(kwargs["CacheControl"], CACHE_CONTROL)
+
+
+class ConfigureBucketTest(unittest.TestCase):
+    def test_region_passee_a_la_creation(self):
+        """Hors us-east-1, AWS refuse un create_bucket sans LocationConstraint."""
+        client = FakeS3()
+        configure_bucket(client, "b", "eu-west-1")
+        self.assertEqual(
+            client.create_kwargs.get("CreateBucketConfiguration"),
+            {"LocationConstraint": "eu-west-1"},
+        )
+
+    def test_us_east_1_sans_location_constraint(self):
+        client = FakeS3()
+        configure_bucket(client, "b", "us-east-1")
+        self.assertNotIn("CreateBucketConfiguration", client.create_kwargs)
+
+    def test_public_par_politique_jamais_par_acl(self):
+        client = FakeS3()
+        result = configure_bucket(client, "b", "eu-west-1")
+
+        self.assertEqual(result["skipped"], [])
+        block = client.settings["access_block"]
+        # Les politiques passent — c'est par là que books/* devient lisible.
+        self.assertFalse(block["BlockPublicPolicy"])
+        self.assertFalse(block["RestrictPublicBuckets"])
+        # Les ACL, elles, restent bloquées *et* ignorées : une ACL publique
+        # posée par erreur sur un objet ne rendrait rien lisible.
+        self.assertTrue(block["BlockPublicAcls"])
+        self.assertTrue(block["IgnorePublicAcls"])
+
+        policy = json.loads(client.policies["b"])
+        statement = policy["Statement"][0]
+        self.assertEqual(statement["Action"], ["s3:GetObject"])
+        # Le préfixe compte : ouvrir le bucket entier exposerait le catalogue.
+        self.assertEqual(statement["Resource"], ["arn:aws:s3:::b/books/*"])
+
+    def test_reglage_absent_est_signale_pas_fatal(self):
+        """MinIO n'implémente pas toute l'API S3 : un réglage refusé ne doit
+        pas empêcher la politique de lecture publique d'être posée."""
+
+        class Partiel(FakeS3):
+            def put_bucket_ownership_controls(self, **kwargs):
+                raise NotImplementedError("non supporté")
+
+        client = Partiel()
+        result = configure_bucket(client, "b", "eu-west-1")
+
+        self.assertEqual(len(result["skipped"]), 1)
+        self.assertIn("ownership", result["skipped"][0])
+        self.assertIn("b", client.policies, "la politique est posée quand même")
 
 
 if __name__ == "__main__":

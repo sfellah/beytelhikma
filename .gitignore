@@ -23,3 +23,11 @@ __pycache__/
 
 # Sortie de tools/import_shamela.py (plusieurs centaines de Mo, régénérable)
 /dist/
+
+# Maquettes jetables du compagnon visuel de brainstorming
+.superpowers/
+
+# Identifiants du bucket de distribution. Jamais dans le dépôt.
+.env
+.env.*
+!.env.example

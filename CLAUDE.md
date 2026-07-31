@@ -27,11 +27,14 @@ python tools/import_shamela.py --all --jobs 8     # les 8 589 livres (~60 Go)
 python tools/import_shamela.py --dry-run          # afficher la sélection
 cd tools && python -m unittest discover -s shamela/tests -t .   # tests de l'importeur
 
-# publication des livres vers MinIO (depuis la racine)
-export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…
+# publication des livres vers S3 — MinIO ou AWS (depuis la racine)
+export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…          # ou AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 python tools/publish_minio.py --bucket beytelhikma --set-anonymous-policy   # une seule fois
 python tools/publish_minio.py --bucket beytelhikma --dry-run
 python tools/publish_minio.py --bucket beytelhikma
+
+# AWS S3 : `--endpoint aws` (ou vide) au lieu de l'URL MinIO ; région dans AWS_REGION
+python tools/publish_minio.py --endpoint aws --region eu-west-1 --bucket <bucket> --set-anonymous-policy
 ```
 
 ## Architecture (règles à respecter)
@@ -44,9 +47,13 @@ python tools/publish_minio.py --bucket beytelhikma
 | `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc)  | lecture seule  |
 | `user.sqlite`              | bibliothèque, progression, réglages       | lecture/écriture |
 
-**Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` (portage Electron) qui les installe depuis MinIO : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
+**Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` (portage Electron) qui les installe depuis le bucket : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
 
-Une `download_url` de schéma non HTTP (`asset://` dans `assets/sample`, `local://` dans `dist/shamela`) fait installer le livre par simple copie depuis la bibliothèque source : les deux jeux de données restent utilisables sans MinIO, et les tests tournent sans réseau.
+Une `download_url` de schéma non HTTP (`asset://` dans `assets/sample`, `local://` dans `dist/shamela`) fait installer le livre par simple copie depuis la bibliothèque source : les deux jeux de données restent utilisables sans bucket, et les tests tournent sans réseau.
+
+**Le bucket de distribution : public par politique, jamais par ACL.** `configure_bucket` de `tools/publish_minio.py` pose la configuration complète en une fois — ACL désactivées (`BucketOwnerEnforced`), blocage d'accès public levé pour les *politiques* seulement (`BlockPublicAcls` et `IgnorePublicAcls` restent vrais), politique de `s3:GetObject` sur `books/*` **et rien d'autre**, chiffrement SSE-S3, CORS `GET`/`HEAD` exposant `Content-Range` et `Accept-Ranges`, purge des multipart abandonnés à 7 jours. Ouvrir le bucket entier exposerait `catalog.sqlite` ; le listing anonyme doit répondre 403.
+
+Les objets partent avec `Cache-Control: public, max-age=31536000, immutable` : la `content_version` étant dans le chemin, aucune clé ne change jamais de contenu. Un réglage que le serveur n'implémente pas (MinIO ne couvre pas toute l'API S3) est signalé et sauté, sans empêcher la politique de lecture publique d'être posée.
 
 Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
 
@@ -99,6 +106,14 @@ Les listes longues sans pagination possible (sommaire d'un livre) se **fenêtren
 - un index mémoire des titres, auteurs et éditeurs, normalisé par `src/shared/arabic.js`.
 
 `src/shared/arabic.js` est le **reflet exact** de `normalize_ar` de `tools/_common.py` : c'est ce contrat qui a produit les colonnes normalisées. `test/arabic.test.js` porte une table de parité — sans elle, les deux implémentations divergeraient en silence et la recherche se dégraderait sans qu'aucun test n'échoue.
+
+**Couvertures.** Aucun livre n'a d'image : `editions.cover_url` est nulle partout et les deux générateurs l'écrivent ainsi. La couverture est composée à l'affichage, sur trois canaux que le catalogue fournit déjà :
+
+- la **forme** de l'objet donne la mise en page parmi cinq — `treatise` (≤ 120 p.), `book`, `tome` (> 400 p.), `compendium` (multi-tomes), `document` (tout `book_type_label` autre que `كتاب`). Données présentes à 100 %, et c'est le canal le plus visible parce que c'est ce qu'on veut savoir avant d'ouvrir ;
+- la **famille** de la catégorie donne la teinte et le motif parmi neuf, indexée par `categoryLabel` normalisé et non par `category_id`, qui ne concorde pas entre `assets/sample` et `dist/shamela` ;
+- le **siècle** de l'auteur donne la patine, en variable **continue** : plus c'est ancien, plus la teinte fonce et plus la dorure monte. C'est ce qui permet aux 29 % d'éditions sans `death_year_hijri` de prendre une patine médiane au lieu d'un style à part qui signifierait « on ne sait pas ».
+
+Les tables vivent dans `src/shared/book-cover.js` et `lib/utils/book_cover.dart`, en miroir l'une de l'autre ; `test/book-cover.test.js` lit le fichier Dart et compare — c'est faute d'un tel test que les palettes d'origine avaient divergé. Attention : `/explore` passe par `catalog-query.js`, projection distincte de `SUMMARY_SELECT` ; les deux doivent porter `book_type_label` et `death_year_hijri`, sinon l'écran entier tombe sur les replis. Voir `docs/superpowers/specs/2026-07-31-couvertures-composees-design.md`.
 
 La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
 
