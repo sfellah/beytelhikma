@@ -7,7 +7,7 @@ import path from 'node:path';
 import test, { after, before } from 'node:test';
 import zlib from 'node:zlib';
 
-import { installRelease } from '../src/main/download-manager.js';
+import { DownloadQueue, installRelease } from '../src/main/download-manager.js';
 
 /** Un « livre » factice : quelques kilo-octets suffisent à exercer le flux. */
 const PLAIN = Buffer.from('SQLite format 3\0'.repeat(400), 'utf8');
@@ -165,4 +165,90 @@ test('une annulation interrompt et efface le .part', async () => {
     (error) => error.code === 'aborted',
   );
   assert.equal(fs.existsSync(path.join(storageRoot, 'downloads', 'ed-test-01.zst.part')), false);
+});
+
+test('une URL non HTTP est servie depuis la bibliothèque locale', async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'beyt-src-'));
+  fs.mkdirSync(path.join(source, 'books'), { recursive: true });
+  fs.writeFileSync(path.join(source, 'books', 'ed-test-01.sqlite'), PLAIN);
+
+  const installed = await installRelease({
+    release: { ...release(), url: 'asset://sample/books/ed-test-01.sqlite' },
+    storageRoot,
+    librarySource: source,
+  });
+
+  assert.deepEqual(fs.readFileSync(installed), PLAIN);
+  fs.rmSync(source, { recursive: true, force: true });
+});
+
+/** Fabrique une file dont chaque livre pointe la même archive de test. */
+function queueFor({ url, persist = async () => {}, librarySource = null }) {
+  return new DownloadQueue({
+    storageRoot,
+    librarySource,
+    resolveRelease: async (editionId) => ({
+      releaseId: `rel-${editionId}`,
+      url: typeof url === 'function' ? url(editionId) : url,
+      sha256: SHA256,
+      compressedSize: PACKED.length,
+      uncompressedSize: PLAIN.length,
+    }),
+    persist,
+  });
+}
+
+test('la file traite les livres un par un et rapporte ses états', async () => {
+  const states = [];
+  const queue = queueFor({
+    url: (editionId) => `${origin}/books/${editionId}.zst`,
+    persist: async (editionId, patch) => states.push([editionId, patch.status]),
+  });
+
+  queue.enqueue('ed-a');
+  queue.enqueue('ed-b');
+  assert.deepEqual(
+    queue.snapshot().map((job) => job.status),
+    ['downloading', 'queued'],
+  );
+
+  await new Promise((resolve) => queue.once('idle', resolve));
+
+  assert.deepEqual(queue.snapshot(), []);
+  assert.ok(fs.existsSync(path.join(storageRoot, 'books', 'ed-a.sqlite')));
+  assert.ok(fs.existsSync(path.join(storageRoot, 'books', 'ed-b.sqlite')));
+  assert.deepEqual(
+    states.filter(([, status]) => status === 'installed').map(([id]) => id),
+    ['ed-a', 'ed-b'],
+  );
+});
+
+test('un échec laisse le job en failed jusqu’au réessai', async () => {
+  handler = (request, response) => {
+    response.writeHead(404).end();
+  };
+  const queue = queueFor({ url: `${origin}/absent.zst` });
+
+  queue.enqueue('ed-a');
+  await new Promise((resolve) => queue.once('idle', resolve));
+
+  const [job] = queue.snapshot();
+  assert.equal(job.status, 'failed');
+  assert.equal(job.error, 'الملف غير متوفر على الخادم');
+
+  queue.clearFailed();
+  assert.deepEqual(queue.snapshot(), []);
+});
+
+test('setBaseUrl remplace l’origine de l’URL publiée', async () => {
+  const queue = queueFor({
+    url: 'http://minio.invalid:9000/beytelhikma/books/ed-x/1/book.sqlite.zst',
+  });
+  queue.setBaseUrl(origin);
+
+  queue.enqueue('ed-x');
+  await new Promise((resolve) => queue.once('idle', resolve));
+
+  assert.deepEqual(queue.snapshot(), []);
+  assert.ok(fs.existsSync(path.join(storageRoot, 'books', 'ed-x.sqlite')));
 });
