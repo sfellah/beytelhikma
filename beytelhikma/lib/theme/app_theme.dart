@@ -3,6 +3,14 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_typography.dart';
 
+/// Rayons de la maquette (`borderRadius` du thème Tailwind) : l'ensemble est
+/// volontairement peu arrondi, jusqu'aux boutons.
+abstract final class AppRadius {
+  static const small = 4.0;
+  static const container = 8.0;
+  static const pill = 12.0;
+}
+
 abstract final class AppTheme {
   static ThemeData light() {
     const scheme = ColorScheme(
@@ -87,7 +95,7 @@ abstract final class AppTheme {
         displayLarge: AppTypography.display(onSurface),
         headlineMedium: AppTypography.headline(onSurface),
         titleMedium: AppTypography.title(onSurface),
-        bodyLarge: AppTypography.body(onSurface),
+        bodyLarge: AppTypography.bodyLarge(variant),
         bodyMedium: AppTypography.body(variant),
         labelLarge: AppTypography.label(onSurface),
         labelMedium: AppTypography.label(variant),
@@ -106,11 +114,10 @@ abstract final class AppTheme {
         color: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.45),
-          ),
+          borderRadius: BorderRadius.circular(AppRadius.container),
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.3)),
         ),
       ),
       dividerTheme: DividerThemeData(
@@ -122,16 +129,31 @@ abstract final class AppTheme {
         backgroundColor: scheme.secondaryContainer,
         labelStyle: AppTypography.labelSmall(scheme.onSecondaryContainer),
         side: BorderSide.none,
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: scheme.primary,
           foregroundColor: scheme.onPrimary,
           textStyle: AppTypography.label(scheme.onPrimary),
-          shape: const StadiumBorder(),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.primary,
+          textStyle: AppTypography.label(scheme.primary),
+          side: BorderSide(color: scheme.outlineVariant),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(

@@ -16,7 +16,7 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 32, 16, 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [

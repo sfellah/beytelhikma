@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/book_category.dart';
+import '../../../theme/app_theme.dart';
 
-/// Grille des disciplines. L'icône dépend du libellé, avec un repli neutre.
+/// Grille des disciplines. Chaque tuile alterne entre trois pastilles d'accent,
+/// comme la section « التخصصات العلمية » de la maquette.
 class CategoryGrid extends StatelessWidget {
   const CategoryGrid({
     required this.categories,
@@ -26,7 +28,6 @@ class CategoryGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (categories.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -34,56 +35,92 @@ class CategoryGrid extends StatelessWidget {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 190,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.55,
+          maxCrossAxisExtent: 200,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 14,
+          childAspectRatio: 1.3,
         ),
         itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          return InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => onTap(category),
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.45,
-                  ),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondaryContainer.withValues(
-                        alpha: 0.45,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _icons[category.label] ?? Icons.category_outlined,
-                      size: 20,
-                      color: theme.colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(category.label, style: theme.textTheme.titleMedium),
-                  Text(
-                    '${category.bookCount} كتاب',
-                    style: theme.textTheme.labelSmall,
-                  ),
-                ],
-              ),
+        itemBuilder: (context, index) => _CategoryTile(
+          category: categories[index],
+          accent: _Accent.values[index % _Accent.values.length],
+          icon: _icons[categories[index].label] ?? Icons.category_outlined,
+          onTap: () => onTap(categories[index]),
+        ),
+      ),
+    );
+  }
+}
+
+enum _Accent { tertiary, secondary, primary }
+
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({
+    required this.category,
+    required this.accent,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final BookCategory category;
+  final _Accent accent;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    final (bubble, foreground) = switch (accent) {
+      _Accent.tertiary => (
+        scheme.tertiaryContainer.withValues(alpha: 0.35),
+        scheme.tertiary,
+      ),
+      _Accent.secondary => (
+        scheme.secondaryContainer.withValues(alpha: 0.5),
+        scheme.secondary,
+      ),
+      _Accent.primary => (
+        scheme.primaryContainer.withValues(alpha: 0.35),
+        scheme.primary,
+      ),
+    };
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.container),
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppRadius.container),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(color: bubble, shape: BoxShape.circle),
+              child: Icon(icon, size: 22, color: foreground),
             ),
-          );
-        },
+            const SizedBox(height: 12),
+            Text(
+              category.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${category.bookCount} كتاب',
+              style: theme.textTheme.labelSmall,
+            ),
+          ],
+        ),
       ),
     );
   }

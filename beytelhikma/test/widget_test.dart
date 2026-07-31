@@ -1,5 +1,8 @@
 import 'package:beytelhikma/app.dart';
+import 'package:beytelhikma/models/reading_progress.dart';
+import 'package:beytelhikma/repositories/book_repository.dart';
 import 'package:beytelhikma/screens/book_detail/book_detail_screen.dart';
+import 'package:beytelhikma/screens/home/home_screen.dart';
 import 'package:beytelhikma/screens/reader/reader_screen.dart';
 import 'package:beytelhikma/widgets/repository_scope.dart';
 import 'package:flutter/material.dart';
@@ -7,8 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes/fake_book_repository.dart';
 
-Widget _wrap(Widget child, {bool failing = false}) => RepositoryScope(
-  repository: FakeBookRepository(failing: failing),
+Widget _wrap(
+  Widget child, {
+  BookRepository? repository,
+  bool failing = false,
+}) => RepositoryScope(
+  repository: repository ?? FakeBookRepository(failing: failing),
   child: MaterialApp(
     locale: const Locale('ar'),
     home: Directionality(textDirection: TextDirection.rtl, child: child),
@@ -24,6 +31,26 @@ void main() {
     expect(find.text('المجموعات الحديثة'), findsOneWidget);
     expect(find.text('التخصصات العلمية'), findsOneWidget);
     expect(find.text('كتاب الاختبار'), findsWidgets);
+  });
+
+  testWidgets('le héros propose la reprise avec un extrait', (tester) async {
+    final repository = FakeBookRepository();
+    await repository.saveProgress(
+      const ReadingProgress(
+        editionId: 'ed-test-01',
+        pageId: 1,
+        sequenceNum: 1,
+        percent: 0.45,
+      ),
+    );
+
+    await tester.pumpWidget(_wrap(const HomeScreen(), repository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('أكمل القراءة..'), findsOneWidget);
+    expect(find.text('متابعة القراءة'), findsOneWidget);
+    expect(find.text('45٪ مكتمل'), findsOneWidget);
+    expect(find.textContaining('نص الصفحة الأولى'), findsOneWidget);
   });
 
   testWidgets('la fiche livre montre métadonnées et sommaire', (tester) async {
