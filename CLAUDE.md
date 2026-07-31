@@ -9,31 +9,47 @@ Guidance pour Claude Code sur ce projet.
 ## Commandes
 
 ```bash
-cd beyelhikma
+cd beytelhikma
 flutter pub get          # dépendances
 flutter run              # lancer l'app
 flutter test             # tests
 flutter analyze          # lint / analyse statique
 dart format lib test     # formatage
+
+python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple
 ```
 
 ## Architecture (règles à respecter)
 
+**Local-first, pas d'API.** La source de vérité est SQLite, conformément à `DATAMODEL.md` :
+
+| Base                       | Rôle                                      | Accès          |
+| -------------------------- | ----------------------------------------- | -------------- |
+| `catalog.sqlite`           | catalogue (œuvres, éditions, auteurs)     | lecture seule  |
+| `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc)  | lecture seule  |
+| `user.sqlite`              | bibliothèque, progression, réglages       | lecture/écriture |
+
+Tant que le pipeline de téléchargement n'existe pas, catalogue et livres sont embarqués dans `beytelhikma/assets/sample/` puis copiés au premier accès par `AppDatabase` — le reste du code lit déjà des fichiers *installés*, comme il le fera avec le CDN. Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
+
 Séparation stricte en trois couches — ne jamais les mélanger :
 
-- **`lib/models/`** — classes de données immuables reflétant l'API (Book, Author, Category, Edition, Volume, Cover, BookFile). `fromJson`/`toJson`, champs nullables tolérés (l'API peut renvoyer des données incomplètes).
-- **`lib/repositories/`** — interface abstraite `BookRepository` + implémentations `MockBookRepository` (actuelle) et `ApiBookRepository` (future). **L'UI ne dépend que de l'interface**, jamais d'une implémentation concrète.
-- **`lib/screens/` + `lib/widgets/`** — UI. Chaque écran gère explicitement 4 états : `loading / success / empty / error`.
-
-Données mockées dans `lib/services/mock/` : réalistes, conformes à la structure future de l'API, avec latence simulée et cas d'erreur.
+- **`lib/models/`** — classes de données immuables reflétant le schéma SQLite (BookSummary, BookDetail, Author, BookCategory, Volume, BookPage, TocEntry, ReadingProgress, LibraryEntry). `fromMap`/`toJson`, champs nullables tolérés (les données source sont incomplètes).
+- **`lib/repositories/`** — interface `BookRepository` + implémentation `SqliteBookRepository`. **L'UI ne dépend que de l'interface**, injectée par `RepositoryScope` ; les erreurs remontent en `RepositoryException`.
+- **`lib/screens/` + `lib/widgets/`** — UI. Chaque écran gère explicitement 4 états : `loading / success / empty / error` (voir `AsyncView`).
 
 ## Écrans principaux
 
-1. `screens/home/` — accueil + bibliothèque (sections dynamiques, recherche, pagination/lazy-loading).
-2. `screens/book_detail/` — fiche livre (éditions, volumes, métadonnées manquantes gérées).
-3. `screens/reader/` — lecteur (chapitres, progression, réglages police/thème).
+1. `screens/home/` — accueil (reprise de lecture, nouveautés, disciplines, auteur en vedette) ; `screens/library/` — livres installés.
+2. `screens/book_detail/` — fiche livre (métadonnées présentes uniquement, volumes, sommaire hiérarchique).
+3. `screens/reader/` — lecteur : une page imprimée par écran, balayage RTL, sélection de texte (`SelectionArea`), taille de police réglable (boutons, pincement, feuille de réglages), ambiances ورقي/بني/ليلي, progression écrite dans `user.sqlite`.
 
-Maquettes HTML de référence dans `ui-examples/` (`book-info.html`, `reader.html`) — s'en inspirer pour le design des écrans Flutter.
+Le rendu du contenu passe par `lib/utils/arabic_html_parser.dart` (HTML minimal → blocs typés → `TextSpan`) : pas de WebView, pas de `flutter_html`, afin de garder le contrôle sur la typographie arabe et la sélection.
+
+Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design des écrans Flutter.
+
+## Hors périmètre v1
+
+Recherche (FTS5 est déjà indexé dans les bases, non exposé) et gestionnaire de téléchargement.
 
 ## i18n / RTL (critique)
 
