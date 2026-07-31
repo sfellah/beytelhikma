@@ -35,6 +35,9 @@ python tools/publish_minio.py --bucket beytelhikma
 
 # AWS S3 : `--endpoint aws` (ou vide) au lieu de l'URL MinIO ; région dans AWS_REGION
 python tools/publish_minio.py --endpoint aws --region eu-west-1 --bucket <bucket> --set-anonymous-policy
+
+# publier le catalogue seul (rapide : ne recompresse pas les livres)
+python tools/publish_minio.py --endpoint aws --bucket <bucket> --catalog-only
 ```
 
 ## Architecture (règles à respecter)
@@ -49,11 +52,25 @@ python tools/publish_minio.py --endpoint aws --region eu-west-1 --bucket <bucket
 
 **Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` (portage Electron) qui les installe depuis le bucket : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
 
-Une `download_url` de schéma non HTTP (`asset://` dans `assets/sample`, `local://` dans `dist/shamela`) fait installer le livre par simple copie depuis la bibliothèque source : les deux jeux de données restent utilisables sans bucket, et les tests tournent sans réseau.
+**Le catalogue ne porte aucun hôte.** `book_releases.object_key` (schéma **2**, ex-`download_url`) contient une clé relative — `books/<edition_id>/<content_version>/book.sqlite.zst` — que le client colle derrière le réglage `distribution.base_url`. La règle tient en une ligne : **la présence de `://` marque un absolu**. C'est elle qui garde `asset://` (dans `assets/sample`) et `local://` (dans `dist/shamela`) utilisables hors ligne, et qui fait qu'un catalogue publié à l'ancienne, avec des URL complètes, continue de fonctionner.
 
-**Le bucket de distribution : public par politique, jamais par ACL.** `configure_bucket` de `tools/publish_minio.py` pose la configuration complète en une fois — ACL désactivées (`BucketOwnerEnforced`), blocage d'accès public levé pour les *politiques* seulement (`BlockPublicAcls` et `IgnorePublicAcls` restent vrais), politique de `s3:GetObject` sur `books/*` **et rien d'autre**, chiffrement SSE-S3, CORS `GET`/`HEAD` exposant `Content-Range` et `Accept-Ranges`, purge des multipart abandonnés à 7 jours. Ouvrir le bucket entier exposerait `catalog.sqlite` ; le listing anonyme doit répondre 403.
+La résolution vit dans `src/shared/distribution.js`, et nulle part ailleurs. Le réglage précédent, `minio.base_url`, ne remplaçait que l'origine en gardant le chemin stocké : il cassait entre un bucket virtual-hosted (`/books/…`) et un path-style (`/bucket/books/…`), précisément le cas qu'il prétendait couvrir.
 
-Les objets partent avec `Cache-Control: public, max-age=31536000, immutable` : la `content_version` étant dans le chemin, aucune clé ne change jamais de contenu. Un réglage que le serveur n'implémente pas (MinIO ne couvre pas toute l'API S3) est signalé et sauté, sans empêcher la politique de lecture publique d'être posée.
+`tools/publish_minio.py` est le **seul** composant à connaître la disposition du bucket. Il construit les clés, les écrit dans le catalogue, puis publie `catalog/<catalog_version>/catalog.sqlite.zst` et un pointeur `catalog/latest.json`. Changer la hiérarchie plus tard ne casse donc aucune application déjà installée.
+
+**Le bucket de distribution : public par politique, jamais par ACL.** `configure_bucket` pose la configuration complète en une fois — ACL désactivées (`BucketOwnerEnforced`), blocage d'accès public levé pour les *politiques* seulement (`BlockPublicAcls` et `IgnorePublicAcls` restent vrais), `s3:GetObject` sur `books/*` et `catalog/*` **et rien d'autre**, chiffrement SSE-S3, CORS `GET`/`HEAD` exposant `Content-Range` et `Accept-Ranges`, purge des multipart abandonnés à 7 jours. Ouvrir le bucket entier autoriserait le listing anonyme, qui doit répondre 403.
+
+Les objets partent en `Cache-Control: public, max-age=31536000, immutable` : la version étant dans le chemin, aucune clé ne change jamais de contenu. **Sauf le pointeur, qui part en `no-cache`** — c'est le seul objet du bucket qui change sous une clé fixe, et le mettre en cache un an tuerait la mise à jour en silence : tout marcherait le premier jour, plus rien ensuite. `test_le_pointeur_n_est_jamais_mis_en_cache` existe pour ça. Un réglage que le serveur n'implémente pas (MinIO ne couvre pas toute l'API S3) est signalé et sauté, sans empêcher la politique de lecture publique d'être posée.
+
+**La mise à jour du catalogue se propose, ne s'impose pas.** Au démarrage, `src/main/catalog-updater.js` lit le pointeur et compare. Cinq branches de décision sur six sont **silencieuses** : hors ligne, pointeur illisible, `schema_version` trop récent, déjà à jour, version refusée. Une application hors ligne a déjà tout ce qu'il lui faut pour explorer — lui afficher une alerte serait du bruit. `fetchPointer` ne lève donc jamais : il rend `null`, et `decideUpdate` en tire une décision. Toute branche silencieuse rend `pointer: null`, pour qu'aucun appelant ne puisse installer ce qu'on vient de refuser. Un refus est retenu **par version** (`distribution.declined_catalog_version`) : refuser la 2 ne fait pas taire la 3.
+
+L'installation vérifie le SHA-256 **avant** le `rename`, qui est le dernier geste : une coupure à n'importe quel point laisse l'ancien catalogue intact et lisible.
+
+**Une mise à jour de catalogue ne supprime jamais un fichier de livre.** `#syncInstalledLibrary` purgeait `books/` dès que la source changeait ; avec un catalogue qui se met à jour seul, ce serait tout retélécharger. La réconciliation se fait par édition, à la lecture : `downloaded_books.release_id` comparé au `release_id` actif donne `hasNewerRelease`. Une édition disparue du catalogue n'est pas dessinable (ni titre ni auteur) mais son fichier reste ; `getLibrary` en rend le compte dans `orphans` plutôt que de la faire disparaître en silence. Les ancres de surlignage sont posées sur le texte rendu : une réédition peut les déplacer, ce doit donc rester un choix de l'utilisateur.
+
+Voir `docs/superpowers/specs/2026-07-31-source-distribution-configurable-design.md`.
+
+**Le jeu d'exemple a deux copies**, `beytelhikma/assets/sample` et `beytelhikma-electron/assets/sample` : les tests Electron lisent la seconde sans passer par le client Flutter. `gen_sample_data.py` écrit les deux (`MIRROR_DIRS`). Elle était recopiée à la main, donc elle dérivait — un renommage de colonne l'a laissée au schéma 1 et la suite Electron a échoué loin de sa cause.
 
 Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
 

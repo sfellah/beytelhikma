@@ -135,7 +135,7 @@ C’est la table la plus importante pour le téléchargement.
 | `schema_version`    | INTEGER | Version du schéma SQLite |
 | `content_version`   | INTEGER | Version du contenu       |
 | `source_version`    | TEXT    | Version Shamela          |
-| `download_url`      | TEXT    | URL CDN/S3               |
+| `object_key`        | TEXT    | Clé relative à la base configurée ; `://` = absolu |
 | `compressed_size`   | INTEGER | Taille téléchargement    |
 | `uncompressed_size` | INTEGER | Taille installée         |
 | `sha256`            | TEXT    | Vérification intégrité   |

@@ -3,6 +3,14 @@
 Date : 2026-07-31
 Portée : `beytelhikma-electron/` et `tools/`. Le client Flutter n'est pas modifié.
 
+> **Partiellement remplacé.** `book_releases.download_url` s'appelle désormais
+> `object_key` et porte une clé **relative**, pas une URL absolue ; le réglage
+> `minio.base_url` est remplacé par `distribution.base_url`, qui préfixe cette
+> clé au lieu d'en remplacer l'origine. Voir
+> `2026-07-31-source-distribution-configurable-design.md`. Tout le reste de ce
+> document — reprise par `Range`, zstd en flux, SHA-256, `rename` atomique —
+> reste exact.
+
 ## 1. Objectif
 
 Aujourd'hui le portage Electron lit un dossier de bibliothèque local (`dist/shamela/`
