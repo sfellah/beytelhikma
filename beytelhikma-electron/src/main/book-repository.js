@@ -1,4 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { all, first } from './app-database.js';
+import { DownloadQueue } from './download-manager.js';
 
 /** Erreur remontée à l'interface : message lisible + cause technique. */
 export class RepositoryError extends Error {
@@ -75,6 +79,11 @@ const tocEntry = (row) => ({
   title: row.title_text,
   level: row.level ?? 1,
   sequenceNum: row.sequence_num,
+  // `pageId` est l'identifiant source, global au corpus (sept chiffres) : il ne
+  // doit jamais être montré. Ce qu'on affiche est le numéro imprimé, et à
+  // défaut le rang de la page dans le livre.
+  printedPageNum: row.printed_page_num ?? null,
+  pageSequenceNum: row.page_sequence_num ?? null,
 });
 
 const volume = (row) => ({
@@ -104,9 +113,15 @@ const progress = (row) =>
  */
 export class BookRepository {
   #db;
+  #downloads = null;
 
-  constructor(database) {
+  constructor(database, { downloads = null } = {}) {
     this.#db = database;
+    this.#downloads = downloads;
+  }
+
+  get downloads() {
+    return this.#downloads;
   }
 
   async #guard(what, run) {
@@ -117,36 +132,146 @@ export class BookRepository {
     }
   }
 
-  /** Marque comme installés les livres livrés avec l'application. */
-  warmUp() {
-    return this.#guard('initialisation de la bibliothèque', async () => {
-      const catalog = await this.#db.catalog();
-      const editions = all(
-        catalog,
-        `SELECT e.edition_id, r.release_id, r.uncompressed_size, r.published_at
-         FROM editions e
-         LEFT JOIN book_releases r ON r.edition_id = e.edition_id AND r.is_active = 1
-         WHERE e.is_hidden = 0`,
+  // ------------------------------------------------------------ téléchargement
+
+  /**
+   * Construit la file de téléchargement câblée sur ce dépôt : elle lui demande
+   * la release active et lui délègue l'écriture dans `user.sqlite`.
+   */
+  createDownloadQueue() {
+    this.#downloads = new DownloadQueue({
+      storageRoot: this.#db.root,
+      librarySource: this.#db.librarySource,
+      resolveRelease: (editionId) => this.#activeRelease(editionId),
+      persist: (editionId, patch) => this.#persistDownload(editionId, patch),
+    });
+    return this.#downloads;
+  }
+
+  async #activeRelease(editionId) {
+    const catalog = await this.#db.catalog();
+    const row = first(
+      catalog,
+      `SELECT release_id, download_url, sha256, compressed_size, uncompressed_size
+       FROM book_releases WHERE edition_id = ? AND is_active = 1 LIMIT 1`,
+      [editionId],
+    );
+    if (!row) return null;
+    return {
+      releaseId: row.release_id,
+      url: row.download_url,
+      sha256: row.sha256,
+      compressedSize: row.compressed_size ?? 0,
+      uncompressedSize: row.uncompressed_size ?? 0,
+    };
+  }
+
+  async #persistDownload(editionId, patch) {
+    await this.#db.writeUser((user) => {
+      user.run(
+        `INSERT INTO downloaded_books
+           (edition_id, release_id, local_path, download_status,
+            downloaded_bytes, total_bytes, downloaded_at, progress_percent)
+         VALUES (?,?,?,?,?,?,?,0)
+         ON CONFLICT(edition_id) DO UPDATE SET
+           release_id       = COALESCE(excluded.release_id, downloaded_books.release_id),
+           local_path       = COALESCE(excluded.local_path, downloaded_books.local_path),
+           download_status  = excluded.download_status,
+           downloaded_bytes = excluded.downloaded_bytes,
+           total_bytes      = CASE WHEN excluded.total_bytes > 0
+                                   THEN excluded.total_bytes
+                                   ELSE downloaded_books.total_bytes END,
+           downloaded_at    = COALESCE(excluded.downloaded_at, downloaded_books.downloaded_at)`,
+        [
+          editionId,
+          patch.releaseId ?? null,
+          patch.localPath ?? null,
+          patch.status,
+          patch.receivedBytes ?? 0,
+          patch.totalBytes ?? 0,
+          patch.status === 'installed' ? new Date().toISOString() : null,
+        ],
       );
-      await this.#db.writeUser((user) => {
-        for (const row of editions) {
-          user.run(
-            `INSERT OR IGNORE INTO downloaded_books
-               (edition_id, release_id, local_path, download_status,
-                downloaded_bytes, total_bytes, downloaded_at, progress_percent)
-             VALUES (?,?,?,?,?,?,?,0)`,
-            [
+    });
+  }
+
+  downloadBook(editionId) {
+    return this.#guard('mise en file du téléchargement', async () => {
+      if (!this.#downloads) throw new Error('gestionnaire de téléchargement absent');
+      return this.#downloads.enqueue(editionId);
+    });
+  }
+
+  cancelDownload(editionId) {
+    return this.#guard("annulation du téléchargement", async () => {
+      this.#downloads?.cancel(editionId);
+    });
+  }
+
+  retryDownload(editionId) {
+    return this.#guard('réessai du téléchargement', async () => {
+      if (!this.#downloads) throw new Error('gestionnaire de téléchargement absent');
+      return this.#downloads.retry(editionId);
+    });
+  }
+
+  /**
+   * Confronte les fichiers réellement présents aux lignes de `downloaded_books`.
+   * Remplace l'ancien `warmUp()`, qui déclarait tout le catalogue installé.
+   */
+  reconcileLibrary() {
+    return this.#guard('réconciliation de la bibliothèque', async () => {
+      const present = new Set(this.#db.installedBooks());
+      const user = await this.#db.user();
+      const rows = all(user, 'SELECT edition_id, download_status FROM downloaded_books');
+      const known = new Set(rows.map((row) => row.edition_id));
+
+      await this.#db.writeUser((db) => {
+        for (const row of rows) {
+          if (present.has(row.edition_id)) {
+            if (row.download_status !== 'installed') {
+              db.run(
+                "UPDATE downloaded_books SET download_status = 'installed' WHERE edition_id = ?",
+                [row.edition_id],
+              );
+            }
+          } else if (row.download_status === 'installed') {
+            db.run(
+              `UPDATE downloaded_books
+                  SET download_status = 'removed', downloaded_bytes = 0, local_path = NULL
+                WHERE edition_id = ?`,
+              [row.edition_id],
+            );
+          } else if (
+            row.download_status === 'downloading' ||
+            row.download_status === 'verifying'
+          ) {
+            db.run("UPDATE downloaded_books SET download_status = 'queued' WHERE edition_id = ?", [
               row.edition_id,
-              row.release_id ?? null,
-              `books/${row.edition_id}.sqlite`,
-              'installed',
-              row.uncompressed_size ?? 0,
-              row.uncompressed_size ?? 0,
-              row.published_at ?? null,
-            ],
+            ]);
+          }
+        }
+        // Fichier posé à la main, sans ligne : on l'adopte.
+        for (const editionId of present) {
+          if (known.has(editionId)) continue;
+          db.run(
+            `INSERT INTO downloaded_books
+               (edition_id, local_path, download_status, downloaded_bytes,
+                total_bytes, downloaded_at, progress_percent)
+             VALUES (?,?, 'installed', 0, 0, ?, 0)`,
+            [editionId, `books/${editionId}.sqlite`, new Date().toISOString()],
           );
         }
       });
+
+      // Les téléchargements interrompus repartent seuls.
+      if (this.#downloads) {
+        const resumable = all(
+          await this.#db.user(),
+          "SELECT edition_id FROM downloaded_books WHERE download_status = 'queued'",
+        );
+        for (const row of resumable) this.#downloads.enqueue(row.edition_id);
+      }
     });
   }
 
@@ -289,6 +414,68 @@ export class BookRepository {
     });
   }
 
+  /** Tous les auteurs du catalogue, avec le nombre d'éditions rattachées. */
+  getAuthors({ limit = 200 } = {}) {
+    return this.#guard('lecture des auteurs', async () => {
+      const db = await this.#db.catalog();
+      return all(
+        db,
+        `SELECT a.*, COUNT(DISTINCT e.edition_id) AS book_count
+         FROM authors a
+         JOIN edition_authors ea ON ea.author_id = a.author_id
+         JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0
+         GROUP BY a.author_id
+         HAVING book_count > 0
+         ORDER BY book_count DESC, a.full_name_ar
+         LIMIT ?`,
+        [limit],
+      ).map(author);
+    });
+  }
+
+  /**
+   * Siècles hégiriens dérivés de la date de décès des auteurs : c'est le
+   * classement usuel du patrimoine arabe, et la seule donnée temporelle fiable
+   * du catalogue (les éditions n'ont pas de date de composition).
+   */
+  getEras() {
+    return this.#guard('lecture des siècles', async () => {
+      const db = await this.#db.catalog();
+      return all(
+        db,
+        `SELECT (a.death_year_hijri - 1) / 100 + 1        AS century,
+                COUNT(DISTINCT e.edition_id)              AS book_count
+         FROM authors a
+         JOIN edition_authors ea ON ea.author_id = a.author_id
+         JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0
+         WHERE a.death_year_hijri IS NOT NULL AND a.death_year_hijri > 0
+         GROUP BY century
+         ORDER BY century`,
+      ).map((row) => ({
+        century: row.century,
+        bookCount: row.book_count ?? 0,
+      }));
+    });
+  }
+
+  getBooksByCentury(century, { limit = 60 } = {}) {
+    return this.#guard('lecture du siècle', async () => {
+      const db = await this.#db.catalog();
+      return all(
+        db,
+        `${SUMMARY_SELECT} AND e.edition_id IN (
+           SELECT ea.edition_id
+           FROM edition_authors ea
+           JOIN authors a ON a.author_id = ea.author_id
+           WHERE a.death_year_hijri IS NOT NULL
+             AND (a.death_year_hijri - 1) / 100 + 1 = ?
+         )
+         GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ?`,
+        [Number(century), limit],
+      ).map(bookSummary);
+    });
+  }
+
   getBooksByAuthor(authorId, { limit = 10 } = {}) {
     return this.#guard("lecture des livres de l'auteur", async () => {
       const db = await this.#db.catalog();
@@ -308,7 +495,13 @@ export class BookRepository {
   getToc(editionId) {
     return this.#guard('lecture du sommaire', async () => {
       const db = await this.#db.book(editionId);
-      return all(db, 'SELECT * FROM toc ORDER BY sequence_num').map(tocEntry);
+      return all(
+        db,
+        `SELECT t.*, p.printed_page_num, p.sequence_num AS page_sequence_num
+         FROM toc t
+         JOIN pages p ON p.page_id = t.page_id
+         ORDER BY t.sequence_num`,
+      ).map(tocEntry);
     });
   }
 
@@ -348,6 +541,7 @@ export class BookRepository {
       const installed = all(
         user,
         `SELECT * FROM downloaded_books
+         WHERE download_status = 'installed'
          ORDER BY last_opened_at DESC, downloaded_at DESC`,
       );
       return installed.length ? this.#joinWithCatalog(installed) : [];
@@ -360,7 +554,7 @@ export class BookRepository {
       const rows = all(
         user,
         `SELECT * FROM downloaded_books
-         WHERE last_opened_at IS NOT NULL
+         WHERE last_opened_at IS NOT NULL AND download_status = 'installed'
          ORDER BY last_opened_at DESC LIMIT 1`,
       );
       if (!rows.length) return null;
@@ -462,13 +656,19 @@ export class BookRepository {
 
 /** Méthodes exposées au rendu par IPC (aucune autre n'est appelable). */
 export const REPOSITORY_METHODS = [
-  'warmUp',
+  'reconcileLibrary',
+  'downloadBook',
+  'cancelDownload',
+  'retryDownload',
   'getCategories',
   'getRecentBooks',
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',
   'getFeaturedAuthor',
+  'getAuthors',
+  'getEras',
+  'getBooksByCentury',
   'getBooksByAuthor',
   'getToc',
   'getPageCount',

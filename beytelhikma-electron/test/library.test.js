@@ -28,6 +28,14 @@ function cloneLibrary(target) {
   return target;
 }
 
+/** Installe [count] livres du catalogue et attend la fin de la file. */
+async function install(repository, count = 1) {
+  const books = await repository.getBooks({ limit: count });
+  for (const book of books) await repository.downloadBook(book.editionId);
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  return books;
+}
+
 test('resolveLibrarySource privilégie BEYTELHIKMA_LIBRARY', () => {
   const previous = process.env.BEYTELHIKMA_LIBRARY;
   process.env.BEYTELHIKMA_LIBRARY = sampleLibrary;
@@ -52,7 +60,7 @@ test('resolveLibrarySource ignore un chemin sans catalogue', () => {
   }
 });
 
-test('le catalogue est copié au premier accès, les livres seulement à l\'ouverture', async () => {
+test('le catalogue est copié au premier accès, les livres seulement au téléchargement', async () => {
   const root = tempRoot();
   const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
   try {
@@ -61,13 +69,18 @@ test('le catalogue est copié au premier accès, les livres seulement à l\'ouve
     assert.ok(!fs.existsSync(path.join(root, 'catalog.sqlite')), 'rien avant le premier accès');
 
     const repository = new BookRepository(database);
-    await repository.warmUp();
-    assert.ok(fs.existsSync(path.join(root, 'catalog.sqlite')));
-    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'aucun livre copié');
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
 
+    // Lire les pages ne suffit plus : sans téléchargement, le livre est absent.
     const books = await repository.getBooks({ limit: 500 });
-    await repository.getPages(books[0].editionId, { offset: 0, limit: 1 });
+    assert.ok(fs.existsSync(path.join(root, 'catalog.sqlite')), 'catalogue copié au 1er accès');
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'aucun livre copié');
+    await assert.rejects(() => repository.getPages(books[0].editionId, { offset: 0, limit: 1 }));
+
+    await install(repository, 1);
     assert.deepEqual(fs.readdirSync(path.join(root, 'books')), [`${books[0].editionId}.sqlite`]);
+    assert.equal((await repository.getPages(books[0].editionId, { limit: 1 })).length, 1);
   } finally {
     database.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -95,9 +108,9 @@ test('changer de bibliothèque purge le cache et conserve les données utilisate
   try {
     await database.initialize();
     let repository = new BookRepository(database);
-    await repository.warmUp();
-    const books = await repository.getBooks({ limit: 500 });
-    await repository.getPages(books[0].editionId, { offset: 0, limit: 1 });
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
+    await install(repository, 1);
     assert.equal(fs.readdirSync(path.join(root, 'books')).length, 1);
     database.close();
 
@@ -108,7 +121,8 @@ test('changer de bibliothèque purge le cache et conserve les données utilisate
     assert.ok(fs.existsSync(path.join(root, 'user.sqlite')), 'progression conservée');
 
     repository = new BookRepository(database);
-    await repository.warmUp();
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
     assert.equal((await repository.getBooks({ limit: 500 })).length, 5);
   } finally {
     database.close();
@@ -125,7 +139,9 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
   const database0 = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
   await database0.initialize();
   const repository0 = new BookRepository(database0);
-  await repository0.warmUp();
+  repository0.createDownloadQueue();
+  await repository0.reconcileLibrary();
+  await install(repository0, 5);
   assert.equal((await repository0.getLibrary()).length, 5);
   database0.close();
 
@@ -188,7 +204,8 @@ test(
     try {
       await database.initialize();
       const repository = new BookRepository(database);
-      await repository.warmUp();
+      repository.createDownloadQueue();
+      await repository.reconcileLibrary();
 
       const categories = await repository.getCategories();
       assert.equal(categories.length, 40);
@@ -199,6 +216,9 @@ test(
       assert.ok(books.every((b) => b.editionId.startsWith('sh-')));
       assert.ok(books.every((b) => b.title && b.authorName && b.categoryLabel));
       assert.ok(books.every((b) => b.pageCount > 0));
+
+      // Le livre n'est plus matérialisé à la lecture : il faut l'installer.
+      await install(repository, 1);
 
       const detail = await repository.getBookDetail(books[0].editionId);
       assert.ok(detail.volumes.length >= 1);

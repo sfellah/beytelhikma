@@ -17,13 +17,25 @@ let repository;
 before(async () => {
   storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'beytelhikma-'));
   database = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await database.initialize();
   repository = new BookRepository(database);
-  await repository.warmUp();
+  repository.createDownloadQueue();
+  await repository.reconcileLibrary();
+  // Les cinq livres d'exemple ont une `download_url` en `asset://` : le
+  // gestionnaire les installe par copie, sans réseau.
+  await installAll(repository);
 });
+
+/** Installe tout le catalogue et attend la fin de la file. */
+async function installAll(repo) {
+  const books = await repo.getBooks({ limit: 50 });
+  const queue = repo.downloads;
+  for (const book of books) await repo.downloadBook(book.editionId);
+  if (queue.snapshot().length) await new Promise((resolve) => queue.once('idle', resolve));
+}
 
 after(() => {
   database.close();
@@ -97,7 +109,7 @@ test('la progression est écrite puis relue depuis user.sqlite', async () => {
 test('la progression survit à la réouverture de la base', async () => {
   database.close();
   const reopened = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await reopened.initialize();
@@ -106,17 +118,39 @@ test('la progression survit à la réouverture de la base', async () => {
   reopened.close();
 
   database = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await database.initialize();
   repository = new BookRepository(database);
+  repository.createDownloadQueue();
 });
 
-test('la bibliothèque liste les livres installés', async () => {
+test('la bibliothèque ne liste que les livres installés', async () => {
   const library = await repository.getLibrary();
   assert.equal(library.length, 5);
   assert.ok(library.every((entry) => entry.status === 'installed'));
+});
+
+test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne', async () => {
+  // Fichier supprimé à la main sous l'application.
+  database.closeBook('ed-muqaddima-01');
+  fs.rmSync(path.join(storageRoot, 'books', 'ed-muqaddima-01.sqlite'));
+  await repository.reconcileLibrary();
+  let library = await repository.getLibrary();
+  assert.equal(
+    library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'),
+    false,
+  );
+
+  // Fichier reposé à la main : la réconciliation le réintègre.
+  fs.copyFileSync(
+    path.join(projectRoot, 'assets', 'sample', 'books', 'ed-muqaddima-01.sqlite'),
+    path.join(storageRoot, 'books', 'ed-muqaddima-01.sqlite'),
+  );
+  await repository.reconcileLibrary();
+  library = await repository.getLibrary();
+  assert.ok(library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
 });
 
 test('les réglages du lecteur sont persistés', async () => {
@@ -125,6 +159,28 @@ test('les réglages du lecteur sont persistés', async () => {
   const settings = await repository.getSettings();
   assert.equal(settings['reader.fontSize'], '26');
   assert.equal(settings['reader.theme'], 'night');
+});
+
+test('les auteurs sont listés du plus au moins représenté', async () => {
+  const authors = await repository.getAuthors();
+  assert.ok(authors.length >= 1);
+  for (const item of authors) {
+    assert.ok(item.fullName);
+    assert.ok(item.bookCount >= 1);
+  }
+  const counts = authors.map((item) => item.bookCount);
+  assert.deepEqual(counts, [...counts].sort((a, b) => b - a));
+});
+
+test('les siècles se déduisent du décès des auteurs', async () => {
+  const eras = await repository.getEras();
+  assert.ok(eras.length >= 1);
+  for (const era of eras) {
+    assert.ok(era.century >= 1 && era.century <= 15, `siècle hors bornes : ${era.century}`);
+    assert.ok(era.bookCount >= 1);
+    const books = await repository.getBooksByCentury(era.century);
+    assert.equal(books.length, era.bookCount);
+  }
 });
 
 test("l'auteur en vedette a des œuvres", async () => {
