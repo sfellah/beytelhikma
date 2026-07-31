@@ -142,7 +142,9 @@ Les tables vivent dans `src/shared/book-cover.js` et `lib/utils/book_cover.dart`
 
 La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
 
-Reste à faire : alignement du client Flutter sur le téléchargement, l'exploration et les annotations.
+**Le jeu publié actuellement** : 397 éditions (10 livres par catégorie), 182 805 pages, sur `beytelhima-library` en `eu-west-1`. Le catalogue est en `catalog_version` 1, `schema_version` 2.
+
+Reste à faire : alignement du client Flutter sur le téléchargement, l'exploration, les annotations et la source de distribution — le miroir Dart de `src/shared/distribution.js` n'existe pas encore. Et le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) : le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement copie toujours le catalogue depuis le dossier source local.
 
 ## i18n / RTL (critique)
 

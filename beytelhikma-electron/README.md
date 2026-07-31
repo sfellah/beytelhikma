@@ -35,15 +35,39 @@ Trois bases SQLite, conformément à `../DATAMODEL.md` :
 Ne jamais éditer `assets/sample/` à la main : modifier le générateur puis recopier.
 
 ```bash
-python ../tools/import_shamela.py --books-per-category 3   # 120 livres -> ../dist/shamela
+python ../tools/import_shamela.py --books-per-category 10  # 397 livres -> ../dist/shamela
 npm start                                                  # les utilise automatiquement
 ```
 
-Au premier accès, `AppDatabase` matérialise les fichiers dans
-`app.getPath('userData')/library` — le catalogue au démarrage, chaque livre à sa
-première ouverture —, comme le fera un jour le téléchargement depuis un CDN.
-Un `library.json` y note la source installée : si elle change, les copies sont
-jetées et réinstallées, `user.sqlite` étant conservé.
+Au premier accès, `AppDatabase` copie **le catalogue seul** dans
+`app.getPath('userData')/library`. Les livres, eux, ne se matérialisent plus tout
+seuls : `AppDatabase.book()` exige un fichier installé et lève
+`BookNotInstalledError` sinon. C'est `download-manager.js` qui les installe.
+
+Un `library.json` note la source installée. Si elle change, le catalogue est jeté
+— il appartenait à l'ancienne source — mais **les livres restent**. Purger
+`books/` était tenable quand la source était un dossier qu'on changeait à la
+main ; avec un catalogue qui se met à jour tout seul depuis le bucket, ce serait
+tout retélécharger à chaque rafraîchissement. La réconciliation se fait par
+édition, à la lecture.
+
+### D'où viennent les livres
+
+Le catalogue ne porte aucun hôte : `book_releases.object_key` contient une clé
+relative (`books/<edition_id>/<content_version>/book.sqlite.zst`) que
+l'application colle derrière son réglage `distribution.base_url`. Une seule
+règle : **la présence de `://` marque un absolu** — `asset://` et `local://`
+désignent la bibliothèque source, ce qui garde les deux jeux locaux utilisables
+sans réseau et fait tourner les tests sans serveur.
+
+Changer `distribution.base_url` suffit donc à servir la même bibliothèque depuis
+un autre bucket, sans rien retélécharger de ce qui est installé. La résolution
+vit dans `src/shared/distribution.js`, et nulle part ailleurs.
+
+Au démarrage, `catalog-updater.js` lit `catalog/latest.json` sur le bucket et
+compare les versions. Cinq branches de décision sur six sont silencieuses : hors
+ligne, pointeur illisible, schéma trop récent, déjà à jour, version refusée. Une
+application hors ligne a déjà tout ce qu'il lui faut pour explorer.
 
 **Limite connue** : `sql.js` charge chaque livre intégralement en mémoire. Les
 120 livres de la sélection par défaut plafonnent à ~18 Mo, mais le corpus complet

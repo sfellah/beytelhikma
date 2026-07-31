@@ -129,6 +129,13 @@ conservant la progression, derrière confirmation.
 `download_url` du catalogue ; renseigné, elle en remplace l'origine. Le réglage
 s'applique **immédiatement** à la file en cours, sans redémarrage.
 
+> **Remplacé.** Cette section est devenue **مصدر التنزيل**, portée par
+> `distribution.base_url`, qui *préfixe* la clé du catalogue au lieu d'en
+> remplacer l'origine — remplacer l'origine seule cassait entre un bucket
+> virtual-hosted et un path-style. Elle porte aussi la vérification de version du
+> catalogue. Voir
+> `2026-07-31-source-distribution-configurable-design.md`.
+
 **عن التطبيق** — chemin de la bibliothèque source, version du schéma
 utilisateur, nombre d'éditions au catalogue. Lecture seule : ce sont les
 informations qu'on demande quand quelque chose ne va pas.
