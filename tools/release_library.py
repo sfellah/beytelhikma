@@ -120,18 +120,90 @@ def lance(commande, **kwargs):
 # ------------------------------------------------------------------ étapes
 
 
-def importe(args):
-    commande = [
-        sys.executable,
-        os.path.join("tools", "import_shamela.py"),
-        "--books-per-category",
-        str(args.books_per_category),
-        "--jobs",
-        str(args.jobs),
-        "--resume",
-        "--compress",
-    ]
+def importe(args, book_ids=None, compress=True):
+    """Un tour d'importeur. `book_ids` restreint à une tranche.
+
+    Sans `book_ids`, la portée est celle des options — c'est aussi la forme qui
+    reconstruit le catalogue **complet** en fin de course : tous les livres sont
+    repris depuis leur manifest, y compris ceux dont le `.sqlite` a été effacé.
+    """
+    commande = [sys.executable, os.path.join("tools", "import_shamela.py")]
+    if book_ids:
+        commande += ["--book-ids", ",".join(str(i) for i in book_ids)]
+    elif args.all:
+        commande.append("--all")
+    else:
+        commande += ["--books-per-category", str(args.books_per_category)]
+    commande += ["--jobs", str(args.jobs), "--resume"]
+    if compress:
+        commande.append("--compress")
     lance(commande)
+
+
+def selection(args):
+    """La sélection de l'importeur, calculée ici pour pouvoir la découper.
+
+    On appelle le même `select` que lui plutôt que d'analyser sa sortie : deux
+    listes tirées de deux codes différents finiraient par diverger, et une
+    tranche publiée qui ne serait plus au catalogue final ne se verrait pas.
+    """
+    from shamela.cli import DEFAULT_SRC
+    from shamela.discovery import scan_corpus, select
+
+    corpus = scan_corpus(args.corpus or DEFAULT_SRC)
+    return select(corpus, None if args.all else args.books_per_category)
+
+
+def tranches(livres, taille):
+    """Découpe en lots d'environ `taille` livres, de poids comparables.
+
+    On distribue en escalier (`[i::n]`) après un tri par taille décroissante,
+    au lieu de couper la liste triée en tronçons. Découper une liste triée
+    mettrait les cent plus gros livres dans la première tranche : 4,5 Go de
+    source, ~45 Go en sortie, soit exactement le pic qu'on cherche à éviter.
+    En escalier, chaque tranche reçoit un gros, un moyen, un petit — le pic
+    disque devient la moyenne, et il est le même à la première tranche qu'à la
+    dernière.
+    """
+    if not livres:
+        return []
+    ordonnes = sorted(livres, key=lambda b: -b.size)
+    nombre = max(1, -(-len(ordonnes) // taille))  # division entière par excès
+    return [ordonnes[i::nombre] for i in range(nombre)]
+
+
+def publie_tranche(src, bucket, region, editions):
+    """Monte une tranche, puis efface ce qui vient d'être monté.
+
+    L'ordre compte : on ne supprime **que** les éditions dont le manifest porte
+    désormais une `object_key`. Un envoi qui a échoué laisse donc son fichier en
+    place, et la tranche suivante le retentera au lieu de le perdre.
+    """
+    import publish_minio
+
+    code = publish_minio.main(
+        ["--src", src, "--endpoint", "aws", "--region", region,
+         "--bucket", bucket, "--skip-catalog"]
+    )
+    if code != 0:
+        raise SystemExit("publication de la tranche en échec")
+
+    livres = os.path.join(RACINE, src, "books")
+    liberes = supprimes = 0
+    for eid in editions:
+        manifeste = os.path.join(livres, f"{eid}.manifest.json")
+        if not os.path.exists(manifeste):
+            continue
+        with open(manifeste, encoding="utf-8") as fh:
+            if not json.load(fh).get("object_key"):
+                continue  # jamais monté : on garde le fichier
+        for nom in (f"{eid}.sqlite", f"{eid}.sqlite.zst"):
+            chemin = os.path.join(livres, nom)
+            if os.path.exists(chemin):
+                liberes += os.path.getsize(chemin)
+                os.remove(chemin)
+                supprimes += 1
+    return supprimes, liberes
 
 
 def verifie_anonymement(base, src):
@@ -170,21 +242,49 @@ def verifie_anonymement(base, src):
     )
 
 
-def nettoie(src):
-    """Retire les archives montées et les fichiers d'éditions hors catalogue."""
+# Restes d'exécutions interrompues. `-journal`, `-wal` et `-shm` sont écrits par
+# SQLite à côté de la base et survivent à un import tué ; ils ne tombaient pas
+# sous la règle « édition hors catalogue » parce que leur nom commence par un
+# identifiant valide, et s'accumulaient donc en silence.
+TEMPORAIRES = (".part", ".tmp", "-journal", "-wal", "-shm")
+
+
+def nettoie(src, editions_montees=False):
+    """Retire archives, restes temporaires et fichiers d'éditions hors catalogue.
+
+    Avec `editions_montees`, retire aussi les `.sqlite` des livres dont le
+    manifest porte une `object_key` : leur contenu est au bucket, le manifest
+    suffit à reconstruire le catalogue.
+    """
     livres = os.path.join(src, "books")
     con = sqlite3.connect(os.path.join(src, "catalog.sqlite"))
     actives = {r[0] for r in con.execute("SELECT edition_id FROM book_releases WHERE is_active = 1")}
     con.close()
 
+    montees = set()
+    if editions_montees:
+        for nom in os.listdir(livres):
+            if not nom.endswith(".manifest.json"):
+                continue
+            try:
+                with open(os.path.join(livres, nom), encoding="utf-8") as fh:
+                    if json.load(fh).get("object_key"):
+                        montees.add(nom[: -len(".manifest.json")])
+            except (OSError, ValueError):
+                continue
+
     supprimes = 0
     liberes = 0
     for nom in os.listdir(livres):
         chemin = os.path.join(livres, nom)
+        if not os.path.isfile(chemin):
+            continue
+        base = nom.split(".")[0]
         jetable = (
-            nom.endswith(".part")
+            nom.endswith(TEMPORAIRES)
             or nom.endswith(".sqlite.zst")
-            or nom.split(".")[0] not in actives
+            or base not in actives
+            or (nom.endswith(".sqlite") and base in montees)
         )
         if jetable:
             liberes += os.path.getsize(chemin)
@@ -193,12 +293,70 @@ def nettoie(src):
     print(f"nettoyage : {supprimes} fichiers, {liberes / 1048576:.1f} Mo libérés")
 
 
+def monte_par_tranches(args, bucket, region):
+    """Importe, monte, efface, recommence — puis reconstruit le catalogue entier.
+
+    Le corpus complet pèse ~300 Go une fois converti, pour 18 Go de source : le
+    tenir en entier sur le disque n'est pas une option. Chaque tranche ne laisse
+    derrière elle que son manifest, quelques kilo-octets qui suffisent à
+    reconstituer le catalogue.
+
+    Le catalogue et le pointeur ne partent **pas** d'ici : `build_catalog`
+    réécrit `catalog.sqlite` avec la seule tranche courante, et publier ce
+    catalogue-là annoncerait cent livres au lieu de huit mille. Ils partent à la
+    fin, une fois le catalogue complet reconstruit, par le chemin ordinaire.
+    """
+    from shamela.catalogdb import edition_id
+
+    livres = selection(args)
+    lots = tranches(livres, args.batch_size)
+    total_source = sum(b.size for b in livres)
+    print(f"{len(livres)} livres à monter en {len(lots)} tranche(s) de {args.batch_size} "
+          f"({total_source / 1024 / 1024:.0f} Mo de source)")
+
+    if args.dry_run:
+        # Un essai à blanc ne monte ni n'efface rien. Le pic disque annoncé est
+        # celui de la tranche la plus lourde, seul chiffre qui décide si la
+        # publication tient sur ce disque.
+        # Ratio mesuré sur 911 livres réels : 10,25 Go de source ont donné
+        # 32,2 Go de SQLite. Le texte normalisé de `body_search` et les index
+        # FTS pèsent plus que le texte lui-même.
+        pic = max(sum(b.size for b in lot) for lot in lots) / 1024 / 1024
+        print(f"essai à blanc — tranche la plus lourde : {pic:.0f} Mo de source, "
+              f"soit ~{pic * 3.1 / 1024:.1f} Go sur le disque à son pic")
+        return
+
+    libere_total = 0
+    for numero, lot in enumerate(lots, start=1):
+        poids = sum(b.size for b in lot) / 1024 / 1024
+        print(f"\n--- tranche {numero}/{len(lots)} : {len(lot)} livres, "
+              f"{poids:.0f} Mo de source ---", flush=True)
+
+        importe(args, book_ids=[b.book_id for b in lot])
+        supprimes, liberes = publie_tranche(
+            args.src, bucket, region, [edition_id(b.book_id) for b in lot]
+        )
+        libere_total += liberes
+        print(f"tranche {numero} montée — {supprimes} fichiers effacés, "
+              f"{liberes / 1048576:.0f} Mo rendus au disque", flush=True)
+
+    print(f"\ntoutes les tranches sont montées ({libere_total / 1073741824:.1f} Go rendus). "
+          "Reconstruction du catalogue complet…", flush=True)
+    # Sans `--compress` : plus rien n'est à compresser, tout est déjà en ligne.
+    importe(args, compress=False)
+
+
 # ------------------------------------------------------------------ entrée
 
 
 def build_parser():
     p = argparse.ArgumentParser(description="Publie la bibliothèque vers le bucket")
     p.add_argument("--src", default="dist/shamela")
+    p.add_argument("--corpus", default=None, help="corpus source (défaut : celui de l'importeur)")
+    p.add_argument("--all", action="store_true", help="tout le corpus (8 589 livres)")
+    p.add_argument("--batch-size", type=int, default=100, metavar="N",
+                   help="livres par tranche : importer, monter, effacer, recommencer "
+                        "(0 : tout d'un coup, ce qui demande ~300 Go de disque)")
     p.add_argument("--books-per-category", type=int, default=10)
     p.add_argument("--jobs", type=int, default=8)
     p.add_argument("--bucket", default=None, help="défaut : BUCKET_NAME")
@@ -222,7 +380,10 @@ def main(argv=None):
 
     src = os.path.join(RACINE, args.src)
     if not args.skip_import:
-        importe(args)
+        if args.batch_size:
+            monte_par_tranches(args, bucket, region)
+        else:
+            importe(args)
 
     catalogue = os.path.join(src, "catalog.sqlite")
     if not os.path.exists(catalogue):
@@ -266,7 +427,7 @@ def main(argv=None):
 
     verifie_anonymement(base, src)
     if not args.skip_cleanup:
-        nettoie(src)
+        nettoie(src, editions_montees=bool(args.batch_size))
     print(f"bibliothèque publiée : catalogue v{version} sur {base}")
     return 0
 

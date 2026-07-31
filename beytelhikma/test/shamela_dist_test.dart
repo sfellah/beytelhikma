@@ -50,68 +50,92 @@ void main() {
     await database.close();
   });
 
-  test('le catalogue importé expose les 40 disciplines peuplées', () async {
-    final categories = await repository.getCategories();
+  test(
+    'le catalogue importé expose les 40 disciplines peuplées',
+    () async {
+      final categories = await repository.getCategories();
 
-    expect(categories, hasLength(40));
-    expect(categories.every((c) => c.label.isNotEmpty), isTrue);
-    expect(categories.every((c) => c.bookCount > 0), isTrue);
-  }, skip: available ? false : 'dist/shamela absent');
+      expect(categories, hasLength(40));
+      expect(categories.every((c) => c.label.isNotEmpty), isTrue);
+      expect(categories.every((c) => c.bookCount > 0), isTrue);
+    },
+    skip: available ? false : 'dist/shamela absent',
+  );
 
-  test('chaque édition porte titre, auteur, catégorie et pagination', () async {
-    final books = await repository.getBooks(limit: 500);
+  test(
+    'chaque édition porte titre, auteur, catégorie et pagination',
+    () async {
+      final books = await repository.getBooks(limit: 500);
 
-    expect(books, isNotEmpty);
-    for (final book in books) {
-      expect(book.title, isNotEmpty, reason: book.editionId);
-      expect(book.authorName, isNotNull, reason: book.editionId);
-      expect(book.categoryLabel, isNotNull, reason: book.editionId);
-      expect(book.pageCount, greaterThan(0), reason: book.editionId);
-      expect(book.volumeCount, greaterThanOrEqualTo(1), reason: book.editionId);
-    }
-  }, skip: available ? false : 'dist/shamela absent');
-
-  test('les pages sont denses et débarrassées du balisage source', () async {
-    final books = await repository.getBooks(limit: 500);
-
-    var withMultipleVolumes = 0;
-    for (final book in books) {
-      final detail = await repository.getBookDetail(book.editionId);
-      expect(detail.volumes, isNotEmpty, reason: book.editionId);
-      if (detail.volumes.length > 1) withMultipleVolumes++;
-
-      final pages = await repository.getPages(book.editionId, limit: 5);
-      expect(pages, isNotEmpty, reason: book.editionId);
-      for (var i = 0; i < pages.length; i++) {
-        expect(pages[i].sequenceNum, i + 1, reason: book.editionId);
-        // Ni table, ni image base64, ni retour chariot ne doivent survivre au
-        // pipeline : aucun des deux clients ne sait les rendre.
-        expect(pages[i].bodyHtml, isNot(contains('<table')));
-        expect(pages[i].bodyHtml, isNot(contains('data:image')));
-        expect(pages[i].bodyHtml, isNot(contains('\r')));
-        // `body_plain` peut porter un `<` littéral venu du texte source ;
-        // ce qu'il ne doit jamais porter, c'est une balise.
-        expect(pages[i].bodyPlain, isNot(contains('<p>')));
-        expect(pages[i].bodyPlain, isNot(contains('<span')));
-        expect(pages[i].bodyPlain, isNot(contains('</')));
+      expect(books, isNotEmpty);
+      for (final book in books) {
+        expect(book.title, isNotEmpty, reason: book.editionId);
+        expect(book.authorName, isNotNull, reason: book.editionId);
+        expect(book.categoryLabel, isNotNull, reason: book.editionId);
+        expect(book.pageCount, greaterThan(0), reason: book.editionId);
+        expect(
+          book.volumeCount,
+          greaterThanOrEqualTo(1),
+          reason: book.editionId,
+        );
       }
-    }
-    expect(withMultipleVolumes, greaterThan(0));
-  }, skip: available ? false : 'dist/shamela absent');
+    },
+    skip: available ? false : 'dist/shamela absent',
+  );
 
-  test('les sommaires sont hiérarchiques', () async {
-    final books = await repository.getBooks(limit: 500);
+  test(
+    'les pages sont denses et débarrassées du balisage source',
+    () async {
+      final books = await repository.getBooks(limit: 500);
 
-    var nested = 0;
-    for (final book in books) {
-      // `getToc` renvoie une liste plate ; l'arbre se reconstruit ensuite.
-      final flat = await repository.getToc(book.editionId);
-      if (flat.isEmpty) continue;
-      final tree = TocEntry.buildTree(flat);
-      expect(tree, isNotEmpty, reason: book.editionId);
-      expect(tree.length, lessThanOrEqualTo(flat.length), reason: book.editionId);
-      if (tree.any((entry) => entry.children.isNotEmpty)) nested++;
-    }
-    expect(nested, greaterThan(0));
-  }, skip: available ? false : 'dist/shamela absent');
+      var withMultipleVolumes = 0;
+      for (final book in books) {
+        final detail = await repository.getBookDetail(book.editionId);
+        expect(detail.volumes, isNotEmpty, reason: book.editionId);
+        if (detail.volumes.length > 1) withMultipleVolumes++;
+
+        final pages = await repository.getPages(book.editionId, limit: 5);
+        expect(pages, isNotEmpty, reason: book.editionId);
+        for (var i = 0; i < pages.length; i++) {
+          expect(pages[i].sequenceNum, i + 1, reason: book.editionId);
+          // Ni table, ni image base64, ni retour chariot ne doivent survivre au
+          // pipeline : aucun des deux clients ne sait les rendre.
+          expect(pages[i].bodyHtml, isNot(contains('<table')));
+          expect(pages[i].bodyHtml, isNot(contains('data:image')));
+          expect(pages[i].bodyHtml, isNot(contains('\r')));
+          // `body_plain` peut porter un `<` littéral venu du texte source ;
+          // ce qu'il ne doit jamais porter, c'est une balise.
+          expect(pages[i].bodyPlain, isNot(contains('<p>')));
+          expect(pages[i].bodyPlain, isNot(contains('<span')));
+          expect(pages[i].bodyPlain, isNot(contains('</')));
+        }
+      }
+      expect(withMultipleVolumes, greaterThan(0));
+    },
+    skip: available ? false : 'dist/shamela absent',
+  );
+
+  test(
+    'les sommaires sont hiérarchiques',
+    () async {
+      final books = await repository.getBooks(limit: 500);
+
+      var nested = 0;
+      for (final book in books) {
+        // `getToc` renvoie une liste plate ; l'arbre se reconstruit ensuite.
+        final flat = await repository.getToc(book.editionId);
+        if (flat.isEmpty) continue;
+        final tree = TocEntry.buildTree(flat);
+        expect(tree, isNotEmpty, reason: book.editionId);
+        expect(
+          tree.length,
+          lessThanOrEqualTo(flat.length),
+          reason: book.editionId,
+        );
+        if (tree.any((entry) => entry.children.isNotEmpty)) nested++;
+      }
+      expect(nested, greaterThan(0));
+    },
+    skip: available ? false : 'dist/shamela absent',
+  );
 }

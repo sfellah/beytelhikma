@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Ordre de lecture, volumes, sommaire, catalogue et parité de schéma."""
 
+import json
 import os
 import re
 import shutil
@@ -238,6 +239,54 @@ class EndToEndTest(unittest.TestCase):
         for name in ("import-report.json", "import-report.csv"):
             self.assertTrue(os.path.exists(os.path.join(self.out, name)), name)
         self.assertTrue(os.path.exists(os.path.join(self.out, "books", "sh-11.manifest.json")))
+
+    def test_un_livre_monte_puis_efface_reste_au_catalogue(self):
+        """Publier par tranches : le `.sqlite` part une fois monté, seul le
+        manifest reste. Exiger le fichier faisait tomber le livre du catalogue
+        que `build_catalog` réécrit — effacer une tranche la dépubliait."""
+        self.assertEqual(main(["--src", self.src, "--out", self.out, "--all", "--jobs", "1"]), 0)
+
+        livres = os.path.join(self.out, "books")
+        manifeste = os.path.join(livres, "sh-11.manifest.json")
+        with open(manifeste, encoding="utf-8") as fh:
+            contenu = json.load(fh)
+        contenu["object_key"] = "books/sh-11/1/book.sqlite.zst"
+        contenu["compressed_size"] = 4242
+        with open(manifeste, "w", encoding="utf-8") as fh:
+            json.dump(contenu, fh, ensure_ascii=False)
+        os.remove(os.path.join(livres, "sh-11.sqlite"))
+
+        code = main(["--src", self.src, "--out", self.out, "--all", "--jobs", "1", "--resume"])
+        self.assertEqual(code, 0)
+
+        con = sqlite3.connect(os.path.join(self.out, "catalog.sqlite"))
+        cle, taille = con.execute(
+            "SELECT object_key, compressed_size FROM book_releases WHERE edition_id = 'sh-11'"
+        ).fetchone()
+        editions = con.execute("SELECT COUNT(*) FROM editions").fetchone()[0]
+        con.close()
+
+        self.assertEqual(editions, 2, "le livre effacé reste au catalogue")
+        self.assertEqual(cle, "books/sh-11/1/book.sqlite.zst", "la clé du bucket est reprise")
+        self.assertEqual(taille, 4242)
+
+    def test_un_manifest_sans_taille_ni_fichier_fait_reimporter(self):
+        """Le catalogue annonce le poids du livre. Sans taille au manifest ni
+        fichier à mesurer, il vaut mieux refaire l'import que d'inventer."""
+        self.assertEqual(main(["--src", self.src, "--out", self.out, "--all", "--jobs", "1"]), 0)
+
+        livres = os.path.join(self.out, "books")
+        manifeste = os.path.join(livres, "sh-11.manifest.json")
+        with open(manifeste, encoding="utf-8") as fh:
+            contenu = json.load(fh)
+        contenu.pop("size", None)
+        with open(manifeste, "w", encoding="utf-8") as fh:
+            json.dump(contenu, fh, ensure_ascii=False)
+        os.remove(os.path.join(livres, "sh-11.sqlite"))
+
+        self.assertEqual(
+            main(["--src", self.src, "--out", self.out, "--all", "--jobs", "1", "--resume"]), 0)
+        self.assertTrue(os.path.exists(os.path.join(livres, "sh-11.sqlite")), "réimporté")
 
 
 if __name__ == "__main__":

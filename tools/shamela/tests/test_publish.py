@@ -169,6 +169,50 @@ class PublishTest(unittest.TestCase):
             self.assertEqual(report["missing"], ["ed-a"])
             self.assertEqual(client.puts, [])
 
+    def test_la_cle_est_ecrite_au_manifest(self):
+        """Le manifest est la seule trace qui survit à la suppression du fichier.
+        Sans la clé dedans, une publication par tranches perdrait l'adresse de
+        tout ce qu'elle vient de monter."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            publish(FakeS3(), src=root, bucket="b")
+            with open(os.path.join(root, "books", "ed-a.manifest.json"), encoding="utf-8") as fh:
+                manifest = json.load(fh)
+            self.assertEqual(manifest["object_key"], object_key("ed-a", 1))
+            self.assertEqual(manifest["compressed_size"], len(b"compressed-bytes"))
+            self.assertEqual(manifest["sha256"], "a" * 64, "le reste du manifest est intact")
+
+    def test_livre_deja_monte_sans_fichier_garde_sa_cle(self):
+        """Publier par tranches : le fichier est effacé une fois monté, mais le
+        catalogue est réécrit à chaque import. Sans ce chemin, il repartirait en
+        `local://` et le client ne saurait plus où chercher le livre."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            client = FakeS3()
+            publish(client, src=root, bucket="b")
+            os.remove(os.path.join(root, "books", "ed-a.sqlite.zst"))
+
+            # Le catalogue tel que le réécrirait l'importeur : clé hors ligne.
+            con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
+            con.execute("UPDATE book_releases SET object_key = 'local://books/ed-a.sqlite'")
+            con.commit()
+            con.close()
+
+            client.puts.clear()
+            report = publish(client, src=root, bucket="b")
+
+            self.assertEqual(report["already"], 1)
+            self.assertEqual(report["missing"], [])
+            self.assertEqual(client.puts, [], "rien n'est renvoyé")
+
+            con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
+            stored, size = con.execute(
+                "SELECT object_key, compressed_size FROM book_releases"
+            ).fetchone()
+            con.close()
+            self.assertEqual(stored, object_key("ed-a", 1))
+            self.assertEqual(size, len(b"compressed-bytes"))
+
     def test_archive_produite_a_la_volee_depuis_le_sqlite(self):
         """L'import n'ayant pas toujours tourné avec --compress, et la reprise
         sautant la compression, l'outil doit savoir compresser lui-même."""

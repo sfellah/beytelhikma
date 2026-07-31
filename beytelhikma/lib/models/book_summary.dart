@@ -7,7 +7,9 @@ class BookSummary {
     this.subtitle,
     this.categoryId,
     this.categoryLabel,
+    this.bookType,
     this.authorName,
+    this.authorDeathYear,
     this.volumeCount = 1,
     this.pageCount,
     this.coverUrl,
@@ -20,7 +22,17 @@ class BookSummary {
   final String? subtitle;
   final int? categoryId;
   final String? categoryLabel;
+
+  /// `book_type_label` : « كتاب » ou l'un des quatre autres — رسالة جامعية,
+  /// مجلة, دروس مفرغة, رسالة. Décide de la mise en page de la couverture : ce
+  /// qui n'est pas un livre ne doit pas se présenter comme un livre.
+  final String? bookType;
   final String? authorName;
+
+  /// Année de décès hégirienne de l'auteur, renseignée pour 69 % du corpus.
+  /// Elle donne la reliure de la couverture (`lib/utils/book_cover.dart`) ;
+  /// son absence est un cas prévu, pas un trou.
+  final int? authorDeathYear;
   final int volumeCount;
   final int? pageCount;
   final String? coverUrl;
@@ -35,7 +47,9 @@ class BookSummary {
     subtitle: map['subtitle_ar'] as String?,
     categoryId: map['category_id'] as int?,
     categoryLabel: map['category_label'] as String?,
+    bookType: map['book_type_label'] as String?,
     authorName: map['author_name'] as String?,
+    authorDeathYear: map['author_death_year'] as int?,
     volumeCount: (map['volume_count'] as int?) ?? 1,
     pageCount: map['page_count'] as int?,
     coverUrl: map['cover_url'] as String?,
@@ -49,7 +63,9 @@ class BookSummary {
     'subtitle_ar': subtitle,
     'category_id': categoryId,
     'category_label': categoryLabel,
+    'book_type_label': bookType,
     'author_name': authorName,
+    'author_death_year': authorDeathYear,
     'volume_count': volumeCount,
     'page_count': pageCount,
     'cover_url': coverUrl,

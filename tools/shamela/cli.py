@@ -99,9 +99,20 @@ def _compress(path: str) -> int | None:
 
 
 def _resume_skip(job: dict) -> dict | None:
-    """Compte rendu déjà produit, si le manifest correspond toujours à la source."""
+    """Compte rendu déjà produit, si le manifest correspond toujours à la source.
+
+    **Le manifest suffit, le `.sqlite` est facultatif.** Un livre déjà monté au
+    bucket peut avoir vu son fichier effacé pour rendre la place : c'est ce qui
+    permet d'importer par tranches sans jamais tenir tout le corpus sur le
+    disque. Le manifest porte alors `object_key`, et le catalogue se reconstruit
+    complet sans qu'aucun fichier ne soit là.
+
+    Exiger le fichier faisait tomber le livre de `results`, donc du catalogue
+    que `build_catalog` réécrit à chaque exécution : effacer une tranche publiée
+    revenait à la dépublier au tour suivant.
+    """
     manifest_path = os.path.splitext(job["out_path"])[0] + ".manifest.json"
-    if not (os.path.exists(job["out_path"]) and os.path.exists(manifest_path)):
+    if not os.path.exists(manifest_path):
         return None
     try:
         manifest = read_json(manifest_path)
@@ -109,6 +120,15 @@ def _resume_skip(job: dict) -> dict | None:
         return None
     if manifest.get("normalization") != NORMALIZATION:
         return None
+
+    # Sans taille au manifest ni fichier à mesurer, le catalogue ne saurait pas
+    # annoncer le poids du livre : mieux vaut le réimporter que de mentir.
+    size = manifest.get("size")
+    if size is None:
+        if not os.path.exists(job["out_path"]):
+            return None
+        size = os.path.getsize(job["out_path"])
+
     return {
         "book_id": job["book_id"],
         "edition_id": job["edition_id"],
@@ -121,7 +141,7 @@ def _resume_skip(job: dict) -> dict | None:
         "assets": manifest.get("asset_count", 0),
         "warnings": {},
         "truncated": manifest.get("truncated", False),
-        "output_bytes": manifest.get("size", os.path.getsize(job["out_path"])),
+        "output_bytes": size,
         "sha256": manifest.get("sha256"),
         "content_hash": manifest.get("content_hash"),
         "source_sha256": manifest.get("source_sha256"),
@@ -130,6 +150,10 @@ def _resume_skip(job: dict) -> dict | None:
         "source_bytes": job.get("source_bytes", 0),
         "duration_s": 0.0,
         "resumed": True,
+        # Écrits au manifest par `publish_minio` une fois le livre monté : c'est
+        # par eux que le catalogue retrouve la clé d'un fichier effacé.
+        "object_key": manifest.get("object_key"),
+        "compressed_bytes": manifest.get("compressed_size"),
         "manifest": manifest,
     }
 

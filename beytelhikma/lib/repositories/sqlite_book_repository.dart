@@ -27,11 +27,13 @@ class SqliteBookRepository implements BookRepository {
            e.title_ar,
            e.subtitle_ar,
            e.category_id,
+           e.book_type_label,
            e.volume_count,
            e.language,
            e.cover_url,
            c.label_ar                                   AS category_label,
            COALESCE(a.short_name_ar, a.full_name_ar)    AS author_name,
+           a.death_year_hijri                           AS author_death_year,
            r.page_count                                 AS page_count,
            r.published_at                               AS published_at
     FROM editions e

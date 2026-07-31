@@ -31,6 +31,7 @@ class AppDatabase {
 
   static const catalogAsset = 'assets/sample/catalog.sqlite';
   static const booksAssetDir = 'assets/sample/books';
+
   /// Version 2 : annotations personnelles (`bookmarks`, `highlights`, `notes`).
   /// Le portage Electron applique la même migration — les deux clients peuvent
   /// partager une racine de bibliothèque, ils doivent lire le même schéma.

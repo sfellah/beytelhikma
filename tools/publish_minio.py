@@ -166,6 +166,9 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
         "skipped": 0,
         "updated": 0,
         "compressed": 0,
+        # Livres montés lors d'une tranche précédente, dont les fichiers ont été
+        # effacés pour rendre la place. Ils ne sont ni envoyés ni manquants.
+        "already": 0,
         # Essai à blanc : ce qui *serait* fait, puisque rien ne l'est.
         "planned": 0,
         "would_compress": 0,
@@ -184,6 +187,11 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
     updates = []
     for release_id, edition_id, content_version in releases:
         manifest_path = os.path.join(books_dir, f"{edition_id}.manifest.json")
+        manifest = {}
+        if os.path.exists(manifest_path):
+            with open(manifest_path, encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        key = object_key(edition_id, content_version)
 
         if dry_run:
             # Un essai à blanc n'ouvre ni ne compresse aucun fichier : il se
@@ -192,7 +200,10 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
             has_archive = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite.zst"))
             has_source = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite"))
             if not has_archive and not has_source:
-                report["missing"].append(edition_id)
+                if manifest.get("object_key") == key:
+                    report["already"] += 1
+                else:
+                    report["missing"].append(edition_id)
                 continue
             report["planned"] += 2  # l'archive et son manifest
             if not has_archive:
@@ -201,17 +212,34 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
 
         packed = _archive(books_dir, edition_id, report)
         if packed is None:
-            report["missing"].append(edition_id)
+            # Fichier absent, mais le manifest porte déjà la clé : le livre a
+            # été monté par une tranche précédente puis effacé. Le catalogue
+            # doit quand même recevoir sa clé, sinon il repartirait en
+            # `local://` et le client ne saurait pas où le chercher.
+            if manifest.get("object_key") == key:
+                report["already"] += 1
+                updates.append((key, manifest.get("compressed_size") or 0, release_id))
+            else:
+                report["missing"].append(edition_id)
             continue
 
         with open(packed, "rb") as fh:
             body = fh.read()
-        manifest = {}
-        if os.path.exists(manifest_path):
-            with open(manifest_path, encoding="utf-8") as fh:
-                manifest = json.load(fh)
 
-        key = object_key(edition_id, content_version)
+        # La clé est écrite au manifest **avant** son envoi. C'est la seule
+        # trace qui survit à la suppression du fichier, et celle dont la reprise
+        # se sert pour reconstruire un catalogue complet depuis un disque
+        # presque vide. La compléter après l'envoi ferait diverger la copie
+        # locale de celle du bucket, et le passage suivant renverrait tous les
+        # manifests pour cette seule différence.
+        manifest["object_key"] = key
+        manifest["compressed_size"] = len(body)
+        if os.path.exists(manifest_path):
+            temporary = f"{manifest_path}.part"
+            with open(temporary, "w", encoding="utf-8") as fh:
+                json.dump(manifest, fh, ensure_ascii=False, indent=2)
+            os.replace(temporary, manifest_path)
+
         _upload(
             client,
             bucket,
@@ -235,6 +263,7 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
             force,
             report,
         )
+
         updates.append((key, len(body), release_id))
 
     if updates and not dry_run:
@@ -523,12 +552,14 @@ def main(argv=None):
             print(
                 f"essai à blanc — objets à envoyer : {report['planned']} • "
                 f"à compresser : {report['would_compress']} • "
+                f"déjà montés : {report['already']} • "
                 f"livres sans fichier : {len(report['missing'])}"
             )
         else:
             print(
                 f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
-                f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
+                f"compressés : {report['compressed']} • déjà montés : {report['already']} • "
+                f"catalogue mis à jour : {report['updated']}"
             )
 
     # Le catalogue part **après** les livres : un pointeur qui annonce des
