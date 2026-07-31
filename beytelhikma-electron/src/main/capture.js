@@ -68,6 +68,15 @@ const READER_STATES = [
   ['reader-toc', `document.querySelector('[title="فهرس المحتويات"]').click()`],
   ['reader-settings', `document.querySelector('[title="إعدادات القراءة"]').click()`],
   [
+    'reader-search',
+    `document.querySelector('[title="بحث في الكتاب"]').click();
+     const field = document.querySelector('.reader__search-field');
+     // Les deux premiers mots d'une page réelle : le terme existe forcément.
+     field.value = (document.querySelector('.reader__page p')?.textContent ?? '')
+       .trim().split(/\\s+/).find((word) => word.length >= 4) ?? 'الله';
+     field.dispatchEvent(new Event('input', { bubbles: true }));`,
+  ],
+  [
     'reader-selection',
     `const paragraph = document.querySelector('.reader__page p');
      const range = document.createRange();

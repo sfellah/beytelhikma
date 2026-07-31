@@ -6,6 +6,7 @@ import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
 import { errorView, loadingView } from '../components/states.js';
+import { arabicSearchPattern } from '../../../shared/arabic.js';
 
 const PAGE_WINDOW = 20;
 const MIN_FONT = 16;
@@ -54,6 +55,8 @@ class Reader {
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
+  /** Motif du terme cherché, réappliqué à chaque page affichée. */
+  #highlight = null;
   #keyHandler = (event) => this.#onKey(event);
   #fullscreenHandler = () => this.#syncFullscreen();
 
@@ -166,7 +169,7 @@ class Reader {
           tool('bookmark', 'إشارة مرجعية', () => toast('الإشارات المرجعية قيد الإنجاز')),
           tool('bookOpen', 'فهرس المحتويات', () => this.#togglePanel('toc')),
           tool('formatSize', 'إعدادات القراءة', () => this.#togglePanel('settings')),
-          tool('search', 'بحث في الكتاب', () => toast('البحث قيد الإنجاز')),
+          tool('search', 'بحث في الكتاب', () => this.#togglePanel('search')),
           fullscreenButton,
         ),
         h(
@@ -216,6 +219,7 @@ class Reader {
     const refs = {};
     const panel = this.#settingsPanel(refs);
     const tocPanel = this.#tocPanel();
+    const searchPanel = this.#searchPanel(refs);
     const selection = this.#selectionMenu();
 
     const root = h(
@@ -230,6 +234,7 @@ class Reader {
       hint,
       panel,
       tocPanel,
+      searchPanel,
       selection,
     );
 
@@ -255,6 +260,7 @@ class Reader {
       scroll,
       panel,
       tocPanel,
+      searchPanel,
       selection,
       fullscreenButton,
       lastScroll: 0,
@@ -395,6 +401,140 @@ class Reader {
     );
   }
 
+  /**
+   * Recherche dans le livre. `pages_fts` n'est pas interrogeable — le build
+   * sql.js embarqué ne contient pas FTS5 — le dépôt cherche donc sur les
+   * colonnes normalisées `body_search` et `title_normalized`.
+   */
+  #searchPanel(refs) {
+    const results = h('div', { class: 'reader__panel-body reader__search-results' });
+    const summary = h('p', { class: 'label-sm muted' }, 'اكتب كلمتين على الأقل.');
+    let timer = null;
+
+    const field = h('input', {
+      type: 'search',
+      class: 'reader__search-field',
+      placeholder: 'ابحث في هذا الكتاب…',
+      oninput: () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => this.#runSearch(field.value, { results, summary }), 250);
+      },
+    });
+
+    refs.searchField = field;
+
+    return h(
+      'aside',
+      { class: 'reader__search reader__panel' },
+      h(
+        'div',
+        { class: 'reader__panel-head' },
+        h('h2', { class: 'title-md' }, 'بحث في الكتاب'),
+        h(
+          'button',
+          { class: 'reader__tool', title: 'إغلاق', onclick: () => this.#closePanels() },
+          icon('close', { size: 20 }),
+        ),
+      ),
+      h('div', { class: 'reader__search-box' }, field, summary),
+      results,
+    );
+  }
+
+  async #runSearch(term, { results, summary }) {
+    const trimmed = term.trim();
+    if (trimmed.length < 2) {
+      this.#highlight = null;
+      summary.textContent = 'اكتب كلمتين على الأقل.';
+      results.replaceChildren();
+      return;
+    }
+
+    summary.textContent = 'جارٍ البحث…';
+    let found;
+    try {
+      found = await repository.searchInBook(this.#editionId, trimmed, { limit: 60 });
+    } catch {
+      summary.textContent = 'تعذّر البحث في هذا الكتاب.';
+      return;
+    }
+
+    this.#highlight = arabicSearchPattern(trimmed);
+    const total = found.chapters.length + found.pages.length;
+    summary.textContent = total
+      ? `${arabicNumber(total)} نتيجة`
+      : 'لا نتائج في هذا الكتاب.';
+
+    // Les chapitres d'abord : trouver un titre vaut mieux qu'une occurrence
+    // perdue au milieu d'une page.
+    results.replaceChildren(
+      ...found.chapters.map((entry) =>
+        h(
+          'button',
+          { class: 'reader__result is-chapter', onclick: () => this.#goToPage(entry.pageId) },
+          h('span', { class: 'reader__result-title truncate' }, entry.title),
+          h(
+            'span',
+            { class: 'label-sm muted' },
+            `ص ${arabicNumber(entry.printedPageNum ?? entry.sequenceNum)}`,
+          ),
+        ),
+      ),
+      ...found.pages.map((entry) =>
+        h(
+          'button',
+          { class: 'reader__result', onclick: () => this.#goToPage(entry.pageId) },
+          h(
+            'p',
+            { class: 'reader__result-snippet' },
+            entry.snippet.before,
+            h('mark', {}, entry.snippet.match),
+            entry.snippet.after,
+          ),
+          h(
+            'span',
+            { class: 'label-sm muted' },
+            `ص ${arabicNumber(entry.printedPageNum ?? entry.sequenceNum)}`,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Enveloppe les occurrences du terme cherché dans la page affichée. On
+   * parcourt les nœuds de texte plutôt que de manipuler du HTML : le contenu du
+   * livre n'est jamais réinterprété.
+   */
+  #applyHighlight(root) {
+    if (!this.#highlight) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const targets = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.nodeValue.trim()) targets.push(node);
+    }
+
+    for (const node of targets) {
+      const text = node.nodeValue;
+      this.#highlight.lastIndex = 0;
+      const fragment = document.createDocumentFragment();
+      let cursor = 0;
+      let match;
+      while ((match = this.#highlight.exec(text))) {
+        if (match.index > cursor) {
+          fragment.append(document.createTextNode(text.slice(cursor, match.index)));
+        }
+        fragment.append(h('mark', {}, match[0]));
+        cursor = match.index + match[0].length;
+        // Un motif capable de correspondre au vide bouclerait sans fin.
+        if (match[0].length === 0) this.#highlight.lastIndex += 1;
+      }
+      if (!cursor) continue;
+      if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
+      node.replaceWith(fragment);
+    }
+  }
+
   /** Menu contextuel de sélection, calqué sur la maquette (V2). */
   #selectionMenu() {
     const item = (name, label, onclick) =>
@@ -459,6 +599,7 @@ class Reader {
 
     const { page: pageNode, footnotes, chapter, pageFoot, slider } = this.#nodes;
     pageNode.replaceChildren(renderBookHtml(page.bodyHtml));
+    this.#applyHighlight(pageNode);
 
     if (page.footnotes) {
       footnotes.replaceChildren(document.createTextNode(page.footnotes));
@@ -577,23 +718,32 @@ class Reader {
 
   // ------------------------------------------------------------- panneaux
 
+  /** Les trois panneaux sont exclusifs : ouvrir l'un referme les autres. */
+  #panelNodes() {
+    return {
+      settings: this.#nodes.panel,
+      toc: this.#nodes.tocPanel,
+      search: this.#nodes.searchPanel,
+    };
+  }
+
   #togglePanel(which) {
-    const target = which === 'toc' ? this.#nodes.tocPanel : this.#nodes.panel;
-    const other = which === 'toc' ? this.#nodes.panel : this.#nodes.tocPanel;
-    other.classList.remove('is-open');
-    target.classList.toggle('is-open');
+    const panels = this.#panelNodes();
+    const target = panels[which];
+    if (!target) return;
+    for (const [key, node] of Object.entries(panels)) {
+      if (key !== which) node.classList.remove('is-open');
+    }
+    const opened = target.classList.toggle('is-open');
+    if (opened && which === 'search') this.#nodes.searchField?.focus();
   }
 
   #closePanels() {
-    this.#nodes.panel.classList.remove('is-open');
-    this.#nodes.tocPanel.classList.remove('is-open');
+    for (const node of Object.values(this.#panelNodes())) node.classList.remove('is-open');
   }
 
   #panelsOpen() {
-    return (
-      this.#nodes.panel.classList.contains('is-open') ||
-      this.#nodes.tocPanel.classList.contains('is-open')
-    );
+    return Object.values(this.#panelNodes()).some((node) => node.classList.contains('is-open'));
   }
 
   #showShortcuts() {
@@ -668,6 +818,14 @@ class Reader {
       this.#toggleFullscreen();
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      if (!this.#nodes.searchPanel.classList.contains('is-open')) this.#togglePanel('search');
+      else this.#nodes.searchField?.focus();
+      return;
+    }
+    // Les raccourcis de navigation ne doivent pas voler la frappe du champ.
+    if (event.target instanceof HTMLInputElement) return;
     if (event.ctrlKey && (event.key === '+' || event.key === '=')) {
       event.preventDefault();
       this.#setSize(this.#prefs.size + 2);

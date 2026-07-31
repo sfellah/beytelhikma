@@ -2080,3 +2080,67 @@ html:not([dir='rtl']) .scroller--at-start {
     width: 100%;
   }
 }
+
+/* ------------------------------------------------- recherche dans le livre */
+
+.reader__search-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--reader-rule);
+}
+
+.reader__search-field {
+  width: 100%;
+  padding: 8px var(--space-sm);
+  border-radius: var(--radius);
+  border: 1px solid var(--reader-rule);
+  background: transparent;
+  color: var(--reader-fg);
+  font: inherit;
+}
+
+.reader__search-results {
+  gap: var(--space-xs);
+}
+
+.reader__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: var(--space-sm);
+  border-radius: var(--radius);
+  text-align: start;
+  cursor: pointer;
+  color: var(--reader-fg);
+}
+
+.reader__result:hover {
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+}
+
+.reader__result.is-chapter {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.reader__result-title {
+  font-weight: 600;
+}
+
+.reader__result-snippet {
+  line-height: 1.7;
+}
+
+.reader__result mark,
+.reader__page mark {
+  background: color-mix(in srgb, #f2c744 55%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
