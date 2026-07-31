@@ -166,6 +166,40 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
   }
 });
 
+test('un catalogue republié de même taille est tout de même recopié', async () => {
+  const root = tempRoot();
+  const source = cloneLibrary(path.join(tempRoot(), 'republié'));
+  const catalogPath = path.join(source, 'catalog.sqlite');
+
+  const database = new AppDatabase({ librarySource: source, storageRoot: root });
+  await database.initialize();
+  const repository = new BookRepository(database);
+  repository.createDownloadQueue();
+  await repository.getBooks({ limit: 1 });
+  const installed = path.join(root, 'catalog.sqlite');
+  assert.ok(fs.existsSync(installed));
+  database.close();
+
+  // `publish_minio.py` réécrit `download_url` : le contenu change, la taille
+  // peut rester identique. Sans comparaison de date, la copie serait sautée.
+  const before = fs.readFileSync(catalogPath);
+  const patched = Buffer.from(before);
+  patched[patched.length - 1] ^= 0xff;
+  assert.equal(patched.length, before.length, 'même taille, contenu différent');
+  fs.writeFileSync(catalogPath, patched);
+  const now = new Date();
+  fs.utimesSync(catalogPath, now, now);
+
+  const reopened = new AppDatabase({ librarySource: source, storageRoot: root });
+  await reopened.initialize();
+  await reopened.catalog().catch(() => null); // le contenu trafiqué peut ne plus s'ouvrir
+  assert.deepEqual(fs.readFileSync(installed), patched, 'la copie a été rafraîchie');
+  reopened.close();
+
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(path.dirname(source), { recursive: true, force: true });
+});
+
 test('un livre non installé ne se matérialise plus tout seul', async () => {
   const root = tempRoot();
   const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });

@@ -175,8 +175,13 @@ export class AppDatabase {
   }
 
   /**
-   * Copie le fichier depuis la bibliothèque source vers [target] s'il n'y est pas
-   * encore, ou si sa taille diffère (régénérer les données change la taille).
+   * Copie le fichier depuis la bibliothèque source vers [target] s'il n'y est
+   * pas encore, si sa taille diffère, ou s'il est plus récent.
+   *
+   * La date compte autant que la taille : `tools/publish_minio.py` réécrit les
+   * `download_url` du catalogue sans forcément en changer la taille. Sans ce
+   * critère, l'application resterait sur l'ancien catalogue et continuerait de
+   * chercher les livres en `local://`.
    */
   #materialize(relativePath, targetPath) {
     const source = path.join(this.#source, relativePath);
@@ -184,8 +189,9 @@ export class AppDatabase {
       if (fs.existsSync(targetPath)) return targetPath;
       throw new Error(`fichier absent de la bibliothèque : ${relativePath}`);
     }
-    const size = fs.statSync(source).size;
-    if (!fs.existsSync(targetPath) || fs.statSync(targetPath).size !== size) {
+    const from = fs.statSync(source);
+    const to = fs.existsSync(targetPath) ? fs.statSync(targetPath) : null;
+    if (!to || to.size !== from.size || to.mtimeMs < from.mtimeMs) {
       fs.copyFileSync(source, targetPath);
     }
     return targetPath;
