@@ -1,0 +1,238 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import {
+  AppDatabase,
+  BookNotInstalledError,
+  all,
+  resolveLibrarySource,
+} from '../src/main/app-database.js';
+import { BookRepository } from '../src/main/book-repository.js';
+
+const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const sampleLibrary = path.join(projectRoot, 'assets', 'sample');
+const shamelaLibrary = path.join(projectRoot, '..', 'dist', 'shamela');
+const hasShamela = fs.existsSync(path.join(shamelaLibrary, 'catalog.sqlite'));
+
+function tempRoot() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'beytelhikma-lib-'));
+}
+
+/** Copie d'une bibliothèque, pour simuler deux sources distinctes. */
+function cloneLibrary(target) {
+  fs.cpSync(sampleLibrary, target, { recursive: true });
+  return target;
+}
+
+/** Installe [count] livres du catalogue et attend la fin de la file. */
+async function install(repository, count = 1) {
+  const books = await repository.getBooks({ limit: count });
+  for (const book of books) await repository.downloadBook(book.editionId);
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  return books;
+}
+
+test('resolveLibrarySource privilégie BEYTELHIKMA_LIBRARY', () => {
+  const previous = process.env.BEYTELHIKMA_LIBRARY;
+  process.env.BEYTELHIKMA_LIBRARY = sampleLibrary;
+  try {
+    assert.equal(resolveLibrarySource(projectRoot), path.resolve(sampleLibrary));
+  } finally {
+    if (previous === undefined) delete process.env.BEYTELHIKMA_LIBRARY;
+    else process.env.BEYTELHIKMA_LIBRARY = previous;
+  }
+});
+
+test('resolveLibrarySource ignore un chemin sans catalogue', () => {
+  const previous = process.env.BEYTELHIKMA_LIBRARY;
+  process.env.BEYTELHIKMA_LIBRARY = path.join(os.tmpdir(), 'inexistant-beytelhikma');
+  try {
+    // retombe sur dist/shamela si l'import a été lancé, sinon sur l'échantillon
+    const resolved = resolveLibrarySource(projectRoot);
+    assert.ok(fs.existsSync(path.join(resolved, 'catalog.sqlite')));
+  } finally {
+    if (previous === undefined) delete process.env.BEYTELHIKMA_LIBRARY;
+    else process.env.BEYTELHIKMA_LIBRARY = previous;
+  }
+});
+
+test('le catalogue est copié au premier accès, les livres seulement au téléchargement', async () => {
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    assert.ok(fs.existsSync(path.join(root, 'library.json')), 'marqueur de bibliothèque');
+    assert.ok(!fs.existsSync(path.join(root, 'catalog.sqlite')), 'rien avant le premier accès');
+
+    const repository = new BookRepository(database);
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
+
+    // Lire les pages ne suffit plus : sans téléchargement, le livre est absent.
+    const books = await repository.getBooks({ limit: 500 });
+    assert.ok(fs.existsSync(path.join(root, 'catalog.sqlite')), 'catalogue copié au 1er accès');
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'aucun livre copié');
+    await assert.rejects(() => repository.getPages(books[0].editionId, { offset: 0, limit: 1 }));
+
+    await install(repository, 1);
+    assert.deepEqual(fs.readdirSync(path.join(root, 'books')), [`${books[0].editionId}.sqlite`]);
+    assert.equal((await repository.getPages(books[0].editionId, { limit: 1 })).length, 1);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('user.sqlite porte user_version, sinon sqflite refuse de l\'ouvrir', async () => {
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    const user = await database.user();
+    assert.equal(all(user, 'PRAGMA user_version')[0].user_version, 1);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('changer de bibliothèque purge le cache et conserve les données utilisateur', async () => {
+  const root = tempRoot();
+  const otherLibrary = cloneLibrary(path.join(tempRoot(), 'autre'));
+
+  let database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    let repository = new BookRepository(database);
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
+    await install(repository, 1);
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 1);
+    database.close();
+
+    database = new AppDatabase({ librarySource: otherLibrary, storageRoot: root });
+    await database.initialize();
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'copies jetées');
+    assert.ok(!fs.existsSync(path.join(root, 'catalog.sqlite')), 'catalogue jeté');
+    assert.ok(fs.existsSync(path.join(root, 'user.sqlite')), 'progression conservée');
+
+    repository = new BookRepository(database);
+    repository.createDownloadQueue();
+    await repository.reconcileLibrary();
+    assert.equal((await repository.getBooks({ limit: 500 })).length, 5);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(path.dirname(otherLibrary), { recursive: true, force: true });
+  }
+});
+
+test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque', async () => {
+  const root = tempRoot();
+  const emptyLibrary = cloneLibrary(path.join(tempRoot(), 'vide'));
+  // catalogue sans aucune édition : toutes les lignes de `downloaded_books`
+  // deviennent orphelines
+  const database0 = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  await database0.initialize();
+  const repository0 = new BookRepository(database0);
+  repository0.createDownloadQueue();
+  await repository0.reconcileLibrary();
+  await install(repository0, 5);
+  assert.equal((await repository0.getLibrary()).length, 5);
+  database0.close();
+
+  // on remplace le catalogue par un fichier au même schéma mais vide
+  const emptyCatalog = new AppDatabase({ librarySource: emptyLibrary, storageRoot: tempRoot() });
+  await emptyCatalog.initialize();
+  const catalog = await emptyCatalog.catalog();
+  catalog.run('DELETE FROM editions');
+  fs.writeFileSync(path.join(emptyLibrary, 'catalog.sqlite'), Buffer.from(catalog.export()));
+  emptyCatalog.close();
+
+  const database = new AppDatabase({ librarySource: emptyLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    const repository = new BookRepository(database);
+    // pas de warmUp : les 5 lignes de l'ancienne bibliothèque sont toujours là
+    assert.equal((await repository.getLibrary()).length, 0, 'aucun livre fantôme');
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(path.dirname(emptyLibrary), { recursive: true, force: true });
+  }
+});
+
+test('un livre non installé ne se matérialise plus tout seul', async () => {
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  await database.initialize();
+
+  await assert.rejects(
+    () => database.book('ed-muqaddima-01'),
+    (error) => error instanceof BookNotInstalledError && error.editionId === 'ed-muqaddima-01',
+  );
+  assert.deepEqual(database.installedBooks(), []);
+
+  // Une fois le fichier posé, il s'ouvre — et closeBook le rend à nouveau absent
+  // du cache, condition d'une suppression sûre.
+  fs.copyFileSync(
+    path.join(sampleLibrary, 'books', 'ed-muqaddima-01.sqlite'),
+    path.join(root, 'books', 'ed-muqaddima-01.sqlite'),
+  );
+  assert.deepEqual(database.installedBooks(), ['ed-muqaddima-01']);
+  const book = await database.book('ed-muqaddima-01');
+  assert.equal(all(book, 'SELECT page_id FROM pages LIMIT 1').length, 1);
+
+  database.closeBook('ed-muqaddima-01');
+  fs.rmSync(path.join(root, 'books', 'ed-muqaddima-01.sqlite'));
+  await assert.rejects(() => database.book('ed-muqaddima-01'), BookNotInstalledError);
+
+  database.close();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test(
+  'la bibliothèque Shamela importée est lue telle quelle',
+  { skip: hasShamela ? false : 'dist/shamela absent — lancer tools/import_shamela.py' },
+  async () => {
+    const root = tempRoot();
+    const database = new AppDatabase({ librarySource: shamelaLibrary, storageRoot: root });
+    try {
+      await database.initialize();
+      const repository = new BookRepository(database);
+      repository.createDownloadQueue();
+      await repository.reconcileLibrary();
+
+      const categories = await repository.getCategories();
+      assert.equal(categories.length, 40);
+      assert.ok(categories.every((c) => c.bookCount > 0));
+
+      const books = await repository.getBooks({ limit: 1000 });
+      assert.ok(books.length > 0);
+      assert.ok(books.every((b) => b.editionId.startsWith('sh-')));
+      assert.ok(books.every((b) => b.title && b.authorName && b.categoryLabel));
+      assert.ok(books.every((b) => b.pageCount > 0));
+
+      // Le livre n'est plus matérialisé à la lecture : il faut l'installer.
+      await install(repository, 1);
+
+      const detail = await repository.getBookDetail(books[0].editionId);
+      assert.ok(detail.volumes.length >= 1);
+
+      const pages = await repository.getPages(books[0].editionId, { offset: 0, limit: 3 });
+      assert.ok(pages.length > 0);
+      for (const page of pages) {
+        assert.ok(!page.bodyHtml.includes('<table'));
+        assert.ok(!page.bodyHtml.includes('data:image'));
+        assert.ok(!page.bodyHtml.includes('\r'));
+      }
+    } finally {
+      database.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

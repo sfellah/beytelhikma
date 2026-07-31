@@ -5,12 +5,13 @@ import { h } from '../dom.js';
  * dérive donc un dégradé stable de l'identifiant d'édition, comme le fait
  * `CoverImage` dans l'application Flutter.
  */
+/* Reliures : émeraude, encre, cuir, bleu-vert. Mêmes familles que les jetons. */
 const PALETTES = [
-  ['#002d29', '#0c2a33'],
-  ['#0c2a33', '#264d49'],
-  ['#3f3020', '#735a35'],
-  ['#1b1c19', '#2f4b54'],
-  ['#264d49', '#0d2b34'],
+  ['#062621', '#0b3a32'],
+  ['#0d2f39', '#1a4b57'],
+  ['#3a2a12', '#7a5714'],
+  ['#1c1710', '#3c3428'],
+  ['#0b3a32', '#123b47'],
 ];
 
 function paletteFor(key) {

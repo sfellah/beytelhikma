@@ -4,6 +4,14 @@
  */
 export const repository = window.beytelhikma.repository;
 
+/**
+ * S'abonne au canal poussé des téléchargements. Renvoie la fonction de
+ * désabonnement : toute vue qui s'abonne doit l'appeler quand elle disparaît.
+ */
+export function onDownloadsChanged(callback) {
+  return window.beytelhikma.onDownloadsChanged(callback);
+}
+
 /** Réglages persistés dans `user.sqlite`, chargés une fois par session. */
 let settingsCache = null;
 

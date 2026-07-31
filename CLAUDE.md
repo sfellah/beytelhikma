@@ -19,6 +19,19 @@ flutter analyze          # lint / analyse statique
 dart format lib test     # formatage
 
 python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple
+python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
+
+# import du corpus Shamela 4 (depuis la racine)
+python tools/import_shamela.py                    # 3 livres par catégorie -> dist/shamela/
+python tools/import_shamela.py --all --jobs 8     # les 8 589 livres (~60 Go)
+python tools/import_shamela.py --dry-run          # afficher la sélection
+cd tools && python -m unittest discover -s shamela/tests -t .   # tests de l'importeur
+
+# publication des livres vers MinIO (depuis la racine)
+export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…
+python tools/publish_minio.py --bucket beytelhikma --set-anonymous-policy   # une seule fois
+python tools/publish_minio.py --bucket beytelhikma --dry-run
+python tools/publish_minio.py --bucket beytelhikma
 ```
 
 ## Architecture (règles à respecter)
@@ -31,7 +44,15 @@ python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'e
 | `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc)  | lecture seule  |
 | `user.sqlite`              | bibliothèque, progression, réglages       | lecture/écriture |
 
-Tant que le pipeline de téléchargement n'existe pas, catalogue et livres sont embarqués dans `beytelhikma/assets/sample/` puis copiés au premier accès par `AppDatabase` — le reste du code lit déjà des fichiers *installés*, comme il le fera avec le CDN. Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
+**Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` (portage Electron) qui les installe depuis MinIO : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
+
+Une `download_url` de schéma non HTTP (`asset://` dans `assets/sample`, `local://` dans `dist/shamela`) fait installer le livre par simple copie depuis la bibliothèque source : les deux jeux de données restent utilisables sans MinIO, et les tests tournent sans réseau.
+
+Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
+
+**Le DDL vit dans `tools/_common.py`** (`BOOK_SCHEMA`, `CATALOG_SCHEMA`), importé à la fois par `gen_sample_data.py` et par l'importeur Shamela : une seule source de vérité, donc aucune dérive possible entre les données d'exemple et les données réelles. `tools/shamela/tests/test_pipeline.py::SchemaParityTest` échoue si ce n'est plus le cas.
+
+`tools/import_shamela.py` transforme le corpus Shamela 4 (`C:\shamela-data`, 8 589 livres) vers `dist/shamela/` (non versionné), au même schéma. L'app le consomme via `AppDatabase.withRoot(Directory('.../dist/shamela'))`. Voir `tools/notebooks/01_un_livre_vers_sqlite.ipynb` pour la transformation d'un livre commentée étape par étape.
 
 Séparation stricte en trois couches — ne jamais les mélanger :
 
@@ -49,9 +70,18 @@ Le rendu du contenu passe par `lib/utils/arabic_html_parser.dart` (HTML minimal 
 
 Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design des écrans Flutter.
 
-## Hors périmètre v1
+## État par implémentation
 
-Recherche (FTS5 est déjà indexé dans les bases, non exposé) et gestionnaire de téléchargement.
+Le portage Electron est en avance sur le client Flutter. Écrans livrés côté Electron : accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`), **collections** (`/collection/:id`), **réglages** (`/settings`).
+
+**Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire pour le client Flutter, mais ce portage ne les interroge jamais. La recherche s'appuie à la place sur :
+
+- les colonnes normalisées déjà présentes au schéma, `pages.body_search` et `toc.title_normalized`, interrogées en `LIKE` ;
+- un index mémoire des titres, auteurs et éditeurs, normalisé par `src/shared/arabic.js`.
+
+`src/shared/arabic.js` est le **reflet exact** de `normalize_ar` de `tools/_common.py` : c'est ce contrat qui a produit les colonnes normalisées. `test/arabic.test.js` porte une table de parité — sans elle, les deux implémentations divergeraient en silence et la recherche se dégraderait sans qu'aucun test n'échoue.
+
+Reste à faire : alignement du client Flutter sur le téléchargement et l'exploration ; recherche transversale à tous les livres installés.
 
 ## i18n / RTL (critique)
 

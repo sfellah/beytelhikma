@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 
-import { AppDatabase } from './app-database.js';
+import { AppDatabase, resolveLibrarySource } from './app-database.js';
 import { BookRepository, REPOSITORY_METHODS } from './book-repository.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -12,13 +12,27 @@ let database;
 let repository;
 
 async function openRepository() {
+  const librarySource = resolveLibrarySource(projectRoot);
+  console.log(`[beytelhikma] bibliothèque : ${librarySource}`);
   database = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource,
     storageRoot: path.join(app.getPath('userData'), 'library'),
   });
   await database.initialize();
   repository = new BookRepository(database);
-  await repository.warmUp();
+  const downloads = repository.createDownloadQueue();
+
+  // Réglage optionnel : pointer un autre MinIO sans régénérer le catalogue.
+  const settings = await repository.getSettings();
+  downloads.setBaseUrl(settings['minio.base_url'] ?? null);
+
+  downloads.on('change', (jobs) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('downloads:changed', jobs);
+    }
+  });
+
+  await repository.reconcileLibrary();
 }
 
 function registerIpc() {
@@ -43,6 +57,7 @@ function createWindow({ capture = false } = {}) {
     show: !capture,
     backgroundColor: '#fbf9f4',
     title: 'بيت الحكمة',
+    icon: path.join(projectRoot, 'src', 'renderer', 'assets', 'brand', 'app-icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(projectRoot, 'src', 'preload', 'preload.cjs'),

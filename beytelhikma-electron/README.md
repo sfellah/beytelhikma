@@ -23,11 +23,31 @@ Trois bases SQLite, conformément à `../DATAMODEL.md` :
 | `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc) | lecture seule    |
 | `user.sqlite`               | bibliothèque, progression, réglages      | lecture/écriture |
 
-`assets/sample/` reprend telles quelles les bases produites par
-`../tools/gen_sample_data.py` (5 livres, 3 à 5 pages). Ne jamais les éditer à la
-main : modifier le générateur puis recopier. Au premier lancement,
-`AppDatabase` les matérialise dans `app.getPath('userData')/library`, comme le
-fera un jour le téléchargement depuis un CDN.
+### D'où vient la bibliothèque
+
+`resolveLibrarySource()` retient le premier dossier contenant un `catalog.sqlite` :
+
+1. `BEYTELHIKMA_LIBRARY` — pour pointer une bibliothèque arbitraire ;
+2. `../dist/shamela/` — la sortie de `../tools/import_shamela.py` (corpus réel) ;
+3. `assets/sample/` — les 5 livres factices de `../tools/gen_sample_data.py`, pour
+   qu'un dépôt fraîchement cloné démarre sans avoir lancé l'import.
+
+Ne jamais éditer `assets/sample/` à la main : modifier le générateur puis recopier.
+
+```bash
+python ../tools/import_shamela.py --books-per-category 3   # 120 livres -> ../dist/shamela
+npm start                                                  # les utilise automatiquement
+```
+
+Au premier accès, `AppDatabase` matérialise les fichiers dans
+`app.getPath('userData')/library` — le catalogue au démarrage, chaque livre à sa
+première ouverture —, comme le fera un jour le téléchargement depuis un CDN.
+Un `library.json` y note la source installée : si elle change, les copies sont
+jetées et réinstallées, `user.sqlite` étant conservé.
+
+**Limite connue** : `sql.js` charge chaque livre intégralement en mémoire. Les
+120 livres de la sélection par défaut plafonnent à ~18 Mo, mais le corpus complet
+(`--all`) contient des livres de plusieurs centaines de Mo qui ne s'ouvriront pas.
 
 `sql.js` (SQLite compilé en WebAssembly) évite toute dépendance native à
 recompiler par version d'Electron. Il travaille en mémoire : chaque écriture
@@ -70,6 +90,19 @@ serifs arabes du système (Amiri, Traditional Arabic…). Déposer les `.ttf` da
 `assets/fonts/` et déclarer les `@font-face` suffirait à retrouver la maquette
 au pixel près. Même chose pour les icônes : Material Symbols est remplacé par
 un jeu SVG local (`js/icons.js`).
+
+## Marque
+
+`src/renderer/assets/brand/` est dérivé de `../logo.png` par
+`python ../tools/gen_brand_assets.py` — ne rien y éditer à la main, relancer le
+générateur. Il découpe le lockup en deux : le **symbole** (`mark.png`) sert
+partout où la place est carrée (rail, barre supérieure) pendant que le nom
+« بيت الحكمة » reste du texte à côté, net et sélectionnable ; le **lockup**
+entier (`lockup.png`) est réservé aux surfaces larges. Les variantes `-light`
+remplacent l'encre vert foncé par du crème pour un fond sombre — la coquille est
+crème aujourd'hui, elles n'ont donc pas encore d'emploi. `app-icon.png`
+(512×512, plaque crème arrondie) est l'icône de la fenêtre et de la barre des
+tâches.
 
 ## Écrans
 

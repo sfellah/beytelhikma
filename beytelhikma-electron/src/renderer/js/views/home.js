@@ -1,11 +1,12 @@
 import { h } from '../dom.js';
-import { excerpt, initial, percent } from '../format.js';
+import { excerpt, initial, ordinal, percent } from '../format.js';
 import { categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { cover } from '../components/cover.js';
+import { reveal, sectionHead } from '../components/section.js';
 import { asyncView } from '../components/states.js';
 
 /** Accueil : reprise de lecture, nouveautés, disciplines, auteur en vedette. */
@@ -16,10 +17,12 @@ export function homeView(host) {
 }
 
 async function load() {
-  const [resume, recent, categories, featured] = await Promise.all([
+  const [resume, library, recent, categories, eras, featured] = await Promise.all([
     repository.getContinueReading(),
+    repository.getLibrary(),
     repository.getRecentBooks({ limit: 12 }),
     repository.getCategories(),
+    repository.getEras(),
     repository.getFeaturedAuthor(),
   ]);
 
@@ -33,8 +36,11 @@ async function load() {
   return {
     resume,
     quote: page ? excerpt(page.bodyPlain) : null,
+    // La reprise occupe déjà le héros : l'étagère montre le reste.
+    shelf: library.filter((entry) => entry.book.editionId !== resume?.book?.editionId),
     recent,
     categories: categories.filter((category) => category.bookCount > 0),
+    eras: eras.filter((era) => era.bookCount > 0),
     featured,
     featuredBooks,
   };
@@ -42,73 +48,232 @@ async function load() {
 
 function render(data) {
   if (!data.recent.length && !data.resume) return null;
-  return h(
+  const root = h(
     'div',
     { class: 'home' },
     heroSection(data),
+    // `data-reveal` 1 est libre : le héros compte pour deux blocs visuels.
+    shelfSection(data.shelf),
     recentSection(data.recent),
-    bentoSection(data),
+    disciplinesSection(data.categories),
+    erasSection(data.eras),
+    featuredSection(data.featured, data.featuredBooks),
   );
+  return reveal(root);
 }
 
 // ------------------------------------------------------------------- héros
 
-function heroSection({ resume, quote, recent }) {
+function heroSection({ resume, quote, recent, shelf }) {
   const book = resume?.book ?? recent[0];
   if (!book) return null;
   const open = () => navigate(`/reader/${book.editionId}`);
 
   return h(
     'section',
-    { class: 'hero' },
+    { class: 'hero', 'aria-labelledby': 'hero-title', 'data-reveal': 0 },
     h(
       'div',
-      { class: 'hero__intro' },
-      h('h1', { class: 'display-lg' }, resume ? 'أكمل القراءة..' : 'ابدأ القراءة..'),
+      { class: 'section-header' },
       h(
-        'p',
-        { class: 'body-lg' },
-        'لا تدع القصة تنتهي هنا. واصل قراءة كتابك الأخير وانغمس في عالم المعرفة والأدب.',
+        'div',
+        { class: 'section-header__text' },
+        h(
+          'h1',
+          { class: 'headline-lg', id: 'hero-title' },
+          resume ? 'متابعة القراءة' : 'ابدأ القراءة',
+        ),
       ),
       h(
-        'button',
-        { class: 'button button--filled', onclick: open },
-        h('span', {}, resume ? 'متابعة القراءة' : 'ابدأ القراءة'),
-        icon('arrowUpRight', { size: 18 }),
+        'a',
+        { class: 'link-action label-md', href: '#/library' },
+        h('span', {}, 'عرض الكل'),
       ),
     ),
-    h('div', { class: 'hero__card' }, continueCard({ book, resume, quote, open })),
+    h(
+      'div',
+      { class: 'bento' },
+      continueCard({ book, resume, quote, open }),
+      h(
+        'div',
+        { class: 'bento__side' },
+        shelfStatCard(shelf, resume),
+        h(
+          'a',
+          { class: 'quick-card', href: '#/library' },
+          h(
+            'span',
+            { class: 'quick-card__text' },
+            h('span', { class: 'label-md quick-card__title' }, 'كل المكتبة'),
+            h('span', { class: 'label-sm muted' }, 'تصفّح، رتّب، تابع التقدّم'),
+          ),
+          h('span', { class: 'quick-card__go' }, icon('arrowLeft', { size: 20 })),
+        ),
+      ),
+    ),
+  );
+}
+
+/** Compte ce qui est réellement installé : rien n'est estimé ni inventé. */
+function shelfStatCard(shelf, resume) {
+  const entries = resume ? [resume, ...shelf] : shelf;
+  if (!entries.length) return null;
+  const done = entries.filter((entry) => entry.percent >= 1).length;
+  const reading = entries.filter(
+    (entry) => entry.percent > 0 && entry.percent < 1,
+  ).length;
+  const untouched = entries.length - done - reading;
+
+  const parts = [];
+  if (reading) parts.push(`${reading} قيد القراءة`);
+  if (done) parts.push(`${done} مكتمل`);
+  if (untouched) parts.push(`${untouched} في الانتظار`);
+
+  return h(
+    'div',
+    { class: 'stat-card' },
+    h('span', { class: 'stat-card__mark' }, icon('bookOpen', { size: 32 })),
+    h(
+      'div',
+      {},
+      h('p', { class: 'label-md stat-card__label' }, 'على جهازك'),
+      h('p', { class: 'stat-card__value' }, `${entries.length} كتاب`),
+    ),
+    h('p', { class: 'label-sm stat-card__note' }, parts.join(' — ')),
   );
 }
 
 function continueCard({ book, resume, quote, open }) {
   const progress = resume?.percent ?? 0;
+  const read = Math.max(
+    1,
+    Math.round((book.pageCount ?? 0) * progress) || (resume ? 1 : 0),
+  );
+
   return h(
     'article',
-    { class: 'continue-card', onclick: open },
-    h('div', { class: 'continue-card__cover' }, cover(book, {
-      showText: true,
-      progress: resume ? progress : null,
-    })),
+    { class: 'continue-card' },
+    h(
+      'div',
+      { class: 'continue-card__cover' },
+      cover(book, { showText: true, progress: null }),
+    ),
     h(
       'div',
       { class: 'continue-card__body' },
-      h(
-        'div',
-        { class: 'continue-card__head' },
-        book.categoryLabel && h('span', { class: 'chip' }, book.categoryLabel),
-        h('span', { class: 'muted' }, icon('more', { size: 20 })),
-      ),
-      h('h3', { class: 'title-md continue-card__title clamp-2' }, book.title),
+      book.categoryLabel && h('span', { class: 'chip' }, book.categoryLabel),
+      h('h3', { class: 'headline-md continue-card__title clamp-2' }, book.title),
       book.authorName &&
-        h('p', { class: 'label-md continue-card__author' }, book.authorName),
+        h('p', { class: 'body-md continue-card__author' }, book.authorName),
       quote && h('p', { class: 'body-md quote clamp-2' }, `«${quote}»`),
       h(
         'div',
-        { class: 'label-sm muted' },
-        resume
-          ? `${percent(progress)} مكتمل`
-          : `${book.pageCount ?? 0} صفحة — لم تبدأ بعد`,
+        { class: 'meter' },
+        h(
+          'div',
+          { class: 'meter__row label-sm' },
+          h('span', { class: 'meter__value' }, percent(progress)),
+          h(
+            'span',
+            { class: 'muted' },
+            resume
+              ? `الصفحة ${read} من ${book.pageCount ?? '؟'}`
+              : `${book.pageCount ?? 0} صفحة — لم تبدأ بعد`,
+          ),
+        ),
+        h(
+          'div',
+          { class: 'meter__track' },
+          h('span', { style: { '--fill': progress } }),
+        ),
+      ),
+      h(
+        'button',
+        { class: 'button button--filled', type: 'button', onclick: open },
+        h('span', {}, resume ? 'أكمل القراءة' : 'ابدأ القراءة'),
+      ),
+    ),
+  );
+}
+
+// ------------------------------------------------------------- votre étagère
+
+const SHELF_LIMIT = 4;
+
+/** Ce qui est *installé*, avec la progression réelle lue dans `user.sqlite`. */
+function shelfSection(entries) {
+  if (!entries.length) return null;
+  const shown = entries.slice(0, SHELF_LIMIT);
+
+  return h(
+    'section',
+    {
+      class: 'section-block shelf',
+      'aria-labelledby': 'shelf-title',
+      'data-reveal': 2,
+    },
+    sectionHead(
+      'shelf-title',
+      'على رفّك',
+      `${entries.length} كتاب منزّل على هذا الجهاز`,
+      entries.length > SHELF_LIMIT
+        ? [
+            h(
+              'a',
+              { class: 'button button--tonal', href: '#/library' },
+              h('span', {}, 'كل المكتبة'),
+            ),
+          ]
+        : null,
+    ),
+    h(
+      'ul',
+      { class: 'shelf__list' },
+      shown.map((entry) => shelfRow(entry)),
+    ),
+  );
+}
+
+function shelfRow({ book, percent: value, progress }) {
+  const done = value >= 1;
+  const started = value > 0;
+  const state = done ? 'مكتمل' : started ? 'قيد القراءة' : 'لم تبدأ بعد';
+
+  return h(
+    'li',
+    {},
+    h(
+      'a',
+      { class: 'shelf-row', href: `#/reader/${book.editionId}` },
+      h('span', { class: 'shelf-row__cover' }, cover(book, { showText: false })),
+      h(
+        'span',
+        { class: 'shelf-row__text' },
+        h('span', { class: 'title-md shelf-row__title clamp-1' }, book.title),
+        book.authorName &&
+          h('span', { class: 'label-md muted truncate' }, book.authorName),
+      ),
+      h(
+        'span',
+        { class: 'shelf-row__meter' },
+        h(
+          'span',
+          { class: 'progress' },
+          h('span', { style: { width: `${Math.round(value * 100)}%` } }),
+        ),
+        h(
+          'span',
+          { class: 'label-sm shelf-row__state' },
+          started
+            ? `${percent(value)} · ${state}`
+            : `${book.pageCount ?? 0} صفحة · ${state}`,
+        ),
+      ),
+      h(
+        'span',
+        { class: 'label-md shelf-row__action' },
+        h('span', {}, progress?.pageId ? 'أكمل' : 'افتح'),
+        icon('arrowLeft', { size: 16 }),
       ),
     ),
   );
@@ -118,102 +283,172 @@ function continueCard({ book, resume, quote, open }) {
 
 function recentSection(recent) {
   if (!recent.length) return null;
+
   const scroller = h(
     'div',
-    { class: 'scroller no-scrollbar' },
-    recent.map((book) => bookCard(book, { action: 'open' })),
+    { class: 'scroller no-scrollbar', tabindex: 0, role: 'list' },
+    recent.map((book) =>
+      h('div', { role: 'listitem' }, bookCard(book, { action: 'open' })),
+    ),
     h(
       'button',
-      { class: 'scroller__more', onclick: () => navigate('/library') },
+      { class: 'scroller__more', type: 'button', onclick: () => navigate('/library') },
       icon('plusSquare', { size: 30 }),
       h('span', {}, 'عرض كل الإصدارات الجديدة'),
     ),
   );
 
-  const scrollBy = (direction) =>
-    scroller.scrollBy({ left: direction * 320, behavior: 'smooth' });
+  // `scrollLeft` est négatif en RTL sous Chromium : on raisonne en distance
+  // absolue au bord, jamais en signe.
+  const previous = h(
+    'button',
+    { class: 'button--icon', type: 'button', title: 'السابق', 'aria-label': 'السابق' },
+    icon('arrowRight', { size: 20 }),
+  );
+  const next = h(
+    'button',
+    { class: 'button--icon', type: 'button', title: 'التالي', 'aria-label': 'التالي' },
+    icon('arrowLeft', { size: 20 }),
+  );
+
+  const step = () => Math.max(240, scroller.clientWidth * 0.8);
+  previous.onclick = () => scroller.scrollBy({ left: step(), behavior: 'smooth' });
+  next.onclick = () => scroller.scrollBy({ left: -step(), behavior: 'smooth' });
+
+  const syncEdges = () => {
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    const offset = Math.abs(scroller.scrollLeft);
+    previous.disabled = offset <= 1;
+    next.disabled = offset >= max - 1;
+    scroller.classList.toggle('scroller--at-start', previous.disabled);
+    scroller.classList.toggle('scroller--at-end', next.disabled);
+  };
+  scroller.addEventListener('scroll', syncEdges, { passive: true });
+  requestAnimationFrame(syncEdges);
+  // `ResizeObserver` plutôt qu'un écouteur sur `window` : la vue est remplacée
+  // à chaque navigation, l'observateur disparaît avec elle.
+  new ResizeObserver(syncEdges).observe(scroller);
 
   return h(
     'section',
-    {},
-    h(
-      'div',
-      { class: 'section-header' },
-      h(
-        'div',
-        {},
-        h('h2', { class: 'headline-lg' }, 'المجموعات الحديثة'),
-        h('p', { class: 'body-md' }, 'أحدث المخطوطات والكتب المضافة للمكتبة'),
-      ),
-      h(
-        'div',
-        { class: 'section-header__actions' },
-        h(
-          'button',
-          { class: 'button--icon', title: 'السابق', onclick: () => scrollBy(320) },
-          icon('arrowRight', { size: 20 }),
-        ),
-        h(
-          'button',
-          { class: 'button--icon', title: 'التالي', onclick: () => scrollBy(-320) },
-          icon('arrowLeft', { size: 20 }),
-        ),
-      ),
+    {
+      class: 'section-block recent',
+      'aria-labelledby': 'recent-title',
+      'data-reveal': 3,
+    },
+    sectionHead(
+      'recent-title',
+      'المجموعات الحديثة',
+      'أحدث المخطوطات والكتب المضافة للمكتبة',
+      [previous, next],
     ),
-    scroller,
+    h('div', { class: 'scroller-frame' }, scroller),
   );
 }
 
-// ------------------------------------------------------------------- bento
+// ------------------------------------------------------------- disciplines
 
 const BUBBLES = ['teal', 'gold', 'emerald'];
 
-function bentoSection({ categories, featured, featuredBooks }) {
+function disciplinesSection(categories) {
+  if (!categories.length) return null;
   return h(
     'section',
-    { class: 'bento' },
+    {
+      class: 'section-block disciplines-section',
+      'aria-labelledby': 'disciplines-title',
+      'data-reveal': 4,
+    },
+    sectionHead(
+      'disciplines-title',
+      'التخصصات العلمية',
+      'تصفّح المكتبة حسب الفن',
+    ),
     h(
       'div',
-      {},
-      h('h2', { class: 'headline-lg' }, 'التخصصات العلمية'),
-      h(
-        'div',
-        { class: 'disciplines' },
-        categories.map((category, index) =>
-          h(
-            'a',
-            {
-              class: 'discipline',
-              href: `#/category/${category.categoryId}`,
-            },
-            h(
-              'span',
-              { class: `discipline__bubble discipline__bubble--${BUBBLES[index % 3]}` },
-              icon(categoryIcon(category.label), { size: 22 }),
-            ),
-            h('span', { class: 'title-md' }, category.label),
-            h('span', { class: 'label-sm muted' }, `${category.bookCount} كتاب`),
-          ),
-        ),
+      { class: 'disciplines' },
+      categories.map((category, index) =>
         h(
           'a',
-          { class: 'discipline', href: '#/library' },
+          { class: 'discipline', href: `#/category/${category.categoryId}` },
           h(
             'span',
-            { class: 'discipline__bubble discipline__bubble--emerald' },
-            icon('more', { size: 22 }),
+            { class: `discipline__bubble discipline__bubble--${BUBBLES[index % 3]}` },
+            icon(categoryIcon(category.label), { size: 22 }),
           ),
-          h('span', { class: 'title-md' }, 'المزيد'),
+          h('span', { class: 'title-md discipline__label' }, category.label),
+          h('span', { class: 'label-sm muted' }, `${category.bookCount} كتاب`),
+        ),
+      ),
+      h(
+        'a',
+        { class: 'discipline discipline--more', href: '#/library' },
+        h(
+          'span',
+          { class: 'discipline__bubble discipline__bubble--emerald' },
+          icon('more', { size: 22 }),
+        ),
+        h('span', { class: 'title-md discipline__label' }, 'المزيد'),
+        h('span', { class: 'label-sm muted' }, 'كل المكتبة'),
+      ),
+    ),
+  );
+}
+
+// ------------------------------------------------------------------ siècles
+
+/**
+ * Le catalogue n'a pas de date de composition : le repère temporel du
+ * patrimoine, c'est le siècle de décès de l'auteur (`authors.death_year_hijri`).
+ */
+function erasSection(eras) {
+  if (eras.length < 2) return null;
+  const max = Math.max(...eras.map((era) => era.bookCount));
+
+  return h(
+    'section',
+    {
+      class: 'section-block eras',
+      'aria-labelledby': 'eras-title',
+      'data-reveal': 5,
+    },
+    sectionHead('eras-title', 'المكتبة عبر القرون', 'حسب قرن وفاة المؤلف'),
+    h(
+      'ol',
+      { class: 'timeline' },
+      eras.map((era) =>
+        h(
+          'li',
+          { class: 'timeline__item' },
+          h(
+            'a',
+            { class: 'era', href: `#/era/${era.century}` },
+            h('span', {
+              class: 'era__bar',
+              style: { '--fill': `${Math.round((era.bookCount / max) * 100)}%` },
+            }),
+            h('span', { class: 'title-md era__name' }, ordinal(era.century)),
+            h('span', { class: 'label-sm muted' }, `${era.bookCount} كتاب`),
+          ),
         ),
       ),
     ),
-    featured &&
-      h(
-        'div',
-        {},
-        h('h2', { class: 'headline-lg' }, 'شخصية الشهر'),
-        authorCard(featured, featuredBooks),
-      ),
+  );
+}
+
+// -------------------------------------------------------- auteur en vedette
+
+function featuredSection(featured, featuredBooks) {
+  if (!featured) return null;
+  return h(
+    'section',
+    {
+      class: 'section-block featured',
+      'aria-labelledby': 'featured-title',
+      'data-reveal': 6,
+    },
+    sectionHead('featured-title', 'شخصية الشهر', 'مؤلف نقف عنده هذا الشهر'),
+    authorCard(featured, featuredBooks),
   );
 }
 
@@ -224,7 +459,11 @@ function authorCard(author, books) {
     h(
       'div',
       { class: 'author-card__head' },
-      h('div', { class: 'author-card__portrait' }, initial(author.shortName ?? author.fullName)),
+      h(
+        'div',
+        { class: 'author-card__portrait' },
+        initial(author.shortName ?? author.fullName),
+      ),
       h(
         'div',
         {},
@@ -236,21 +475,19 @@ function authorCard(author, books) {
         ),
       ),
     ),
-    author.bio && h('p', { class: 'body-md author-card__bio' }, author.bio),
+    author.bio && h('p', { class: 'body-md author-card__bio clamp-4' }, author.bio),
     books.length > 0 &&
       h(
         'div',
         { class: 'author-card__works' },
-        h('h4', { class: 'label-md' }, 'أبرز مؤلفاته:'),
+        h('h4', { class: 'label-md author-card__works-title' }, 'أبرز مؤلفاته:'),
         books.map((book) =>
           h(
-            'div',
-            {
-              class: 'author-work',
-              onclick: () => navigate(`/book/${book.editionId}`),
-            },
+            'a',
+            { class: 'author-work', href: `#/book/${book.editionId}` },
             h('span', { class: 'author-work__tile' }, icon('book', { size: 16 })),
             h('span', { class: 'label-md truncate' }, book.title),
+            h('span', { class: 'author-work__chevron' }, icon('arrowLeft', { size: 16 })),
           ),
         ),
       ),

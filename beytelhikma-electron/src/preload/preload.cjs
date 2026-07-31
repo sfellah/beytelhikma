@@ -9,6 +9,9 @@ const METHODS = [
   'getBooksByCategory',
   'getBookDetail',
   'getFeaturedAuthor',
+  'getAuthors',
+  'getEras',
+  'getBooksByCentury',
   'getBooksByAuthor',
   'getToc',
   'getPageCount',
@@ -20,6 +23,29 @@ const METHODS = [
   'saveProgress',
   'getSettings',
   'saveSetting',
+  'downloadBook',
+  'cancelDownload',
+  'retryDownload',
+  'deleteBook',
+  'getDownloads',
+  'clearFailedDownloads',
+  'getStorageUsage',
+  'exploreBooks',
+  'getFacets',
+  'suggestValues',
+  'getSelectionWeight',
+  'downloadSelection',
+  'searchInBook',
+  'getCollections',
+  'createCollection',
+  'renameCollection',
+  'deleteCollection',
+  'addToCollection',
+  'removeFromCollection',
+  'getCollectionBooks',
+  'deleteAllBooks',
+  'setDownloadBaseUrl',
+  'getAbout',
 ];
 
 const repository = {};
@@ -28,4 +54,11 @@ for (const method of METHODS) {
     ipcRenderer.invoke('repository', method, args);
 }
 
-contextBridge.exposeInMainWorld('beytelhikma', { repository });
+/** Abonnement au canal poussé ; renvoie la fonction de désabonnement. */
+function onDownloadsChanged(callback) {
+  const listener = (_event, jobs) => callback(jobs);
+  ipcRenderer.on('downloads:changed', listener);
+  return () => ipcRenderer.off('downloads:changed', listener);
+}
+
+contextBridge.exposeInMainWorld('beytelhikma', { repository, onDownloadsChanged });

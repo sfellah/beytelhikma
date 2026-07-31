@@ -6,6 +6,9 @@ Sortie : beytelhikma/assets/sample/
     catalog.sqlite
     books/<edition_id>.sqlite
 
+Le schema et les fonctions de normalisation viennent de `tools/_common.py`,
+partages avec l'importeur Shamela (`tools/import_shamela.py`).
+
 Usage : python tools/gen_sample_data.py
 """
 
@@ -14,58 +17,23 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import sqlite3
-import unicodedata
+
+from _common import (
+    BOOK_SCHEMA,
+    CATALOG_SCHEMA,
+    SCHEMA_VERSION,
+    normalize_ar,
+    sha256_file,
+    sha256_text,
+    strip_html,
+)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "beytelhikma", "assets", "sample")
 BOOKS_DIR = os.path.join(OUT_DIR, "books")
 
-SCHEMA_VERSION = 1
 CONTENT_VERSION = 1
-
-# ---------------------------------------------------------------- normalisation
-
-HARAKAT = re.compile(r"[ؐ-ًؚ-ٰٟۖ-ۭ]")
-TATWEEL = "ـ"
-
-
-def normalize_ar(text: str) -> str:
-    """Texte arabe normalisé pour la recherche souple (voir DATAMODEL.md §3)."""
-    text = unicodedata.normalize("NFC", text)
-    text = HARAKAT.sub("", text)
-    text = text.replace(TATWEEL, "")
-    text = re.sub(r"[أإآٱ]", "ا", text)
-    text = text.replace("ى", "ي")
-    text = text.replace("ة", "ه")
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-BLOCK_TAGS = r"p|div|h[1-6]|li|blockquote"
-
-
-def strip_html(html: str) -> str:
-    text = re.sub(r"<br\s*/?>", "\n", html)
-    text = re.sub(rf"</?(?:{BLOCK_TAGS})\b[^>]*>", "\n", text)
-    text = re.sub(r"<[^>]+>", "", text)
-    text = text.replace("&nbsp;", " ")
-    text = text.replace("\r", "")
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def sha256_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 # ---------------------------------------------------------------- jeu de données
@@ -441,73 +409,6 @@ BOOKS = [
 
 # ---------------------------------------------------------------- book.sqlite
 
-BOOK_SCHEMA = """
-CREATE TABLE book_info (
-    edition_id      TEXT PRIMARY KEY,
-    source_book_id  INTEGER,
-    shamela_id      INTEGER,
-    title_ar        TEXT NOT NULL,
-    schema_version  INTEGER NOT NULL,
-    content_version INTEGER NOT NULL,
-    page_count      INTEGER NOT NULL,
-    toc_count       INTEGER NOT NULL,
-    created_at      TEXT NOT NULL,
-    content_hash    TEXT NOT NULL
-);
-
-CREATE TABLE volumes (
-    volume_id     INTEGER PRIMARY KEY,
-    part_number   INTEGER NOT NULL,
-    label_ar      TEXT,
-    sequence_num  INTEGER NOT NULL,
-    first_page_id INTEGER,
-    last_page_id  INTEGER
-);
-
-CREATE TABLE pages (
-    page_id          INTEGER PRIMARY KEY,
-    shamela_page_id  INTEGER,
-    volume_id        INTEGER REFERENCES volumes(volume_id),
-    printed_page_num INTEGER,
-    sequence_num     INTEGER NOT NULL,
-    body_html        TEXT NOT NULL,
-    body_plain       TEXT NOT NULL,
-    body_search      TEXT NOT NULL,
-    footnotes        TEXT,
-    hints            TEXT,
-    content_hash     TEXT NOT NULL
-);
-CREATE INDEX idx_pages_sequence ON pages(sequence_num);
-CREATE INDEX idx_pages_volume ON pages(volume_id, sequence_num);
-
-CREATE TABLE toc (
-    toc_id           INTEGER PRIMARY KEY,
-    parent_toc_id    INTEGER REFERENCES toc(toc_id),
-    page_id          INTEGER NOT NULL REFERENCES pages(page_id),
-    title_text       TEXT NOT NULL,
-    title_normalized TEXT NOT NULL,
-    level            INTEGER NOT NULL,
-    sequence_num     INTEGER NOT NULL,
-    shamela_title_id INTEGER
-);
-CREATE INDEX idx_toc_parent ON toc(parent_toc_id, sequence_num);
-
-CREATE TABLE assets (
-    asset_id  INTEGER PRIMARY KEY,
-    file_path TEXT NOT NULL,
-    mime_type TEXT NOT NULL,
-    sha256    TEXT NOT NULL,
-    width     INTEGER,
-    height    INTEGER
-);
-
-CREATE VIRTUAL TABLE pages_fts USING fts5(
-    page_id UNINDEXED,
-    body_search,
-    footnotes_search,
-    content=''
-);
-"""
 
 
 def build_book(book: dict) -> dict:
@@ -556,9 +457,13 @@ def build_book(book: dict) -> dict:
                 sha256_text(html),
             ),
         )
+        # `pages_fts` est contentless (`content=''`) : FTS5 ne stocke PAS les
+        # colonnes UNINDEXED, donc `SELECT page_id ... WHERE ... MATCH` renvoie
+        # NULL. Le seul lien exploitable vers `pages` est le rowid — il doit
+        # donc valoir explicitement page_id.
         con.execute(
-            "INSERT INTO pages_fts (page_id, body_search, footnotes_search) VALUES (?,?,?)",
-            (page_id, search, normalize_ar(footnotes) if footnotes else ""),
+            "INSERT INTO pages_fts (rowid, page_id, body_search, footnotes_search) VALUES (?,?,?,?)",
+            (page_id, page_id, search, normalize_ar(footnotes) if footnotes else ""),
         )
 
     for part_number, volume_id in volume_ids.items():
@@ -627,102 +532,6 @@ def build_book(book: dict) -> dict:
 
 # ---------------------------------------------------------------- catalog.sqlite
 
-CATALOG_SCHEMA = """
-CREATE TABLE catalog_info (
-    catalog_version INTEGER NOT NULL,
-    schema_version  INTEGER NOT NULL,
-    generated_at    TEXT NOT NULL,
-    edition_count   INTEGER NOT NULL
-);
-
-CREATE TABLE categories (
-    category_id INTEGER PRIMARY KEY,
-    label_ar    TEXT NOT NULL,
-    parent_id   INTEGER REFERENCES categories(category_id),
-    sort_order  INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE authors (
-    author_id        TEXT PRIMARY KEY,
-    full_name_ar     TEXT NOT NULL,
-    short_name_ar    TEXT,
-    death_year_hijri INTEGER,
-    bio_ar           TEXT,
-    portrait_url     TEXT
-);
-
-CREATE TABLE works (
-    work_id     TEXT PRIMARY KEY,
-    title_ar    TEXT NOT NULL,
-    category_id INTEGER REFERENCES categories(category_id)
-);
-
-CREATE TABLE editions (
-    edition_id        TEXT PRIMARY KEY,
-    work_id           TEXT NOT NULL REFERENCES works(work_id),
-    source            TEXT NOT NULL,
-    source_book_id    INTEGER,
-    shamela_id        INTEGER,
-    title_ar          TEXT NOT NULL,
-    subtitle_ar       TEXT,
-    category_id       INTEGER REFERENCES categories(category_id),
-    book_type         INTEGER,
-    book_type_label   TEXT,
-    bibliography_text TEXT,
-    publisher_ar      TEXT,
-    edition_label_ar  TEXT,
-    publication_year  INTEGER,
-    printed           INTEGER NOT NULL DEFAULT 1,
-    is_hidden         INTEGER NOT NULL DEFAULT 0,
-    volume_count      INTEGER NOT NULL DEFAULT 1,
-    has_multi_part    INTEGER NOT NULL DEFAULT 0,
-    language          TEXT NOT NULL DEFAULT 'ar',
-    cover_url         TEXT
-);
-CREATE INDEX idx_editions_category ON editions(category_id);
-
-CREATE TABLE edition_authors (
-    edition_id TEXT NOT NULL REFERENCES editions(edition_id),
-    author_id  TEXT NOT NULL REFERENCES authors(author_id),
-    role       TEXT NOT NULL,
-    position   INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (edition_id, author_id, role)
-);
-
-CREATE TABLE book_releases (
-    release_id        TEXT PRIMARY KEY,
-    edition_id        TEXT NOT NULL REFERENCES editions(edition_id),
-    schema_version    INTEGER NOT NULL,
-    content_version   INTEGER NOT NULL,
-    source_version    TEXT,
-    download_url      TEXT NOT NULL,
-    compressed_size   INTEGER,
-    uncompressed_size INTEGER,
-    sha256            TEXT NOT NULL,
-    page_count        INTEGER NOT NULL,
-    toc_count         INTEGER NOT NULL,
-    fts_version       INTEGER NOT NULL DEFAULT 1,
-    min_app_version   TEXT,
-    published_at      TEXT NOT NULL,
-    is_active         INTEGER NOT NULL DEFAULT 1
-);
-CREATE INDEX idx_releases_edition ON book_releases(edition_id, is_active);
-
-CREATE TABLE edition_relations (
-    from_edition_id TEXT NOT NULL REFERENCES editions(edition_id),
-    to_edition_id   TEXT NOT NULL REFERENCES editions(edition_id),
-    relation_type   TEXT NOT NULL,
-    PRIMARY KEY (from_edition_id, to_edition_id, relation_type)
-);
-
-CREATE VIRTUAL TABLE catalog_fts USING fts5(
-    edition_id UNINDEXED,
-    title_ar,
-    title_normalized,
-    author_names,
-    bibliography_text
-);
-"""
 
 
 def build_catalog(manifests: dict) -> None:

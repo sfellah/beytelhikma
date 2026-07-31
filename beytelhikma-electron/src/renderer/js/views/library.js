@@ -1,10 +1,12 @@
 import { h } from '../dom.js';
+import { ordinal } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { asyncView, emptyView } from '../components/states.js';
+import { collectionsStrip } from './collections.js';
 
 const FILTERS = [
   { key: 'all', label: 'الكل', keep: () => true },
@@ -17,10 +19,14 @@ const SORTS = [
   { key: 'title', label: 'العنوان' },
 ];
 
-/** Bibliothèque : les livres installés, filtrables et triables. */
+/** Bibliothèque : les collections, puis les livres installés. */
 export function libraryView(host) {
   const content = renderShell(host, { active: 'library' });
-  asyncView(content, () => repository.getLibrary(), render, {
+  // Le bandeau des collections reste visible même sans livre installé : une
+  // collection peut n'être qu'une liste d'envies.
+  const books = h('div', {});
+  content.append(collectionsStrip(), books);
+  asyncView(books, () => repository.getLibrary(), render, {
     empty: 'مكتبتك فارغة بعد',
   });
   return null;
@@ -137,10 +143,19 @@ function render(entries) {
  */
 export function collectionView(kind) {
   return (host, params) => {
-    const content = renderShell(host, { active: kind === 'category' ? 'home' : 'authors' });
+    const content = renderShell(host, { active: kind === 'author' ? 'authors' : 'home' });
     asyncView(
       content,
       async () => {
+        if (kind === 'era') {
+          const century = Number(params.id);
+          const books = await repository.getBooksByCentury(century, { limit: 60 });
+          return {
+            title: `${ordinal(century)} الهجري`,
+            subtitle: `${books.length} كتاب لمؤلفين توفّوا في هذا القرن`,
+            books,
+          };
+        }
         if (kind === 'category') {
           const categories = await repository.getCategories();
           const category = categories.find(

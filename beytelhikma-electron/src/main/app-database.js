@@ -16,6 +16,14 @@ function engine() {
 
 export const USER_DB_SCHEMA_VERSION = 1;
 
+/**
+ * Au-delà de cette taille, `new SQL.Database(buffer)` charge le livre entier en
+ * mémoire WASM et devient très lent, voire échoue. Les livres du corpus Shamela
+ * vont jusqu'à ~800 Mo pour les plus gros : on prévient plutôt que de laisser
+ * planter sans explication.
+ */
+const BOOK_SIZE_WARNING = 128 * 1024 * 1024;
+
 const USER_SCHEMA = [
   `CREATE TABLE downloaded_books (
      edition_id           TEXT PRIMARY KEY,
@@ -51,7 +59,47 @@ const USER_SCHEMA = [
    )`,
   `CREATE TABLE user_info (schema_version INTEGER NOT NULL)`,
   `INSERT INTO user_info (schema_version) VALUES (${USER_DB_SCHEMA_VERSION})`,
+  // sqflite, côté Flutter, se fie à `user_version` pour décider s'il doit créer
+  // le schéma. Sans cette ligne il lit 0, rejoue ses `CREATE TABLE` sur des
+  // tables déjà présentes et refuse d'ouvrir la base : les deux clients ne
+  // peuvent alors pas partager une même racine de bibliothèque.
+  `PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`,
 ];
+
+/** Le fichier du livre n'est pas installé : l'appelant doit le télécharger. */
+export class BookNotInstalledError extends Error {
+  constructor(editionId) {
+    super(`livre non installé : ${editionId}`);
+    this.name = 'BookNotInstalledError';
+    this.editionId = editionId;
+  }
+}
+
+/**
+ * Emplacement de la bibliothèque à installer, par ordre de priorité :
+ *
+ *  1. `BEYTELHIKMA_LIBRARY` — pour pointer une bibliothèque arbitraire ;
+ *  2. `dist/shamela/` — la sortie de `tools/import_shamela.py` ;
+ *  3. `assets/sample/` — les 5 livres factices, pour qu'un dépôt fraîchement
+ *     cloné démarre sans avoir lancé l'import.
+ *
+ * Un dossier de bibliothèque contient `catalog.sqlite` et `books/`.
+ */
+export function resolveLibrarySource(projectRoot) {
+  const candidates = [
+    process.env.BEYTELHIKMA_LIBRARY,
+    path.join(projectRoot, '..', 'dist', 'shamela'),
+    path.join(projectRoot, 'assets', 'sample'),
+  ].filter(Boolean);
+
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'catalog.sqlite'))) return path.resolve(dir);
+  }
+  throw new Error(
+    `aucune bibliothèque trouvée (cherché : ${candidates.join(', ')}). ` +
+      'Lancer `python tools/import_shamela.py` ou définir BEYTELHIKMA_LIBRARY.',
+  );
+}
 
 /**
  * Accès aux trois bases de l'application (voir DATAMODEL.md) :
@@ -60,23 +108,25 @@ const USER_SCHEMA = [
  *  * `books/<edition_id>.sqlite` — contenu d'un livre, lecture seule ;
  *  * `user.sqlite`               — bibliothèque, progression, réglages.
  *
- * Tant que le pipeline de téléchargement n'existe pas, catalogue et livres sont
- * livrés dans `assets/sample/` puis copiés au premier accès dans le dossier de
- * données : le reste du code lit déjà des fichiers *installés*, comme il le fera
- * avec le CDN.
+ * Les fichiers sont livrés dans un dossier *source* — `dist/shamela/` produit par
+ * `tools/import_shamela.py`, ou `assets/sample/` à défaut — puis copiés au
+ * premier accès dans le dossier de données : le reste du code lit déjà des
+ * fichiers *installés*, comme il le fera avec le CDN. Seul le catalogue est
+ * copié depuis la source ; les livres sont installés par `download-manager.js`.
  *
  * sql.js travaille en mémoire : toute écriture dans `user.sqlite` est
  * immédiatement réexportée sur disque (le fichier pèse quelques kilo-octets).
  */
 export class AppDatabase {
-  #assetsDir;
+  #source;
   #root;
   #catalog = null;
   #user = null;
   #books = new Map();
 
-  constructor({ assetsDir, storageRoot }) {
-    this.#assetsDir = assetsDir;
+  constructor({ librarySource, storageRoot }) {
+    if (!librarySource) throw new Error('librarySource est requis');
+    this.#source = librarySource;
     this.#root = storageRoot;
   }
 
@@ -84,20 +134,55 @@ export class AppDatabase {
     return this.#root;
   }
 
+  get librarySource() {
+    return this.#source;
+  }
+
   async initialize() {
     fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
+    this.#syncInstalledLibrary();
     await engine();
   }
 
   /**
-   * Copie l'asset vers [target] s'il n'y est pas encore, ou si sa taille diffère
-   * (le générateur de données d'exemple change la taille du fichier).
+   * Si la bibliothèque source a changé depuis la dernière ouverture, les copies
+   * installées appartiennent à un autre catalogue : on les jette.
+   *
+   * Seul le cache est purgé — `user.sqlite` (progression, collections) survit.
+   * Les lignes qui pointent des éditions absentes du nouveau catalogue sont
+   * simplement ignorées à la lecture.
    */
-  #materialize(assetRelativePath, targetPath) {
-    const source = path.join(this.#assetsDir, assetRelativePath);
+  #syncInstalledLibrary() {
+    const marker = path.join(this.#root, 'library.json');
+    const current = { source: path.resolve(this.#source) };
+
+    let previous = null;
+    try {
+      previous = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    } catch {
+      previous = null; // absent ou illisible : on réinstalle
+    }
+
+    if (previous?.source !== current.source) {
+      fs.rmSync(path.join(this.#root, 'catalog.sqlite'), { force: true });
+      fs.rmSync(path.join(this.#root, 'books'), { recursive: true, force: true });
+      fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
+      fs.writeFileSync(
+        marker,
+        JSON.stringify({ ...current, installedAt: new Date().toISOString() }, null, 2),
+      );
+    }
+  }
+
+  /**
+   * Copie le fichier depuis la bibliothèque source vers [target] s'il n'y est pas
+   * encore, ou si sa taille diffère (régénérer les données change la taille).
+   */
+  #materialize(relativePath, targetPath) {
+    const source = path.join(this.#source, relativePath);
     if (!fs.existsSync(source)) {
       if (fs.existsSync(targetPath)) return targetPath;
-      throw new Error(`asset introuvable : ${assetRelativePath}`);
+      throw new Error(`fichier absent de la bibliothèque : ${relativePath}`);
     }
     const size = fs.statSync(source).size;
     if (!fs.existsSync(targetPath) || fs.statSync(targetPath).size !== size) {
@@ -108,29 +193,54 @@ export class AppDatabase {
 
   async #open(filePath) {
     const SQL = await engine();
+    const bytes = fs.statSync(filePath).size;
+    if (bytes > BOOK_SIZE_WARNING) {
+      console.warn(
+        `[beytelhikma] ${path.basename(filePath)} pèse ${Math.round(bytes / 1024 / 1024)} Mo : ` +
+          'sql.js le charge intégralement en mémoire, le chargement sera long.',
+      );
+    }
     return new SQL.Database(fs.readFileSync(filePath));
   }
 
   async catalog() {
     if (this.#catalog) return this.#catalog;
-    const file = this.#materialize(
-      'sample/catalog.sqlite',
-      path.join(this.#root, 'catalog.sqlite'),
-    );
+    const file = this.#materialize('catalog.sqlite', path.join(this.#root, 'catalog.sqlite'));
     this.#catalog = await this.#open(file);
     return this.#catalog;
   }
 
+  /**
+   * Ouvre un livre **installé**. Contrairement au catalogue, aucun fichier n'est
+   * copié ici : c'est `download-manager.js` qui installe les livres.
+   */
   async book(editionId) {
     const cached = this.#books.get(editionId);
     if (cached) return cached;
-    const file = this.#materialize(
-      `sample/books/${editionId}.sqlite`,
-      path.join(this.#root, 'books', `${editionId}.sqlite`),
-    );
+    const file = path.join(this.#root, 'books', `${editionId}.sqlite`);
+    if (!fs.existsSync(file)) throw new BookNotInstalledError(editionId);
     const db = await this.#open(file);
     this.#books.set(editionId, db);
     return db;
+  }
+
+  /** Ferme un livre et le retire du cache : préalable à sa suppression. */
+  closeBook(editionId) {
+    const db = this.#books.get(editionId);
+    if (!db) return;
+    db.close();
+    this.#books.delete(editionId);
+  }
+
+  /** Identifiants des livres dont le fichier est présent sur le disque. */
+  installedBooks() {
+    const dir = path.join(this.#root, 'books');
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith('.sqlite'))
+      .map((name) => name.slice(0, -'.sqlite'.length))
+      .sort();
   }
 
   async user() {

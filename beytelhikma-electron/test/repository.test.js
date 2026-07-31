@@ -5,7 +5,7 @@ import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { AppDatabase } from '../src/main/app-database.js';
+import { AppDatabase, all } from '../src/main/app-database.js';
 import { BookRepository, RepositoryError } from '../src/main/book-repository.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,13 +17,25 @@ let repository;
 before(async () => {
   storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'beytelhikma-'));
   database = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await database.initialize();
   repository = new BookRepository(database);
-  await repository.warmUp();
+  repository.createDownloadQueue();
+  await repository.reconcileLibrary();
+  // Les cinq livres d'exemple ont une `download_url` en `asset://` : le
+  // gestionnaire les installe par copie, sans réseau.
+  await installAll(repository);
 });
+
+/** Installe tout le catalogue et attend la fin de la file. */
+async function installAll(repo) {
+  const books = await repo.getBooks({ limit: 50 });
+  const queue = repo.downloads;
+  for (const book of books) await repo.downloadBook(book.editionId);
+  if (queue.snapshot().length) await new Promise((resolve) => queue.once('idle', resolve));
+}
 
 after(() => {
   database.close();
@@ -97,7 +109,7 @@ test('la progression est écrite puis relue depuis user.sqlite', async () => {
 test('la progression survit à la réouverture de la base', async () => {
   database.close();
   const reopened = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await reopened.initialize();
@@ -106,17 +118,178 @@ test('la progression survit à la réouverture de la base', async () => {
   reopened.close();
 
   database = new AppDatabase({
-    assetsDir: path.join(projectRoot, 'assets'),
+    librarySource: path.join(projectRoot, 'assets', 'sample'),
     storageRoot,
   });
   await database.initialize();
   repository = new BookRepository(database);
+  repository.createDownloadQueue();
 });
 
-test('la bibliothèque liste les livres installés', async () => {
+test('la bibliothèque ne liste que les livres installés', async () => {
   const library = await repository.getLibrary();
   assert.equal(library.length, 5);
   assert.ok(library.every((entry) => entry.status === 'installed'));
+});
+
+test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne', async () => {
+  // Fichier supprimé à la main sous l'application.
+  database.closeBook('ed-muqaddima-01');
+  fs.rmSync(path.join(storageRoot, 'books', 'ed-muqaddima-01.sqlite'));
+  await repository.reconcileLibrary();
+  let library = await repository.getLibrary();
+  assert.equal(
+    library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'),
+    false,
+  );
+
+  // Fichier reposé à la main : la réconciliation le réintègre.
+  fs.copyFileSync(
+    path.join(projectRoot, 'assets', 'sample', 'books', 'ed-muqaddima-01.sqlite'),
+    path.join(storageRoot, 'books', 'ed-muqaddima-01.sqlite'),
+  );
+  await repository.reconcileLibrary();
+  library = await repository.getLibrary();
+  assert.ok(library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
+});
+
+test('les résumés portent le statut de téléchargement', async () => {
+  const books = await repository.getBooks({ limit: 50 });
+  const installed = books.filter((book) => book.downloadStatus === 'installed');
+  assert.ok(installed.length >= 1);
+  assert.ok(books.every((book) => 'downloadStatus' in book));
+});
+
+test('la fiche livre porte l’état de téléchargement et la taille', async () => {
+  const detail = await repository.getBookDetail('ed-muqaddima-01');
+  assert.equal(detail.download.status, 'installed');
+  assert.ok(detail.download.compressedSize > 0);
+  assert.ok(detail.download.releaseId);
+});
+
+test('l’espace occupé compte les fichiers réellement présents', async () => {
+  const usage = await repository.getStorageUsage();
+  assert.equal(usage.bookCount, database.installedBooks().length);
+  assert.ok(usage.bytes > 0);
+});
+
+test('supprimer en gardant la progression efface le fichier, pas la position', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-risala-01',
+    pageId: 2,
+    sequenceNum: 2,
+    percent: 0.4,
+  });
+
+  await repository.deleteBook('ed-risala-01', { keepProgress: true });
+
+  assert.equal(fs.existsSync(path.join(storageRoot, 'books', 'ed-risala-01.sqlite')), false);
+  const library = await repository.getLibrary();
+  assert.equal(
+    library.some((entry) => entry.book.editionId === 'ed-risala-01'),
+    false,
+  );
+
+  const progress = await repository.getProgress('ed-risala-01');
+  assert.equal(progress.pageId, 2);
+  assert.equal(progress.percent, 0.4);
+
+  // Réinstallation : la position est retrouvée telle quelle.
+  await repository.downloadBook('ed-risala-01');
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  assert.equal((await repository.getProgress('ed-risala-01')).pageId, 2);
+});
+
+test('supprimer totalement efface aussi la progression', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-risala-01',
+    pageId: 3,
+    sequenceNum: 3,
+    percent: 0.7,
+  });
+
+  await repository.deleteBook('ed-risala-01', { keepProgress: false });
+
+  assert.equal(await repository.getProgress('ed-risala-01'), null);
+  const user = await database.user();
+  assert.equal(
+    all(user, 'SELECT edition_id FROM downloaded_books WHERE edition_id = ?', ['ed-risala-01'])
+      .length,
+    0,
+  );
+});
+
+test('l’exploration sans filtre renvoie tout le catalogue', async () => {
+  const { books, total } = await repository.exploreBooks({});
+  assert.equal(total, 5);
+  assert.equal(books.length, 5);
+  assert.ok(books.every((book) => 'downloadStatus' in book));
+});
+
+test('les filtres se combinent en ET, leurs valeurs en OU', async () => {
+  const categories = (await repository.getCategories()).filter((c) => c.bookCount > 0);
+  const [first, second] = categories;
+  const one = await repository.exploreBooks({ categories: [first.categoryId] });
+  const two = await repository.exploreBooks({
+    categories: [first.categoryId, second.categoryId],
+  });
+  assert.equal(one.total, first.bookCount);
+  assert.equal(two.total, first.bookCount + second.bookCount);
+});
+
+test('le filtre de statut s’appuie sur les livres réellement installés', async () => {
+  const installed = await repository.exploreBooks({ status: 'installed' });
+  const missing = await repository.exploreBooks({ status: 'missing' });
+  assert.equal(installed.total, database.installedBooks().length);
+  assert.equal(installed.total + missing.total, 5);
+});
+
+test('le compteur d’une facette ignore son propre filtre', async () => {
+  const categories = (await repository.getCategories()).filter((c) => c.bookCount > 0);
+  const target = categories[0];
+  const facets = await repository.getFacets({ categories: [target.categoryId] });
+
+  // Les catégories non choisies gardent un compte non nul : on peut en ajouter.
+  const others = facets.categories.filter((entry) => entry.value !== target.categoryId);
+  assert.ok(
+    others.some((entry) => entry.count > 0),
+    'les sœurs ne tombent pas à zéro',
+  );
+  // Le type, lui, est bien restreint à la catégorie choisie.
+  const typeTotal = facets.types.reduce((sum, entry) => sum + entry.count, 0);
+  assert.equal(typeTotal, target.bookCount);
+});
+
+test('la recherche trouve avec et sans diacritiques', async () => {
+  const withMarks = await repository.exploreBooks({ text: 'مقدمة' });
+  assert.ok(withMarks.total >= 1);
+  const bare = await repository.exploreBooks({ text: 'مقدمه' });
+  assert.equal(bare.total, withMarks.total);
+});
+
+test('l’autocomplétion des auteurs cherche sur le nom normalisé', async () => {
+  const authors = await repository.getAuthors();
+  const target = authors[0];
+  const suggestions = await repository.suggestValues('authors', target.fullName.slice(0, 4));
+  assert.ok(suggestions.some((entry) => entry.value === target.authorId));
+  assert.ok(suggestions.every((entry) => entry.count >= 1));
+  assert.deepEqual(await repository.suggestValues('authors', 'ا'), [], 'moins de 2 caractères');
+});
+
+test('la sélection se pèse et se met en file, sans les déjà installés', async () => {
+  await repository.deleteBook('ed-muqaddima-01', { keepProgress: true });
+  const missing = await repository.exploreBooks({ status: 'missing' });
+  assert.ok(missing.total >= 1);
+
+  const ids = missing.books.map((book) => book.editionId);
+  const weight = await repository.getSelectionWeight(ids);
+  assert.equal(weight.count, ids.length);
+  assert.ok(weight.bytes > 0);
+
+  const queued = await repository.downloadSelection(ids);
+  assert.equal(queued, ids.length);
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  assert.equal((await repository.exploreBooks({ status: 'missing' })).total, 0);
 });
 
 test('les réglages du lecteur sont persistés', async () => {
@@ -125,6 +298,137 @@ test('les réglages du lecteur sont persistés', async () => {
   const settings = await repository.getSettings();
   assert.equal(settings['reader.fontSize'], '26');
   assert.equal(settings['reader.theme'], 'night');
+});
+
+// --------------------------------------------------- recherche dans le livre
+
+test('la recherche interne trouve avec et sans diacritiques', async () => {
+  const page = await repository.getPageById('ed-muqaddima-01', 1);
+  const word = page.bodyPlain.split(/\s+/).find((token) => token.length >= 4);
+
+  const found = await repository.searchInBook('ed-muqaddima-01', word);
+  assert.ok(found.pages.length >= 1, `aucun résultat pour « ${word} »`);
+  const [hit] = found.pages;
+  assert.ok(hit.snippet.match.length > 0, "l'extrait doit porter la correspondance");
+  assert.ok(typeof hit.sequenceNum === 'number');
+});
+
+test('un terme trop court ne cherche rien', async () => {
+  const found = await repository.searchInBook('ed-muqaddima-01', 'ا');
+  assert.deepEqual(found.pages, []);
+  assert.deepEqual(found.chapters, []);
+});
+
+test('un joker LIKE ne ramène pas tout le livre', async () => {
+  const found = await repository.searchInBook('ed-muqaddima-01', '%%');
+  assert.deepEqual(found.pages, [], 'les % doivent être échappés, pas interprétés');
+});
+
+test('la recherche interne remonte aussi les titres du sommaire', async () => {
+  const toc = await repository.getToc('ed-muqaddima-01');
+  const word = toc[0].title.split(/\s+/).find((token) => token.length >= 3) ?? toc[0].title;
+  const found = await repository.searchInBook('ed-muqaddima-01', word);
+  assert.ok(found.chapters.length >= 1);
+  assert.ok(found.chapters.every((entry) => typeof entry.pageId === 'number'));
+});
+
+// ---------------------------------------------------------------- collections
+
+test('une collection se crée, se remplit et se vide sans toucher aux livres', async () => {
+  const id = await repository.createCollection('  أصول الفقه  ');
+  let collections = await repository.getCollections();
+  const created = collections.find((entry) => entry.id === id);
+  assert.equal(created.name, 'أصول الفقه', 'le nom est rogné');
+  assert.equal(created.bookCount, 0);
+
+  const books = await repository.getBooks({ limit: 3 });
+  const ids = books.map((book) => book.editionId);
+  assert.equal(await repository.addToCollection(id, ids), 3);
+  assert.equal(await repository.addToCollection(id, ids), 0, 'aucun doublon');
+
+  const content = await repository.getCollectionBooks(id);
+  assert.deepEqual(
+    content.map((book) => book.editionId),
+    ids,
+    "l'ordre de la collection est conservé",
+  );
+  assert.ok(content.every((book) => 'downloadStatus' in book));
+
+  collections = await repository.getCollections();
+  assert.equal(collections.find((entry) => entry.id === id).bookCount, 3);
+
+  await repository.removeFromCollection(id, ids[0]);
+  assert.equal((await repository.getCollectionBooks(id)).length, 2);
+
+  await repository.renameCollection(id, 'مراجع');
+  assert.equal((await repository.getCollections()).find((e) => e.id === id).name, 'مراجع');
+
+  await repository.deleteCollection(id);
+  assert.equal(
+    (await repository.getCollections()).some((entry) => entry.id === id),
+    false,
+  );
+  // Les livres n'ont pas bougé.
+  assert.equal((await repository.getLibrary()).length, 5);
+});
+
+test('une collection refuse un nom vide', async () => {
+  await assert.rejects(() => repository.createCollection('   '), RepositoryError);
+});
+
+// ------------------------------------------------------------------ réglages
+
+test('l’adresse du serveur est persistée et appliquée à la file', async () => {
+  await repository.setDownloadBaseUrl('http://127.0.0.1:9000/beytelhikma');
+  const settings = await repository.getSettings();
+  assert.equal(settings['minio.base_url'], 'http://127.0.0.1:9000/beytelhikma');
+  await repository.setDownloadBaseUrl('');
+  assert.equal((await repository.getSettings())['minio.base_url'], '');
+});
+
+test('les informations d’application décrivent la bibliothèque installée', async () => {
+  const about = await repository.getAbout();
+  assert.equal(about.editionCount, 5);
+  assert.ok(about.categoryCount >= 5);
+  assert.equal(about.schemaVersion, 1);
+  assert.ok(about.librarySource.endsWith('sample'));
+});
+
+test('deleteAllBooks vide le dossier et conserve les progressions', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-muqaddima-01',
+    pageId: 4,
+    sequenceNum: 4,
+    percent: 0.8,
+  });
+
+  const removed = await repository.deleteAllBooks();
+  assert.ok(removed >= 1);
+  assert.deepEqual(database.installedBooks(), []);
+  assert.equal((await repository.getLibrary()).length, 0);
+  assert.equal((await repository.getProgress('ed-muqaddima-01')).pageId, 4);
+});
+
+test('les auteurs sont listés du plus au moins représenté', async () => {
+  const authors = await repository.getAuthors();
+  assert.ok(authors.length >= 1);
+  for (const item of authors) {
+    assert.ok(item.fullName);
+    assert.ok(item.bookCount >= 1);
+  }
+  const counts = authors.map((item) => item.bookCount);
+  assert.deepEqual(counts, [...counts].sort((a, b) => b - a));
+});
+
+test('les siècles se déduisent du décès des auteurs', async () => {
+  const eras = await repository.getEras();
+  assert.ok(eras.length >= 1);
+  for (const era of eras) {
+    assert.ok(era.century >= 1 && era.century <= 15, `siècle hors bornes : ${era.century}`);
+    assert.ok(era.bookCount >= 1);
+    const books = await repository.getBooksByCentury(era.century);
+    assert.equal(books.length, era.bookCount);
+  }
 });
 
 test("l'auteur en vedette a des œuvres", async () => {
