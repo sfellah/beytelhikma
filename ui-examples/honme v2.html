@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html class="light" dir="rtl" lang="ar"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>قارئ الكتاب الإسلامي - المكتبة</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&amp;family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#444542",
+                    "secondary-container": "#f4dfcb",
+                    "surface-dim": "#dcd9dd",
+                    "surface-container": "#f0edf1",
+                    "on-primary-container": "#80bea6",
+                    "on-primary-fixed": "#002117",
+                    "surface-container-highest": "#e4e1e5",
+                    "outline": "#707974",
+                    "secondary-fixed": "#f4dfcb",
+                    "surface": "#fbf8fc",
+                    "surface-variant": "#e4e1e5",
+                    "on-error-container": "#93000a",
+                    "on-secondary-container": "#716252",
+                    "on-primary-fixed-variant": "#0b513d",
+                    "background": "#fbf8fc",
+                    "on-secondary-fixed": "#241a0e",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#2d2f2c",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed": "#1b1c19",
+                    "outline-variant": "#bfc9c3",
+                    "on-surface": "#1b1b1e",
+                    "on-tertiary-container": "#b2b2ae",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#eae7eb",
+                    "on-surface-variant": "#404944",
+                    "secondary-fixed-dim": "#d7c3b0",
+                    "error": "#ba1a1a",
+                    "error-container": "#ffdad6",
+                    "primary-fixed": "#b0f0d6",
+                    "tertiary-fixed-dim": "#c7c7c2",
+                    "on-tertiary-fixed-variant": "#464744",
+                    "on-secondary-fixed-variant": "#524436",
+                    "on-secondary": "#ffffff",
+                    "secondary": "#6b5c4c",
+                    "surface-tint": "#2b6954",
+                    "inverse-primary": "#95d3ba",
+                    "surface-bright": "#fbf8fc",
+                    "primary": "#003527",
+                    "primary-fixed-dim": "#95d3ba",
+                    "inverse-surface": "#303033",
+                    "tertiary-fixed": "#e3e3de",
+                    "primary-container": "#064e3b",
+                    "inverse-on-surface": "#f3f0f4",
+                    "surface-container-low": "#f5f3f6",
+                    "on-background": "#1b1b1e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "gutter": "20px",
+                    "md": "16px",
+                    "xl": "40px",
+                    "xs": "4px",
+                    "unit": "4px",
+                    "container-max": "1200px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "headline-lg-mobile": ["IBM Plex Sans Arabic"],
+                    "label-md": ["IBM Plex Sans Arabic"],
+                    "label-sm": ["IBM Plex Sans Arabic"],
+                    "body-md": ["Amiri"],
+                    "headline-lg": ["IBM Plex Sans Arabic"],
+                    "body-lg": ["Amiri"],
+                    "headline-md": ["IBM Plex Sans Arabic"]
+            },
+            "fontSize": {
+                    "headline-lg-mobile": ["24px", {"lineHeight": "34px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "body-md": ["18px", {"lineHeight": "32px", "fontWeight": "400"}],
+                    "headline-lg": ["30px", {"lineHeight": "42px", "fontWeight": "600"}],
+                    "body-lg": ["20px", {"lineHeight": "36px", "fontWeight": "400"}],
+                    "headline-md": ["22px", {"lineHeight": "32px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #fbf8fc;
+            font-family: 'IBM Plex Sans Arabic', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .reading-progress-gradient {
+            background: linear-gradient(90deg, #2b6954 var(--progress), #f4dfcb var(--progress));
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #bfc9c3;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface overflow-x-hidden">
+<!-- Sidebar (Shared Component: SideNavBar) -->
+<aside class="fixed right-0 top-0 h-full w-64 bg-surface-container-low border-l border-outline-variant z-50 flex flex-col py-lg px-md overflow-y-auto hidden md:flex">
+<div class="mb-xl text-right">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">قارئ الكتاب الإسلامي</h1>
+</div>
+<!-- User Profile -->
+<div class="flex items-center gap-md mb-xl flex-row-reverse">
+<div class="w-12 h-12 rounded-full overflow-hidden border-2 border-primary-fixed">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a young scholarly man with a neat beard, wearing a modern modest linen shirt. The background is a soft, out-of-focus Islamic library with warm emerald and sand tones. The lighting is soft and cinematic, emphasizing a serene and intellectual atmosphere in a modern spiritualist style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-_nFzPb3kkPAE6iL29oelGGVbgtO3H-965P-Notu_d8q_AzfOwq-PptO1up_FIeDSZ-Hr0_NccLF0xeKNXYdjKHJm30i9M1RNC58Ci1DsSHJNUZaJWyzRj59XE9_ZRysHbxJarW8FcSHu-Srw36a-hyOfa9aKa9SIdwuv_TYQEvkD-YApomlGyoycHo1iLo5VphxLzHBteEYnNG-Z1PpeYmK306pZlIN5eBK6-2ephQxK3e_r8GH2"/>
+</div>
+<div class="text-right">
+<p class="font-label-md text-label-md font-bold text-on-surface">مرحباً بك</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">طالب العلم</p>
+</div>
+</div>
+<nav class="flex-grow space-y-xs">
+<!-- Active Tab: المكتبة -->
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-primary border-r-4 border-primary bg-secondary-container/30 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="library_books">library_books</span>
+<span class="font-label-md text-label-md">المكتبة</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-label-md text-label-md">القرآن الكريم</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="font-label-md text-label-md">الحديث الشريف</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-label-md text-label-md">الفقه الإسلامي</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-label-md text-label-md">التاريخ والسير</span>
+</a>
+</nav>
+<button class="mt-xl w-full py-md bg-primary text-white rounded-xl font-label-md text-label-md flex items-center justify-center gap-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>إضافة كتاب جديد</span>
+</button>
+<div class="mt-auto pt-xl space-y-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+<span class="font-label-md text-label-md">المفضلة</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:bg-secondary-container/50 transition-all duration-200 flex-row-reverse" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">الإعدادات</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="md:mr-64 min-h-screen">
+<!-- Top App Bar (Shared Component: TopAppBar) -->
+<header class="sticky top-0 bg-surface/80 backdrop-blur-md shadow-[0_20px_20px_rgba(43,105,84,0.04)] z-40 transition-all duration-200">
+<div class="max-w-container-max mx-auto px-gutter py-md flex flex-row items-center justify-between">
+<!-- Left: Actions & Search -->
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<input class="w-64 lg:w-96 pl-md pr-12 py-sm bg-surface-container-high border-none rounded-full font-label-md text-label-md focus:ring-2 focus:ring-primary/20 transition-all" placeholder="بحث في الكتب والمؤلفين..." type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+</div>
+<button class="p-sm rounded-full hover:bg-secondary-container transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="settings">settings</span>
+</button>
+<button class="p-sm rounded-full hover:bg-secondary-container transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+<!-- Center: Branding for Mobile -->
+<div class="md:hidden">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">قارئ الكتاب</h1>
+</div>
+<!-- Right: Mobile Menu Toggle -->
+<button class="md:hidden p-sm text-primary">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+</header>
+<div class="max-w-container-max mx-auto px-gutter py-xl">
+<!-- Continue Reading Section (Bento Style) -->
+<section class="mb-xl">
+<div class="flex items-center justify-between mb-lg flex-row-reverse">
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold">متابعة القراءة</h2>
+<a class="text-primary font-label-md text-label-md hover:underline" href="#">عرض الكل</a>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+<!-- Featured Current Reading -->
+<div class="lg:col-span-8 bg-surface-container-lowest rounded-xl p-lg shadow-[0_20px_20px_rgba(43,105,84,0.04)] flex flex-col md:flex-row-reverse items-center gap-xl relative overflow-hidden group">
+<div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="w-32 md:w-48 aspect-[3/4] rounded-lg shadow-xl overflow-hidden flex-shrink-0 z-10 transform group-hover:scale-105 transition-transform duration-500">
+<img class="w-full h-full object-cover" data-alt="A beautifully designed Islamic book cover for Sahih al-Bukhari, featuring intricate emerald green and gold geometric patterns. The typography is elegant Arabic calligraphy. The background is a soft textured paper style. Minimalist and high-end aesthetic, fitting a modern spiritualist library." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD96b1iWqpjoY6E6bdNduOeMDccBsEvxwf3alaeeYFq59hS7zyYPkQi1norc356g2FlW2bdhp5I4d1Ljl24wYH_Lf1mR2NMuIN4CjiXeBCvbIoUteGRTbaXJFEE0bS0678Nz912ocdvPXXhHw1CtqopFdPOCFhcBbbywC5kAEraZDbSUlsg19cqrYfpPJNhDp2lIeX4BGhKTCV7kk78ZCj8qKACOsZV0W5CvMuuGe4eITaImJVS2X-A"/>
+</div>
+<div class="flex-grow text-right z-10">
+<span class="inline-block px-md py-xs bg-secondary-container/50 text-secondary font-label-sm text-label-sm rounded-full mb-md">الحديث الشريف</span>
+<h3 class="font-headline-md text-headline-md font-bold text-primary mb-xs">صحيح البخاري</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-xl">الإمام محمد بن إسماعيل البخاري</p>
+<div class="space-y-sm">
+<div class="flex justify-between items-center flex-row-reverse">
+<span class="font-label-sm text-label-sm text-primary font-bold">75%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">الصفحة 342 من 456</span>
+</div>
+<div class="h-2 w-full bg-secondary-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 75%;"></div>
+</div>
+</div>
+<button class="mt-xl px-lg py-md bg-primary text-white rounded-xl font-label-md text-label-md active:scale-95 transition-transform">
+                                أكمل القراءة
+                            </button>
+</div>
+</div>
+<!-- Side Stats / Quick Actions -->
+<div class="lg:col-span-4 grid grid-cols-1 gap-lg">
+<div class="bg-primary p-lg rounded-xl text-white shadow-xl flex flex-col justify-between">
+<div class="flex justify-between items-start flex-row-reverse">
+<span class="material-symbols-outlined text-4xl opacity-50" data-icon="auto_awesome">auto_awesome</span>
+<div>
+<p class="font-label-md text-label-md opacity-80">إنجاز اليوم</p>
+<h4 class="text-3xl font-bold">45 صفحة</h4>
+</div>
+</div>
+<p class="font-label-sm text-label-sm opacity-70 mt-md">أنت الآن في المركز الخامس بين طلاب العلم هذا الأسبوع</p>
+</div>
+<div class="bg-surface-container-high p-lg rounded-xl flex items-center justify-between flex-row-reverse">
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-primary">ورد اليوم</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">سورة الكهف</p>
+</div>
+<button class="w-12 h-12 rounded-full bg-white text-primary flex items-center justify-center shadow-sm hover:shadow-md transition-shadow">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Book Grid Section -->
+<section>
+<div class="flex items-center justify-between mb-lg flex-row-reverse">
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold">المكتبة المقترحة</h2>
+<div class="flex gap-sm">
+<button class="px-md py-xs bg-secondary-container text-secondary rounded-full font-label-sm text-label-sm">الكل</button>
+<button class="px-md py-xs hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm transition-colors">الأكثر قراءة</button>
+<button class="px-md py-xs hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm transition-colors">وصل حديثاً</button>
+</div>
+</div>
+<!-- Grid -->
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-xl">
+<!-- Book Card 1 -->
+<div class="group cursor-pointer">
+<div class="aspect-[3/4] bg-surface-container-low rounded-xl overflow-hidden shadow-sm group-hover:shadow-xl transition-all duration-300 mb-md relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Minimalist book cover for 'Riyad as-Salihin' by Imam al-Nawawi. The design features soft ivory background with a central emerald green emblem of Islamic geometry. The titles are in clean modern Arabic font. High-end, soft lighting, serene mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAs7OCc05N_wmHZxxfIReud-Wre_6nkbJ96QZcqyLerLH9x_-faFxYA4Jq9CTdsqKZhMcxwoeu78c4iay7HoIz85qFHcBcrIhFknvyGD4DeA6s-VQVhxJKE0vFMzDXIa6i947YinUY19fOEjjetYvl3Yy4IdJr8i3jHcrWufGtHs-FZQFseLei3nEPuZ48IyRJWWqL68lF4_FRb-jl-AGoI6C89WWF2nFTiQvWQcGqJlnsyea3jxvLO"/>
+<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all text-4xl" data-icon="menu_book">menu_book</span>
+</div>
+</div>
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">رياض الصالحين</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">الإمام النووي</p>
+</div>
+</div>
+<!-- Book Card 2 -->
+<div class="group cursor-pointer">
+<div class="aspect-[3/4] bg-surface-container-low rounded-xl overflow-hidden shadow-sm group-hover:shadow-xl transition-all duration-300 mb-md relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Cover of the book 'The Sealed Nectar' (Ar-Raheeq Al-Makhtum). Modern graphic design with a desert horizon silhouette under a deep green sky. Minimalist Arabic typography. Cinematic, reverent atmosphere, high-quality production style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrU_MYkpk-XM24REU51WywglxHVpEznUFJ-nIDlQI3ns2be-dbe88G2xa5gtqs5TeLsqkyKteFJ6YvlQU1CmiZIZXzDe4wyqTtDxTRywIQx0QILyxu4f2L4zYCrUG3EtYmP5I-veL0B9moP-S67XB_Z1wrT4Sz-mmnLRqnzk5gEUX6QGbxx5V4QxnpnXi5k5QzZF6zpMV11WZRTj262SZK_mu3agBCQwwsDewgMILWkMjidA2aJVIE"/>
+<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all text-4xl" data-icon="menu_book">menu_book</span>
+</div>
+</div>
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">الرحيق المختوم</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">صفي الرحمن المباركفوري</p>
+</div>
+</div>
+<!-- Book Card 3 -->
+<div class="group cursor-pointer">
+<div class="aspect-[3/4] bg-surface-container-low rounded-xl overflow-hidden shadow-sm group-hover:shadow-xl transition-all duration-300 mb-md relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Book cover for 'The Muwatta' of Imam Malik. Elegant, classical design with gold leaf details on a deep forest green background. Traditional yet refined and modern. Soft atmospheric lighting, studio shot style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAewKRIb3EUzUVq0oaPSwszUPObOfdKbJsS95jcs_sO1eszKnakEjGwR_VIgvKO3j9aTltDbY8epXKpldhuAOlJbULhmFbFdgrLvbSOGBSZ197usGhd2Icnt2E64rX1lX8HgsGIXi362bt5SGpFQVeMFptHfPuKl8cKVqjpUC9_BGp2Y0gc6liltIcFwgwchMVTCrClDeexd57O1jMBxPec027VHcbUMv1JmGSIlxX81ZtsuINBB76Q"/>
+<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all text-4xl" data-icon="menu_book">menu_book</span>
+</div>
+</div>
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">الموطأ</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">الإمام مالك بن أنس</p>
+</div>
+</div>
+<!-- Book Card 4 -->
+<div class="group cursor-pointer">
+<div class="aspect-[3/4] bg-surface-container-low rounded-xl overflow-hidden shadow-sm group-hover:shadow-xl transition-all duration-300 mb-md relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Modern book cover design for an Islamic Fiqh book. Minimalist architecture inspired patterns. Sage green and clay color palette. Clean white typography in Arabic. Scholarly and contemporary aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBRaBnJo9l_YCfiyXEk90RP4Zq5H1zRN1n-L7jUNExuEzlf88VJb99L_GHpaywK_C5TgY7DqVNDgOJpmpEJdf8XiOHKmSFR9mmrZCsM2yUmj254_tSI2qG5Cm-lzhwxYcJdhi26Px88FVrMUnXOLtZ0-U_4oB1Jc7i8oBMb6idG87jPaW4uaMTeTv8g53NPhCQxbPvilAIBQ55DTq9_Ic6vUQpCSkVenRGWxcm7O9NYES0j8UWTjnd"/>
+<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all text-4xl" data-icon="menu_book">menu_book</span>
+</div>
+</div>
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">منهاج المسلم</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">أبو بكر الجزائري</p>
+</div>
+</div>
+<!-- Book Card 5 -->
+<div class="group cursor-pointer">
+<div class="aspect-[3/4] bg-surface-container-low rounded-xl overflow-hidden shadow-sm group-hover:shadow-xl transition-all duration-300 mb-md relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Modern spiritualist cover for an Arabic Tafsir book. Ethereal, light-filled composition with subtle rays of light hitting a textured paper surface. Emerald accents. Professional book photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwGw6nI1Wnyyac7d2AQmVL-kFjZre-y95fNPNUUrepCfxFXn0OqntdqsHFufRgqPmQZ41P9cj4teYYJRjK6PuTTgGlry8KhtatxShFUvB8pVD_IMby8R9fJ4LwDmAB-CzOO1okimRFRo5XcgruiKNLLnMNiyFplShWiIlBARNk_MWFZxgzXLoBhbdT7YUGGoZkkLKu79kMPwUBVLpsSXD-yi9KDAsz63RWQQuPm4b2xYF0e2__XSWP"/>
+<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all text-4xl" data-icon="menu_book">menu_book</span>
+</div>
+</div>
+<div class="text-right">
+<h4 class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">تيسير الكريم الرحمن</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">عبد الرحمن السعدي</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- FAB for Quick Actions (Mobile only) -->
+<button class="md:hidden fixed bottom-8 left-8 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center z-50 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<!-- Bottom Nav for Mobile -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-surface border-t border-outline-variant flex justify-around items-center py-sm z-50">
+<a class="flex flex-col items-center gap-xs text-primary" href="#">
+<span class="material-symbols-outlined" data-icon="library_books">library_books</span>
+<span class="text-[10px] font-bold">المكتبة</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="text-[10px]">القرآن</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="text-[10px]">الحديث</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-[10px]">حسابي</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions and UI logic
+        document.addEventListener('DOMContentLoaded', () => {
+            // Scroll shadow effect for header
+            const header = document.querySelector('header');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 20) {
+                    header.classList.add('shadow-md', 'bg-surface/95');
+                } else {
+                    header.classList.remove('shadow-md', 'bg-surface/95');
+                }
+            });
+
+            // Hover state for cards
+            const cards = document.querySelectorAll('.group');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.classList.add('scale-[1.02]');
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.classList.remove('scale-[1.02]');
+                });
+            });
+        });
+    </script>
+</body></html>

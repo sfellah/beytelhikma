@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>قارئ الكتاب الإسلامي - تجربة القراءة</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&amp;family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@100..900&amp;family=IBM+Plex+Sans+Arabic:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .reading-canvas {
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .sepia-mode {
+            background-color: #f4ecd8 !important;
+            color: #433422 !important;
+        }
+        .overlay-visible {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
+            pointer-events: auto !important;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Custom progress bar transition */
+        .tasbih-progress {
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#444542",
+                        "secondary-container": "#f4dfcb",
+                        "surface-dim": "#dcd9dd",
+                        "surface-container": "#f0edf1",
+                        "on-primary-container": "#80bea6",
+                        "on-primary-fixed": "#002117",
+                        "surface-container-highest": "#e4e1e5",
+                        "outline": "#707974",
+                        "secondary-fixed": "#f4dfcb",
+                        "surface": "#fbf8fc",
+                        "surface-variant": "#e4e1e5",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#716252",
+                        "on-primary-fixed-variant": "#0b513d",
+                        "background": "#fbf8fc",
+                        "on-secondary-fixed": "#241a0e",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#2d2f2c",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed": "#1b1c19",
+                        "outline-variant": "#bfc9c3",
+                        "on-surface": "#1b1b1e",
+                        "on-tertiary-container": "#b2b2ae",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#eae7eb",
+                        "on-surface-variant": "#404944",
+                        "secondary-fixed-dim": "#d7c3b0",
+                        "error": "#ba1a1a",
+                        "error-container": "#ffdad6",
+                        "primary-fixed": "#b0f0d6",
+                        "tertiary-fixed-dim": "#c7c7c2",
+                        "on-tertiary-fixed-variant": "#464744",
+                        "on-secondary-fixed-variant": "#524436",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#6b5c4c",
+                        "surface-tint": "#2b6954",
+                        "inverse-primary": "#95d3ba",
+                        "surface-bright": "#fbf8fc",
+                        "primary": "#003527",
+                        "primary-fixed-dim": "#95d3ba",
+                        "inverse-surface": "#303033",
+                        "tertiary-fixed": "#e3e3de",
+                        "primary-container": "#064e3b",
+                        "inverse-on-surface": "#f3f0f4",
+                        "surface-container-low": "#f5f3f6",
+                        "on-background": "#1b1b1e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "gutter": "20px",
+                        "md": "16px",
+                        "xl": "40px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "container-max": "1200px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["IBM Plex Sans Arabic"],
+                        "label-md": ["IBM Plex Sans Arabic"],
+                        "label-sm": ["IBM Plex Sans Arabic"],
+                        "body-md": ["Amiri"],
+                        "headline-lg": ["IBM Plex Sans Arabic"],
+                        "body-lg": ["Amiri"],
+                        "headline-md": ["IBM Plex Sans Arabic"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", {"lineHeight": "34px", "fontWeight": "600"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "body-md": ["18px", {"lineHeight": "32px", "fontWeight": "400"}],
+                        "headline-lg": ["30px", {"lineHeight": "42px", "fontWeight": "600"}],
+                        "body-lg": ["20px", {"lineHeight": "36px", "fontWeight": "400"}],
+                        "headline-md": ["22px", {"lineHeight": "32px", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md overflow-hidden h-screen selection:bg-primary/20">
+<!-- Interactive Reader Canvas -->
+<main class="reading-canvas w-full h-full flex justify-center overflow-y-auto hide-scrollbar cursor-text bg-surface relative" id="reader-canvas" onclick="toggleOverlays(event)">
+<!-- Text Container (RTL Layout) -->
+<article class="w-full max-w-[750px] px-gutter py-xl md:py-32 flex flex-col items-center">
+<!-- Book Metadata Header (Optional in-page) -->
+<div class="mb-12 text-center opacity-40">
+<p class="font-headline-md text-headline-md mb-2">كتاب التوحيد</p>
+<div class="h-px w-24 bg-current mx-auto opacity-20"></div>
+</div>
+<!-- Chapter Heading -->
+<h2 class="font-headline-lg text-headline-lg mb-12 text-primary dark:text-primary-fixed text-center leading-relaxed">بَابُ مَا جَاءَ فِي التَّطَيُّرِ</h2>
+<!-- Main Content Area -->
+<div class="text-justify font-body-lg text-body-lg leading-[2.2] space-y-8" id="book-content">
+<p>
+                    وَقَوْلِ اللَّهِ تَعَالَى: {أَلَا إِنَّمَا طَائِرُهُمْ عِنْدَ اللَّهِ وَلَكِنَّ أَكْثَرَهُمْ لَا يَعْلَمُونَ} [الأعراف: 131]. وَقَوْلِهِ: {قَالُوا طَائِرُكُمْ مَعَكُمْ} الآيَةَ [يس: 19].
+                </p>
+<p>
+                    عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ، أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «لَا عَدْوَى، وَلَا طِيَرَةَ، وَلَا هَامَةَ، وَلَا صَفَرَ» أَخْرَجَاهُ. وَزَادَ مُسْلِمٌ: «وَلَا نَوْءَ، وَلَا غُولَ».
+                </p>
+<p>
+                    وَلَهُمَا عَنْ أَنَسٍ قَالَ: قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «لَا عَدْوَى، وَلَا طِيَرَةَ، وَيُعْجِبُنِي الْفَأْلُ». قَالُوا: وَمَا الْفَأْلُ؟ قَالَ: «الْكَلِمَةُ الطَّيِّبَةُ».
+                </p>
+<p>
+                    وَلِأَبِي دَاوُدَ بِسَنَدٍ صَحِيحٍ عَنْ عُقْبَةَ بْنِ عَامِرٍ قَالَ: ذُكِرَتِ الطِّيَرَةُ عِنْدَ رَسُولِ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ، فَقَالَ: «أَحْسَنُهَا الْفَأْلُ، وَلَا تَرُدُّ مُسْلِمًا، فَإِذَا رَأَى أَحَدُكُمْ مَا يَكْرَهُ، فَلْيَقُلْ: اللَّهُمَّ لَا يَأْتِي بِالْحَسَنَاتِ إِلَّا أَنْتَ، وَلَا يَدْفَعُ السَّيِّئَاتِ إِلَّا أَنْتَ، وَلَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِكَ».
+                </p>
+<p>
+                    وَعَنِ ابْنِ مَسْعُودٍ مَرْفُوعًا: «الطِّيَرَةُ شِرْكٌ، الطِّيَرَةُ شِرْكٌ، وَمَا مِنَّا إِلَّا، وَلَكِنَّ اللَّهَ يُذْهِبُهُ بِالتَّوَكُّلِ» رَوَاهُ أَبُو دَاوُدَ وَالتِّرْمِذِيُّ وَصَحَّحَهُ، وَجَعَلَ آخِرَهُ مِنْ قَوْلِ ابْنِ مَسْعُودٍ.
+                </p>
+<p>
+                    وَلِأَحْمَدَ مِنْ حَدِيثِ ابْنِ عَمْرٍو: «مَنْ رَدَّتْهُ الطِّيَرَةُ عَنْ حَاجَتِهِ فَقَدْ أَشْرَكَ». قَالُوا: فَمَا كَفَّارَةُ ذَلِكَ؟ قَالَ: «أَنْ تَقُولَ: اللَّهُمَّ لَا خَيْرَ إِلَّا خَيْرُكَ، وَلَا طَيْرَ إِلَّا طَيْرُكَ، وَلَا إِلَهَ غَيْرُكَ».
+                </p>
+<p>
+                    وَلَهُ مِنْ حَدِيثِ الْفَضْلِ بْنِ عَبَّاسٍ: «إِنَّمَا الطِّيَرَةُ مَا أَمْضَاكَ أَوْ رَدَّكَ».
+                </p>
+</div>
+<!-- Page Footer (Minimalist) -->
+<div class="mt-24 pt-8 border-t border-outline-variant w-full text-center opacity-30 text-label-sm">
+                صفحة ١٤ من ١٥٦
+            </div>
+</article>
+<div class="absolute top-[20%] left-[60%] z-40 bg-surface border border-outline-variant rounded-xl shadow-xl w-64 overflow-hidden flex flex-col"><button class="flex items-center gap-3 px-4 py-3 hover:bg-secondary-container/30 text-right w-full border-b border-outline-variant/30"><span class="material-symbols-outlined text-on-surface-variant">note_add</span><span class="text-label-md">إضافة ملاحظة</span></button><button class="flex items-center gap-3 px-4 py-3 hover:bg-secondary-container/30 text-right w-full border-b border-outline-variant/30"><span class="material-symbols-outlined text-on-surface-variant">content_copy</span><span class="text-label-md">نسخ</span></button><button class="flex items-center gap-3 px-4 py-3 hover:bg-secondary-container/30 text-right w-full border-b border-outline-variant/30"><span class="material-symbols-outlined text-on-surface-variant">translate</span><span class="text-label-md">ترجمة</span></button><button class="flex items-center gap-3 px-4 py-3 hover:bg-secondary-container/30 text-right w-full border-b border-outline-variant/30"><span class="material-symbols-outlined text-on-surface-variant">search</span><span class="text-label-md">بحث في الكتاب</span></button><div class="flex justify-around p-3 bg-surface-container-low"><div class="w-6 h-6 rounded-full bg-yellow-400 cursor-pointer border-2 border-transparent hover:border-primary"></div><div class="w-6 h-6 rounded-full bg-red-500 cursor-pointer border-2 border-transparent hover:border-primary"></div><div class="w-6 h-6 rounded-full bg-green-500 cursor-pointer border-2 border-transparent hover:border-primary"></div><div class="w-6 h-6 rounded-full bg-blue-500 cursor-pointer border-2 border-transparent hover:border-primary"></div></div></div></main>
+<!-- TOP OVERLAY: TopAppBar -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-surface/90 backdrop-blur-md border-b border-outline-variant opacity-100 transition-all duration-300" id="top-nav"><div class="flex flex-row justify-between items-center w-full px-4 h-14 max-w-container-max mx-auto"><div class="flex items-center gap-1"><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">more_vert</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">help</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">bookmark</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">menu_book</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">format_size</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">search</span></button><button class="p-2 rounded-full hover:bg-secondary-container/50"><span class="material-symbols-outlined text-on-surface-variant">fullscreen</span></button></div><div class="flex items-center gap-4"><h1 class="font-headline-md text-label-md font-bold text-primary">كتاب التوحيد</h1><button class="p-2 rounded-full hover:bg-secondary-container/50" onclick="window.history.back()"><span class="material-symbols-outlined text-on-surface-variant">close</span></button></div></div></header>
+<!-- BOTTOM OVERLAY: Toolbar & Progress -->
+<footer class="fixed bottom-0 left-0 right-0 z-50 bg-surface/90 backdrop-blur-md border-t border-outline-variant opacity-100 transition-all duration-300 pb-safe" id="bottom-nav"><div class="max-w-container-max mx-auto px-4 h-14 flex items-center justify-between"><div class="flex items-center gap-4 text-label-sm text-on-surface-variant"><button class="p-2 hover:text-primary"><span class="material-symbols-outlined">chevron_left</span></button><span class="font-label-md">٤٣ / ٤٦٤</span><button class="p-2 hover:text-primary"><span class="material-symbols-outlined">chevron_right</span></button></div><div class="flex-1 mx-8 flex items-center gap-4"><div class="flex-1 h-1 bg-secondary-container/30 rounded-full relative"><div class="absolute right-0 top-0 h-full bg-primary rounded-full" style="width: 25%;"></div><div class="absolute right-[25%] top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full shadow-md"></div></div></div></div></footer>
+<!-- Reading Mode Floating Label (Distraction Free) -->
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-on-surface/5 text-on-surface/40 rounded-full text-label-sm pointer-events-none transition-opacity duration-700 opacity-100" id="reading-mode-hint">
+        انقر في المنتصف لإظهار الأدوات
+    </div>
+<script>
+        let overlaysVisible = false;
+        let currentFontSize = 20;
+
+        function toggleOverlays(e) {
+            // Prevent toggling when clicking specific interactive text (if any highlighting exists)
+            const topNav = document.getElementById('top-nav');
+            const bottomNav = document.getElementById('bottom-nav');
+            const hint = document.getElementById('reading-mode-hint');
+
+            overlaysVisible = !overlaysVisible;
+
+            if (overlaysVisible) {
+                topNav.classList.add('overlay-visible');
+                bottomNav.classList.add('overlay-visible');
+                hint.classList.add('opacity-0');
+            } else {
+                topNav.classList.remove('overlay-visible');
+                bottomNav.classList.remove('overlay-visible');
+                hint.classList.remove('opacity-0');
+            }
+        }
+
+        function setTheme(theme) {
+            const body = document.body;
+            const canvas = document.getElementById('reader-canvas');
+            const btns = document.querySelectorAll('[id^="theme-"]');
+            
+            // Clear themes
+            body.classList.remove('dark');
+            canvas.classList.remove('sepia-mode');
+            btns.forEach(b => {
+                b.classList.remove('bg-primary', 'text-on-primary');
+                b.classList.add('hover:bg-secondary-container');
+            });
+
+            const activeBtn = document.getElementById('theme-' + theme);
+            activeBtn.classList.add('bg-primary', 'text-on-primary');
+            activeBtn.classList.remove('hover:bg-secondary-container');
+
+            if (theme === 'dark') {
+                body.classList.add('dark');
+            } else if (theme === 'sepia') {
+                canvas.classList.add('sepia-mode');
+            }
+        }
+
+        function changeFontSize(delta) {
+            currentFontSize = Math.min(Math.max(currentFontSize + delta * 2, 16), 36);
+            document.getElementById('book-content').style.fontSize = currentFontSize + 'px';
+            document.getElementById('book-content').style.lineHeight = (currentFontSize * 1.8) + 'px';
+        }
+
+        // Simple Reading Progress Listener
+        const reader = document.getElementById('reader-canvas');
+        const progress = document.getElementById('progress-indicator');
+        
+        reader.addEventListener('scroll', () => {
+            const scrollPercent = (reader.scrollTop / (reader.scrollHeight - reader.clientHeight)) * 100;
+            progress.style.width = scrollPercent + '%';
+        });
+
+        // Swipe Simulation (RTL logic)
+        let touchstartX = 0;
+        let touchendX = 0;
+
+        function checkDirection() {
+            if (touchendX < touchstartX - 50) {
+                // Swiped Left (Next page in RTL context usually)
+                console.log('Next Page');
+            }
+            if (touchendX > touchstartX + 50) {
+                // Swiped Right (Previous page)
+                console.log('Previous Page');
+            }
+        }
+
+        reader.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        });
+
+        reader.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            checkDirection();
+        });
+
+        // Initialize hint fade out
+        setTimeout(() => {
+            document.getElementById('reading-mode-hint').classList.add('opacity-0');
+        }, 4000);
+    </script>
+</body></html>
