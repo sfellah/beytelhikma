@@ -27,6 +27,15 @@ python tools/import_shamela.py --all --jobs 8     # les 8 589 livres (~60 Go)
 python tools/import_shamela.py --dry-run          # afficher la sélection
 cd tools && python -m unittest discover -s shamela/tests -t .   # tests de l'importeur
 
+# chaîne bibliothèque : importe, publie, vérifie, nettoie (depuis la racine)
+python tools/release_library.py --dry-run     # dit ce qui serait publié
+python tools/release_library.py               # tout, dans l'ordre
+python tools/release_library.py --skip-import # republier sans réimporter
+
+# chaîne application (depuis beytelhikma-electron/)
+npm run seed          # récupère la graine de catalogue depuis le bucket
+npm run release:win   # tests + graine + installeur NSIS et portable
+
 # publication des livres vers S3 — MinIO ou AWS (depuis la racine)
 export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…          # ou AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 python tools/publish_minio.py --bucket beytelhikma --set-anonymous-policy   # une seule fois
@@ -121,6 +130,10 @@ Deux conséquences de forme :
 - `getLibrary` filtre les lignes de `downloaded_books` qui ne sont plus au catalogue. `saveProgress` accepte n'importe quel `edition_id` et pose une ligne « installée » : sans ce filtre, le total promettrait des pages que la jointure ne saurait pas remplir.
 - Le tri par titre ne peut pas se faire en SQL : le titre vit dans `catalog.sqlite`, l'installation dans `user.sqlite`, deux instances sql.js qu'aucun `ORDER BY` ne traverse. L'ordre est donc lu une fois côté catalogue (`#titleOrder`, gardé pour la session) et l'on y pioche ce qui est installé — un `IN (?,?,…)` de plusieurs milliers de paramètres, SQLite le refuserait.
 
+**L'accueil échantillonne, et le dit.** `getTopCategories` rend six disciplines sur les quarante peuplées, avec le vrai `total` : c'est lui qu'annonce le lien de repli, jamais `rows.length`. Sa teinte vient de `coverFamily()` puis de `COVER_FAMILIES` — la bulle d'une discipline porte la couleur des couvertures de cette discipline, et il n'existe pas de seconde palette à tenir à jour.
+
+La frise des siècles comble son axe côté vue (`getEras` ne rend que les siècles peuplés ; un siècle vide doit se voir comme vide, pas disparaître) et met les barres en **racine** du rapport au maximum — en rapport brut, un siècle à un livre tombait sous son plancher de pixels et cessait de porter une valeur. Elle se termine par `غير مؤرّخ`, portée `undated` de `BOOK_SCOPES` : 29 % des éditions n'ont aucun auteur daté, et une section qui se donne pour une vue d'ensemble ne peut pas les taire. Voir `docs/superpowers/specs/2026-07-31-accueil-disciplines-et-siecles-design.md`.
+
 Les listes longues sans pagination possible (sommaire d'un livre) se **fenêtrent** côté vue : `TOC_WINDOW` entrées montées, le reste à la demande, plus un champ qui filtre sur le titre normalisé. Le lecteur garde le sommaire entier en mémoire — il lui sert à nommer le chapitre de chaque page — mais n'en dessine qu'une tranche.
 
 **Les méthodes exposées au rendu vivent dans deux listes** — `METHODS` de `src/preload/preload.cjs` et `REPOSITORY_METHODS` de `book-repository.js`. Une méthode ajoutée d'un seul côté ne casse rien au démarrage : elle échoue au premier clic. `test/repository.test.js` porte le test de parité.
@@ -143,6 +156,26 @@ Les tables vivent dans `src/shared/book-cover.js` et `lib/utils/book_cover.dart`
 La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
 
 **Le jeu publié actuellement** : 397 éditions (10 livres par catégorie), 182 805 pages, sur `beytelhima-library` en `eu-west-1`. Le catalogue est en `catalog_version` 1, `schema_version` 2.
+
+## Deux chaînes de build
+
+Elles ont deux cadences, deux artefacts, et un seul point de couplage. Voir `docs/superpowers/specs/2026-07-31-chaines-de-build-design.md`.
+
+**Bibliothèque** — `tools/release_library.py`, en local : le corpus source fait ~60 Go sur la machine, aucune CI ne l'aura. Importe, publie, vérifie, nettoie, dans cet ordre.
+
+**La `catalog_version` ne se donne pas à la main.** Elle se déduit de ce qui est en ligne : le pointeur dit la version publiée et son empreinte ; même empreinte, rien n'est republié. `version_suivante()` est une fonction pure, testée sans réseau. Une version qui s'incrémenterait à chaque exécution ferait retélécharger la graine à tous les clients pour un catalogue identique.
+
+**La vérification anonyme est dans la chaîne, pas à côté.** Elle relit le pointeur et un livre *sans identifiants*. Une publication qui réussit derrière des clés et échoue sans elles est un échec qui ne se voit qu'en production.
+
+**Application** — `npm run release:win` : tests, puis `scripts/fetch-seed.mjs`, puis `electron-builder`. Rien ne s'empaquette sur une suite rouge.
+
+La graine (`assets/catalog.sqlite.zst`) est **téléchargée depuis le bucket au moment du build**, jamais copiée de `dist/` : elle est donc par construction celle qui est en ligne, et un installeur ne peut pas promettre des livres que le bucket n'a pas. C'est un artefact, pas une source — ignorée par git, sinon plusieurs Mo de binaire entreraient dans l'historique à chaque publication. `assets/catalog-seed.json` dit ce qui a été embarqué et rend l'étape idempotente.
+
+`fetch-seed` s'arrête sans rien écrire si la source est injoignable ou si le `schema_version` du pointeur dépasse `SUPPORTED_SCHEMA_VERSION`. **Pas de repli sur une graine périmée** : un installeur silencieusement obsolète est pire qu'un build raté, parce que l'erreur se découvre alors chez l'utilisateur.
+
+**Au premier lancement**, `AppDatabase.#plantSeed` décompresse la graine — **seulement si `catalog.sqlite` est absent**. Une mise à jour d'application embarque une graine plus ancienne que le catalogue déjà téléchargé ; l'écraser ferait régresser le catalogue de l'utilisateur à chaque nouvelle version. Dans une application empaquetée, `librarySource` est nul : **aucun livre ne peut venir d'ailleurs que du bucket**, et `asset://` / `local://` ne s'y rencontrent jamais.
+
+`beytelhikma-electron/build/` est le `buildResources` d'electron-builder, pas un dossier de sortie : il porte `icon.ico`, dérivé de `app-icon.png` par `tools/gen_brand_assets.py`. Il n'est donc pas ignorable en bloc — git ne réinclut rien sous un dossier exclu. Ce qui est artefact y est nommé un par un (`build/screenshots/`), et les artefacts d'empaquetage sortent dans `release/`.
 
 Reste à faire : alignement du client Flutter sur le téléchargement, l'exploration, les annotations et la source de distribution — le miroir Dart de `src/shared/distribution.js` n'existe pas encore. Et le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) : le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement copie toujours le catalogue depuis le dossier source local.
 
