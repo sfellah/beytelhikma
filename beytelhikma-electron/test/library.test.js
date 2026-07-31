@@ -104,7 +104,11 @@ test('user.sqlite porte user_version, sinon sqflite refuse de l\'ouvrir', async 
   }
 });
 
-test('changer de bibliothèque purge le cache et conserve les données utilisateur', async () => {
+test('changer de bibliothèque jette le catalogue et garde les livres', async () => {
+  // Le catalogue appartient à la source : il part avec elle. Les livres, non —
+  // ils ont été téléchargés, parfois annotés. Purger `books/` était tenable
+  // quand la source était un dossier qu'on changeait à la main ; avec un
+  // catalogue qui se met à jour tout seul, ce serait tout retélécharger.
   const root = tempRoot();
   const otherLibrary = cloneLibrary(path.join(tempRoot(), 'autre'));
 
@@ -120,7 +124,7 @@ test('changer de bibliothèque purge le cache et conserve les données utilisate
 
     database = new AppDatabase({ librarySource: otherLibrary, storageRoot: root });
     await database.initialize();
-    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'copies jetées');
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 1, 'les livres restent');
     assert.ok(!fs.existsSync(path.join(root, 'catalog.sqlite')), 'catalogue jeté');
     assert.ok(fs.existsSync(path.join(root, 'user.sqlite')), 'progression conservée');
 
@@ -202,6 +206,42 @@ test('un catalogue republié de même taille est tout de même recopié', async 
 
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(path.dirname(source), { recursive: true, force: true });
+});
+
+test('une réédition est signalée, jamais appliquée', async () => {
+  // Les ancres de surlignage sont posées sur le texte rendu : une réédition
+  // peut les déplacer. Ce doit être un choix de l'utilisateur, jamais un effet
+  // de bord d'une mise à jour de catalogue.
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    const repository = new BookRepository(database);
+    repository.createDownloadQueue();
+    const [book] = await install(repository, 1);
+
+    const avant = await repository.getLibrary({ limit: 10 });
+    assert.equal(avant.rows[0].hasNewerRelease, false, 'rien à signaler tant que rien ne bouge');
+
+    // La release installée devient périmée : le catalogue en annonce une autre.
+    await database.writeUser((user) => {
+      user.run('UPDATE downloaded_books SET release_id = ? WHERE edition_id = ?', [
+        'rel-perimee-v0',
+        book.editionId,
+      ]);
+    });
+
+    const après = await repository.getLibrary({ limit: 10 });
+    const ligne = après.rows.find((row) => row.book.editionId === book.editionId);
+    assert.equal(ligne.hasNewerRelease, true);
+    assert.ok(
+      fs.existsSync(path.join(root, 'books', `${book.editionId}.sqlite`)),
+      'aucun fichier ne doit être supprimé',
+    );
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('un livre non installé ne se matérialise plus tout seul', async () => {

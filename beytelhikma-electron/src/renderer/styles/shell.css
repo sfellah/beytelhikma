@@ -66,17 +66,6 @@
   gap: var(--space-xs);
 }
 
-/* Les réglages ferment le rail. Le filet les sépare de la navigation plutôt
-   qu'un simple écart : sans trait, l'entrée flotte au bas de la colonne sans
-   qu'on sache si elle appartient encore à la liste. */
-.rail__footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--outline-variant);
-}
-
 /* Élément actif : filet émeraude sur le bord *droit* du menu, comme le
    prescrit `DESIGN.md` — en RTL c'est le bord de début de ligne. Le filet est
    dessiné par un pseudo-élément et non par la bordure : une bordure ne peut
@@ -252,10 +241,10 @@
   color: var(--on-surface-variant);
 }
 
-/* Porte de secours vers les réglages : masquée dès que le rail paraît (voir la
-   requête média en fin de fichier), où les réglages ont leur place au pied de
-   la colonne. Elle ne sert qu'en fenêtre étroite, où il n'y a ni rail ni place
-   dans la barre du bas. */
+/* Seul chemin vers les réglages, et le même à toutes les largeurs : la
+   navigation ne les liste plus. Elle liste ce qu'on lit — régler n'est pas une
+   destination de lecture, et une entrée qui change de place selon la fenêtre ne
+   se retrouve pas. */
 .topbar__icon-button {
   display: flex;
   padding: 10px;

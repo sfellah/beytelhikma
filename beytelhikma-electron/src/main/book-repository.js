@@ -1194,14 +1194,21 @@ export class BookRepository {
       const order = await this.#titleOrder();
       // Une ligne de `downloaded_books` peut désigner une édition que le
       // catalogue courant ne connaît plus. Elle ne compte pas : sinon le total
-      // annoncerait des pages que la jointure ne saurait pas remplir.
+      // annoncerait des pages que la jointure ne saurait pas remplir — sans
+      // titre ni auteur, il n'y a rien à dessiner.
+      //
+      // Son fichier reste sur le disque : une mise à jour de catalogue ne
+      // supprime jamais un livre. On dit seulement combien il y en a, plutôt
+      // que de les faire disparaître en silence.
       const known = new Set(order);
-      const installed = all(
+      const toutes = all(
         user,
         `SELECT * FROM downloaded_books
          WHERE download_status = 'installed'
          ORDER BY last_opened_at DESC, downloaded_at DESC`,
-      ).filter((row) => known.has(row.edition_id));
+      );
+      const installed = toutes.filter((row) => known.has(row.edition_id));
+      const orphans = toutes.length - installed.length;
 
       const counts = {
         all: installed.length,
@@ -1218,7 +1225,7 @@ export class BookRepository {
       const rows = selected.length
         ? await this.#joinWithCatalog(selected.slice(offset, offset + limit))
         : [];
-      return { rows, total: selected.length, counts };
+      return { rows, total: selected.length, counts, orphans };
     });
   }
 
@@ -1249,16 +1256,32 @@ export class BookRepository {
       ).map((row) => [row.edition_id, bookSummary(row)]),
     );
 
+    // La release active du catalogue, pour la comparer à celle installée. Une
+    // mise à jour de catalogue peut avoir promu une nouvelle édition d'un livre
+    // déjà là : on le **signale**, on ne le remplace jamais de force.
+    const activeById = new Map(
+      all(
+        catalog,
+        `SELECT edition_id, release_id FROM book_releases
+         WHERE is_active = 1 AND edition_id IN (${placeholders})`,
+        ids,
+      ).map((row) => [row.edition_id, row.release_id]),
+    );
+
     const entries = [];
     for (const row of installedRows) {
       const book = booksById.get(row.edition_id);
       if (!book) continue;
+      const active = activeById.get(row.edition_id) ?? null;
       entries.push({
         book,
         status: row.download_status ?? 'installed',
         progress: progress(row),
         lastOpenedAt: row.last_opened_at ?? null,
         percent: row.progress_percent ?? 0,
+        // Faux quand l'une des deux valeurs manque : ne rien savoir n'est pas
+        // une raison de proposer un retéléchargement.
+        hasNewerRelease: Boolean(row.release_id && active && row.release_id !== active),
       });
     }
     return entries;

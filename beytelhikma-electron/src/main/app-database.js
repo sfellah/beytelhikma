@@ -219,8 +219,18 @@ export class AppDatabase {
     }
 
     if (previous?.source !== current.source) {
+      // Le catalogue part : il appartient à l'ancienne source. Les livres, non.
+      //
+      // Cette méthode purgeait aussi `books/`. C'était correct quand la source
+      // était un dossier de développement qu'on changeait à la main. Avec un
+      // catalogue qui se met à jour tout seul depuis le bucket, ce serait
+      // retélécharger la bibliothèque entière à chaque rafraîchissement.
+      //
+      // La réconciliation se fait désormais par édition, à la lecture, en
+      // comparant `downloaded_books.release_id` au `release_id` actif
+      // (`BookRepository.#joinWithCatalog`). Aucun fichier de livre n'est
+      // supprimé ici. Jamais.
       fs.rmSync(path.join(this.#root, 'catalog.sqlite'), { force: true });
-      fs.rmSync(path.join(this.#root, 'books'), { recursive: true, force: true });
       fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
       fs.writeFileSync(
         marker,
