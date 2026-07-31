@@ -187,22 +187,27 @@ function storageSection(usage, refresh) {
 }
 
 /**
- * `minio.base_url` remplace l'origine des `download_url` du catalogue. Le
- * réglage s'applique immédiatement à la file, sans redémarrage.
+ * `distribution.base_url` préfixe les clés du catalogue.
+ *
+ * Le catalogue ne porte plus d'hôte : changer cette seule valeur suffit à
+ * servir la même bibliothèque depuis un autre bucket, sans rien retélécharger
+ * de ce qui est déjà installé. Le réglage s'applique à la file sans redémarrage.
  */
 function serverSection(prefs, refresh) {
   const field = h('input', {
     type: 'url',
     class: 'settings__field',
-    value: prefs['minio.base_url'] ?? '',
-    placeholder: 'http://127.0.0.1:9000/beytelhikma',
+    value: prefs['distribution.base_url'] ?? '',
+    placeholder: 'https://beytelhima-library.s3.eu-west-1.amazonaws.com',
   });
 
+  const état = h('span', { class: 'label-sm muted' }, 'لم يُتحقَّق بعد');
+
   return group(
-    'الخادم',
-    'اتركه فارغًا لاتّباع الروابط المسجّلة في الفهرس.',
+    'مصدر التنزيل',
+    'اتركه فارغًا لاستخدام المصدر الافتراضي.',
     row(
-      'عنوان الخادم',
+      'عنوان المصدر',
       h(
         'div',
         { class: 'settings__inline' },
@@ -213,7 +218,7 @@ function serverSection(prefs, refresh) {
             class: 'button button--filled',
             onclick: async () => {
               await repository.setDownloadBaseUrl(field.value);
-              toast('حُفظ عنوان الخادم');
+              toast('حُفظ عنوان المصدر');
               refresh();
             },
           },
@@ -221,6 +226,40 @@ function serverSection(prefs, refresh) {
         ),
       ),
       'يُطبَّق فورًا على التنزيلات التالية',
+    ),
+    row(
+      'الفهرس',
+      h(
+        'div',
+        { class: 'settings__inline' },
+        état,
+        h(
+          'button',
+          {
+            class: 'button',
+            onclick: async (event) => {
+              const bouton = event.currentTarget;
+              bouton.disabled = true;
+              état.textContent = 'جارٍ التحقّق…';
+              try {
+                const verdict = await repository.checkCatalogUpdate();
+                if (verdict.action !== 'offer') {
+                  état.textContent = 'الفهرس محدَّث';
+                  return;
+                }
+                état.textContent = 'جارٍ التنزيل…';
+                const { catalogVersion } = await repository.installCatalogUpdate();
+                toast(`حُدِّث الفهرس إلى الإصدار ${catalogVersion}`);
+                refresh();
+              } finally {
+                bouton.disabled = false;
+              }
+            },
+          },
+          'التحقّق من التحديثات',
+        ),
+      ),
+      'يُنزَّل الفهرس كاملًا ويُستبدل دفعة واحدة',
     ),
   );
 }

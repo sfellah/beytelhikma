@@ -392,6 +392,26 @@ test('l’adresse du serveur est persistée et appliquée à la file', async () 
   assert.equal((await repository.getSettings())['distribution.base_url'], '');
 });
 
+test('une source injoignable ne propose rien et ne lève pas', async () => {
+  // C'est la propriété qui compte : hors ligne, l'application se tait. Elle a
+  // déjà tout ce qu'il lui faut pour explorer.
+  await repository.setDownloadBaseUrl('http://127.0.0.1:1/');
+  try {
+    const verdict = await repository.checkCatalogUpdate();
+    assert.equal(verdict.action, 'none');
+    assert.equal(verdict.pointer, null);
+  } finally {
+    await repository.setDownloadBaseUrl('');
+  }
+});
+
+test('un refus est retenu par version, pas une fois pour toutes', async () => {
+  await repository.declineCatalogUpdate(7);
+  assert.equal((await repository.getSettings())['distribution.declined_catalog_version'], '7');
+  await repository.declineCatalogUpdate(8);
+  assert.equal((await repository.getSettings())['distribution.declined_catalog_version'], '8');
+});
+
 test('les informations d’application décrivent la bibliothèque installée', async () => {
   const about = await repository.getAbout();
   assert.equal(about.editionCount, 5);

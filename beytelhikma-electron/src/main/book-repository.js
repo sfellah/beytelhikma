@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
 import { all, first } from './app-database.js';
+import { decideUpdate, fetchPointer, installCatalog } from './catalog-updater.js';
 import { buildCount, buildFacetQuery, buildList } from './catalog-query.js';
 import { DownloadQueue } from './download-manager.js';
 
@@ -1912,6 +1913,60 @@ export class BookRepository {
     });
   }
 
+  /**
+   * Vérifie s'il existe un catalogue plus récent.
+   *
+   * Ne lève jamais pour cause de réseau : `fetchPointer` rend `null` et
+   * `decideUpdate` en tire une décision silencieuse. Une application hors ligne
+   * a déjà tout ce qu'il lui faut pour explorer.
+   */
+  checkCatalogUpdate() {
+    return this.#guard('vérification du catalogue', async () => {
+      const settings = await this.getSettings();
+      const pointer = await fetchPointer(settings['distribution.base_url'] ?? null, {});
+      const catalog = await this.#db.catalog();
+      const info = first(catalog, 'SELECT catalog_version FROM catalog_info LIMIT 1');
+      const declined = Number(settings['distribution.declined_catalog_version'] ?? 0) || null;
+
+      return decideUpdate({
+        pointer,
+        localVersion: info?.catalog_version ?? 0,
+        declinedVersion: declined,
+      });
+    });
+  }
+
+  /**
+   * Installe le catalogue proposé, puis rouvre celui que sql.js sert.
+   *
+   * La décision est reprise ici plutôt que reçue du rendu : un pointeur qui a
+   * bougé entre l'affichage de la bannière et le clic ne doit pas faire
+   * installer ce qu'on n'a pas proposé.
+   */
+  installCatalogUpdate() {
+    return this.#guard('mise à jour du catalogue', async () => {
+      const verdict = await this.checkCatalogUpdate();
+      if (verdict.action !== 'offer') return { catalogVersion: null };
+
+      const settings = await this.getSettings();
+      await installCatalog({
+        pointer: verdict.pointer,
+        baseUrl: settings['distribution.base_url'] ?? null,
+        storageRoot: this.#db.root,
+      });
+      await this.#db.reloadCatalog();
+      this.#titleOrderCache = null;
+      return { catalogVersion: verdict.pointer.catalog_version };
+    });
+  }
+
+  /** Note un refus. Refuser la version N ne fait pas taire la N+1. */
+  declineCatalogUpdate(version) {
+    return this.#guard('report de la mise à jour du catalogue', async () => {
+      await this.saveSetting('distribution.declined_catalog_version', String(version ?? ''));
+    });
+  }
+
   /** Informations qu'on réclame quand quelque chose ne va pas. */
   getAbout() {
     return this.#guard("lecture des informations d'application", async () => {
@@ -1998,6 +2053,9 @@ export const REPOSITORY_METHODS = [
   'getCollectionBooks',
   'deleteAllBooks',
   'setDownloadBaseUrl',
+  'checkCatalogUpdate',
+  'installCatalogUpdate',
+  'declineCatalogUpdate',
   'getAbout',
   'getBookAnnotations',
   'getAnnotations',

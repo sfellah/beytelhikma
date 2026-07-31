@@ -19,6 +19,13 @@ const NAV = [
 ];
 
 /**
+ * Les réglages ferment le rail, séparés du reste : le rail liste ce qu'on lit,
+ * régler n'est pas une destination de lecture. Au pied de la colonne, c'est
+ * aussi la seule entrée qui ne bouge jamais de place.
+ */
+const SETTINGS = { key: 'settings', path: '/settings', label: 'الإعدادات', icon: 'sliders' };
+
+/**
  * Nombre de travaux dans la file, tenu à jour pour la pastille de navigation.
  * La coque étant redessinée à chaque navigation, les pastilles sont repeintes
  * après chaque rendu plutôt que conservées d'un écran à l'autre.
@@ -129,6 +136,7 @@ function rail(active) {
       { class: 'rail__list' },
       NAV.map((item) => railItem(item, active)),
     ),
+    h('div', { class: 'rail__footer' }, railItem(SETTINGS, active)),
   );
 }
 
@@ -136,11 +144,10 @@ function rail(active) {
  * Barre supérieure : la marque, la recherche, les réglages. Pas de compte ni
  * de notifications — l'application est locale, il n'y a personne à notifier.
  *
- * Les réglages ne sont plus dans la navigation : le rail et la barre du bas
- * listent ce qu'on lit, et régler n'est pas une destination de lecture. Le
- * bouton de cette barre est donc le chemin unique vers `/settings`, à toutes
- * les largeurs — une entrée qui change de place selon la fenêtre ne se
- * retrouve pas.
+ * Les réglages vivent au pied du rail. Le bouton de cette barre est masqué dès
+ * que le rail paraît (900 px) et ne sert donc qu'en fenêtre étroite, où il n'y
+ * a pas de rail et où la barre du bas est déjà pleine — cinq onglets, sept la
+ * rendraient illisible.
  */
 function topbar() {
   // Deux destinations pour un même champ : `Entrée` cherche un livre dans le
