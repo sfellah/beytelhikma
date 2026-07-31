@@ -7,15 +7,17 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from publish_minio import object_key, publish
+from publish_minio import ensure_bucket, object_key, publish
 
 
 class FakeS3:
-    """Client S3 minimal : mémorise les objets et les appels."""
+    """Client S3 minimal : mémorise les objets, les buckets et les appels."""
 
-    def __init__(self):
+    def __init__(self, buckets=()):
         self.objects = {}
         self.puts = []
+        self.buckets = set(buckets)
+        self.policies = {}
 
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
@@ -25,6 +27,17 @@ class FakeS3:
     def put_object(self, Bucket, Key, Body, **kwargs):
         self.objects[Key] = Body
         self.puts.append(Key)
+
+    def head_bucket(self, Bucket):
+        if Bucket not in self.buckets:
+            raise FileNotFoundError(Bucket)
+        return {}
+
+    def create_bucket(self, Bucket, **kwargs):
+        self.buckets.add(Bucket)
+
+    def put_bucket_policy(self, Bucket, Policy):
+        self.policies[Bucket] = Policy
 
 
 def build_src(root):
@@ -97,7 +110,7 @@ class PublishTest(unittest.TestCase):
             con.close()
             self.assertEqual(url, "local://books/ed-a.sqlite")
 
-    def test_livre_sans_archive_est_signale(self):
+    def test_livre_sans_archive_ni_source_est_signale(self):
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             os.remove(os.path.join(root, "books", "ed-a.sqlite.zst"))
@@ -105,6 +118,31 @@ class PublishTest(unittest.TestCase):
             report = publish(client, src=root, bucket="b", public_base="http://x/b")
             self.assertEqual(report["missing"], ["ed-a"])
             self.assertEqual(client.puts, [])
+
+    def test_archive_produite_a_la_volee_depuis_le_sqlite(self):
+        """L'import n'ayant pas toujours tourné avec --compress, et la reprise
+        sautant la compression, l'outil doit savoir compresser lui-même."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            os.remove(os.path.join(root, "books", "ed-a.sqlite.zst"))
+            plain = os.path.join(root, "books", "ed-a.sqlite")
+            with open(plain, "wb") as fh:
+                fh.write(b"SQLite format 3\0" * 500)
+
+            client = FakeS3()
+            report = publish(client, src=root, bucket="b", public_base="http://x/b")
+
+            self.assertEqual(report["missing"], [])
+            self.assertEqual(report["compressed"], 1)
+            self.assertIn(object_key("ed-a", 1), client.objects)
+            # L'archive est gardée : le passage suivant n'a plus à compresser.
+            self.assertTrue(os.path.exists(os.path.join(root, "books", "ed-a.sqlite.zst")))
+
+    def test_le_bucket_est_cree_s_il_manque(self):
+        client = FakeS3()
+        self.assertTrue(ensure_bucket(client, "beytelhikma"), "créé au premier appel")
+        self.assertIn("beytelhikma", client.buckets)
+        self.assertFalse(ensure_bucket(client, "beytelhikma"), "déjà là au second")
 
 
 if __name__ == "__main__":

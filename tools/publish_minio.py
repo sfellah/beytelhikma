@@ -33,6 +33,52 @@ def object_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/book.sqlite.zst"
 
 
+def ensure_bucket(client, bucket: str) -> bool:
+    """Crée le bucket s'il manque. Renvoie True s'il vient d'être créé."""
+    try:
+        client.head_bucket(Bucket=bucket)
+        return False
+    except Exception:
+        client.create_bucket(Bucket=bucket)
+        return True
+
+
+def _archive(books_dir: str, edition_id: str, report: dict) -> str | None:
+    """Chemin de l'archive du livre, compressée à la volée si nécessaire.
+
+    L'import ne produit les `.zst` qu'avec `--compress`, et sa reprise saute la
+    compression des livres déjà bâtis : sans ce repli, un `dist/` importé sans
+    l'option serait impubliable sans tout refaire.
+    """
+    packed = os.path.join(books_dir, f"{edition_id}.sqlite.zst")
+    if os.path.exists(packed):
+        return packed
+
+    plain = os.path.join(books_dir, f"{edition_id}.sqlite")
+    if not os.path.exists(plain):
+        return None
+
+    try:
+        import zstandard
+    except ImportError:
+        print(
+            f"erreur : {edition_id}.sqlite.zst absent et zstandard non installé "
+            "(pip install zstandard)",
+            file=sys.stderr,
+        )
+        return None
+
+    compressor = zstandard.ZstdCompressor(level=10)
+    # Écriture dans un fichier temporaire puis renommage : une interruption ne
+    # laisse jamais une archive tronquée qui serait prise pour valide.
+    temporary = f"{packed}.part"
+    with open(plain, "rb") as source, open(temporary, "wb") as target:
+        compressor.copy_stream(source, target)
+    os.replace(temporary, packed)
+    report["compressed"] += 1
+    return packed
+
+
 def manifest_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/manifest.json"
 
@@ -61,7 +107,7 @@ def _upload(client, bucket, key, body, content_type, metadata, force, dry_run, r
 
 def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
     """Monte les livres puis réécrit `download_url`. Renvoie un compte rendu."""
-    report = {"uploaded": 0, "skipped": 0, "updated": 0, "missing": []}
+    report = {"uploaded": 0, "skipped": 0, "updated": 0, "compressed": 0, "missing": []}
     catalog_path = os.path.join(src, "catalog.sqlite")
     if not os.path.exists(catalog_path):
         raise SystemExit(f"catalogue introuvable : {catalog_path}")
@@ -71,11 +117,12 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
         "SELECT release_id, edition_id, content_version FROM book_releases WHERE is_active = 1"
     ).fetchall()
 
+    books_dir = os.path.join(src, "books")
     updates = []
     for release_id, edition_id, content_version in releases:
-        packed = os.path.join(src, "books", f"{edition_id}.sqlite.zst")
-        manifest_path = os.path.join(src, "books", f"{edition_id}.manifest.json")
-        if not os.path.exists(packed):
+        manifest_path = os.path.join(books_dir, f"{edition_id}.manifest.json")
+        packed = _archive(books_dir, edition_id, report)
+        if packed is None:
             report["missing"].append(edition_id)
             continue
 
@@ -125,8 +172,7 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
 
     if report["missing"]:
         print(
-            f"attention : {len(report['missing'])} livre(s) sans .sqlite.zst — "
-            "relancer import_shamela.py --compress",
+            f"attention : {len(report['missing'])} livre(s) sans fichier dans {books_dir}",
             file=sys.stderr,
         )
     return report
@@ -178,6 +224,8 @@ def main(argv=None):
     )
 
     if args.set_anonymous_policy:
+        if ensure_bucket(client, args.bucket):
+            print(f"bucket créé : {args.bucket}")
         set_anonymous_policy(client, args.bucket)
         print(f"policy de lecture publique posée sur {args.bucket}/books/*")
 
@@ -192,7 +240,7 @@ def main(argv=None):
     )
     print(
         f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
-        f"catalogue mis à jour : {report['updated']}"
+        f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
     )
     return 0
 
