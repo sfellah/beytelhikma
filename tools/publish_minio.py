@@ -16,6 +16,7 @@ AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY usuels. Jamais dans le dépôt.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -36,6 +37,12 @@ READ_ONLY_POLICY = {
 # Les objets sont immutables par construction (la version est dans le chemin) :
 # un client peut donc les garder un an sans jamais revalider.
 CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# Le pointeur est la seule chose du bucket qui change sous une clé fixe. Le
+# mettre en cache comme le reste tuerait la mise à jour en silence : tout
+# marcherait le premier jour, et plus rien ne bougerait ensuite.
+POINTER_KEY = "catalog/latest.json"
+POINTER_CACHE_CONTROL = "no-cache"
 
 # Le téléchargeur reprend par en-tête `Range` ; un navigateur ne verra les
 # en-têtes de reprise que s'ils sont explicitement exposés.
@@ -59,6 +66,10 @@ CORS_RULES = [
 
 def object_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/book.sqlite.zst"
+
+
+def catalog_key(catalog_version: int) -> str:
+    return f"catalog/{catalog_version}/catalog.sqlite.zst"
 
 
 def ensure_bucket(client, bucket: str, region: str | None = None) -> bool:
@@ -122,8 +133,13 @@ def manifest_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/manifest.json"
 
 
-def _upload(client, bucket, key, body, content_type, metadata, force, report):
-    """Envoie [body] sous [key], sauf si un objet de même taille est déjà là."""
+def _upload(client, bucket, key, body, content_type, metadata, force, report,
+            cache_control=CACHE_CONTROL):
+    """Envoie [body] sous [key], sauf si un objet de même taille est déjà là.
+
+    Le raccourci « même taille = déjà là » est faux pour le pointeur, dont la
+    taille ne bouge pas d'une version à l'autre : il part toujours en `force`.
+    """
     if not force:
         try:
             head = client.head_object(Bucket=bucket, Key=key)
@@ -137,7 +153,7 @@ def _upload(client, bucket, key, body, content_type, metadata, force, report):
         Key=key,
         Body=body,
         ContentType=content_type,
-        CacheControl=CACHE_CONTROL,
+        CacheControl=cache_control,
         Metadata=metadata,
     )
     report["uploaded"] += 1
@@ -239,10 +255,96 @@ def publish(client, *, src, bucket, force=False, dry_run=False):
 
 
 def set_anonymous_policy(client, bucket):
-    """Rend `books/*` lisible sans authentification. À lancer une seule fois."""
+    """Rend `books/*` et `catalog/*` lisibles sans authentification.
+
+    Deux préfixes explicites, jamais le bucket entier : le listing anonyme doit
+    continuer de répondre 403. Le catalogue ne porte que des métadonnées de
+    livres déjà publics — l'ouvrir ne concède rien.
+    """
     policy = json.loads(json.dumps(READ_ONLY_POLICY))
-    policy["Statement"][0]["Resource"] = [f"arn:aws:s3:::{bucket}/books/*"]
+    policy["Statement"][0]["Resource"] = [
+        f"arn:aws:s3:::{bucket}/books/*",
+        f"arn:aws:s3:::{bucket}/catalog/*",
+    ]
     client.put_bucket_policy(Bucket=bucket, Policy=json.dumps(policy))
+
+
+def publish_catalog(client, *, src, bucket, force=False, dry_run=False):
+    """Monte le catalogue compressé sous un chemin versionné, puis son pointeur.
+
+    Le pointeur est écrit **en dernier** : tant qu'il n'a pas bougé, aucun client
+    ne peut découvrir un catalogue à moitié monté.
+    """
+    catalog_path = os.path.join(src, "catalog.sqlite")
+    if not os.path.exists(catalog_path):
+        raise SystemExit(f"catalogue introuvable : {catalog_path}")
+
+    con = sqlite3.connect(catalog_path)
+    row = con.execute(
+        "SELECT catalog_version, schema_version, generated_at, edition_count FROM catalog_info"
+    ).fetchone()
+    con.close()
+    if row is None:
+        raise SystemExit("catalog_info est vide : impossible de versionner le catalogue")
+    catalog_version, schema_version, generated_at, edition_count = row
+
+    report = {
+        "catalog_version": catalog_version,
+        "uploaded": 0,
+        "skipped": 0,
+        "planned": 0,
+        "compressed": 0,
+    }
+    if dry_run:
+        report["planned"] = 2  # le catalogue et son pointeur
+        return report
+
+    try:
+        import zstandard
+    except ImportError:
+        print("erreur : zstandard est requis (pip install zstandard)", file=sys.stderr)
+        raise SystemExit(2)
+
+    with open(catalog_path, "rb") as fh:
+        raw = fh.read()
+    body = zstandard.ZstdCompressor(level=19).compress(raw)
+    report["compressed"] += 1
+    digest = hashlib.sha256(raw).hexdigest()
+
+    key = catalog_key(catalog_version)
+    _upload(
+        client,
+        bucket,
+        key,
+        body,
+        "application/zstd",
+        {"sha256": digest, "uncompressed-size": str(len(raw))},
+        force,
+        report,
+    )
+
+    pointer = {
+        "catalog_version": catalog_version,
+        "schema_version": schema_version,
+        "generated_at": generated_at,
+        "edition_count": edition_count,
+        "object_key": key,
+        "sha256": digest,
+        "compressed_size": len(body),
+        "uncompressed_size": len(raw),
+    }
+    _upload(
+        client,
+        bucket,
+        POINTER_KEY,
+        json.dumps(pointer, ensure_ascii=False, indent=2).encode("utf-8"),
+        "application/json",
+        {},
+        True,  # jamais sauté : sa taille ne change pas d'une version à l'autre
+        report,
+        cache_control=POINTER_CACHE_CONTROL,
+    )
+    return report
 
 
 def _try(label, fn, applied, skipped):
@@ -364,6 +466,10 @@ def build_parser():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--set-anonymous-policy", action="store_true")
+    parser.add_argument("--catalog-only", action="store_true",
+                        help="ne publier que le catalogue et son pointeur")
+    parser.add_argument("--skip-catalog", action="store_true",
+                        help="ne publier que les livres")
     return parser
 
 
@@ -405,24 +511,39 @@ def main(argv=None):
         for label in result["skipped"]:
             print(f"  ignoré  : {label}", file=sys.stderr)
 
-    report = publish(
-        client,
-        src=args.src,
-        bucket=args.bucket,
-        force=args.force,
-        dry_run=args.dry_run,
-    )
-    if args.dry_run:
-        print(
-            f"essai à blanc — objets à envoyer : {report['planned']} • "
-            f"à compresser : {report['would_compress']} • "
-            f"livres sans fichier : {len(report['missing'])}"
+    if not args.catalog_only:
+        report = publish(
+            client,
+            src=args.src,
+            bucket=args.bucket,
+            force=args.force,
+            dry_run=args.dry_run,
         )
-    else:
-        print(
-            f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
-            f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
+        if args.dry_run:
+            print(
+                f"essai à blanc — objets à envoyer : {report['planned']} • "
+                f"à compresser : {report['would_compress']} • "
+                f"livres sans fichier : {len(report['missing'])}"
+            )
+        else:
+            print(
+                f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
+                f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
+            )
+
+    # Le catalogue part **après** les livres : un pointeur qui annonce des
+    # éditions dont les objets ne sont pas encore montés ferait échouer des
+    # téléchargements chez ceux qui le liraient entre les deux.
+    if not args.skip_catalog:
+        catalog_report = publish_catalog(
+            client,
+            src=args.src,
+            bucket=args.bucket,
+            force=args.force,
+            dry_run=args.dry_run,
         )
+        verbe = "à publier" if args.dry_run else "publié"
+        print(f"catalogue v{catalog_report['catalog_version']} {verbe} • pointeur {POINTER_KEY}")
     return 0
 
 

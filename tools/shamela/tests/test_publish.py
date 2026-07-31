@@ -7,7 +7,16 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from publish_minio import CACHE_CONTROL, configure_bucket, ensure_bucket, object_key, publish
+from publish_minio import (
+    CACHE_CONTROL,
+    POINTER_KEY,
+    catalog_key,
+    configure_bucket,
+    ensure_bucket,
+    object_key,
+    publish,
+    publish_catalog,
+)
 
 
 class FakeS3:
@@ -196,6 +205,83 @@ class PublishTest(unittest.TestCase):
             self.assertEqual(kwargs["CacheControl"], CACHE_CONTROL)
 
 
+def build_catalog_info(root, catalog_version=2, schema_version=2, editions=397):
+    con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
+    con.execute(
+        "CREATE TABLE catalog_info (catalog_version INTEGER, schema_version INTEGER,"
+        " generated_at TEXT, edition_count INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO catalog_info VALUES (?,?,?,?)",
+        (catalog_version, schema_version, "2026-07-31T14:37:43Z", editions),
+    )
+    con.commit()
+    con.close()
+
+
+class PublishCatalogTest(unittest.TestCase):
+    def test_catalogue_et_pointeur_montes(self):
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            build_catalog_info(root)
+            client = FakeS3()
+
+            report = publish_catalog(client, src=root, bucket="b")
+
+            self.assertEqual(report["catalog_version"], 2)
+            self.assertIn(catalog_key(2), client.objects)
+            self.assertIn(POINTER_KEY, client.objects)
+
+            pointer = json.loads(client.objects[POINTER_KEY])
+            self.assertEqual(pointer["catalog_version"], 2)
+            self.assertEqual(pointer["schema_version"], 2)
+            self.assertEqual(pointer["edition_count"], 397)
+            self.assertEqual(pointer["object_key"], catalog_key(2))
+            self.assertEqual(len(pointer["sha256"]), 64)
+            self.assertGreater(pointer["compressed_size"], 0)
+            self.assertGreater(pointer["uncompressed_size"], 0)
+
+    def test_le_pointeur_n_est_jamais_mis_en_cache(self):
+        """Un pointeur en `immutable` ne désignerait jamais rien de nouveau :
+        la mise à jour serait morte sans qu'aucun autre test n'échoue."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            build_catalog_info(root)
+            client = FakeS3()
+
+            publish_catalog(client, src=root, bucket="b")
+
+            self.assertEqual(client.put_kwargs[POINTER_KEY]["CacheControl"], "no-cache")
+            self.assertEqual(client.put_kwargs[catalog_key(2)]["CacheControl"], CACHE_CONTROL)
+
+    def test_le_pointeur_repart_meme_a_taille_egale(self):
+        """Son contenu change sans que sa taille bouge : le raccourci « même
+        taille = déjà là » le figerait sur la première version publiée."""
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            build_catalog_info(root)
+            client = FakeS3()
+
+            publish_catalog(client, src=root, bucket="b")
+            client.puts.clear()
+            publish_catalog(client, src=root, bucket="b")
+
+            self.assertIn(POINTER_KEY, client.puts)
+            self.assertNotIn(catalog_key(2), client.puts, "le catalogue, lui, est sauté")
+
+    def test_essai_a_blanc_ne_monte_rien(self):
+        with tempfile.TemporaryDirectory() as root:
+            build_src(root)
+            build_catalog_info(root)
+            client = FakeS3()
+
+            report = publish_catalog(client, src=root, bucket="b", dry_run=True)
+
+            self.assertEqual(client.puts, [])
+            self.assertEqual(report["catalog_version"], 2)
+            self.assertEqual(report["planned"], 2)
+
+
 class ConfigureBucketTest(unittest.TestCase):
     def test_region_passee_a_la_creation(self):
         """Hors us-east-1, AWS refuse un create_bucket sans LocationConstraint."""
@@ -228,8 +314,12 @@ class ConfigureBucketTest(unittest.TestCase):
         policy = json.loads(client.policies["b"])
         statement = policy["Statement"][0]
         self.assertEqual(statement["Action"], ["s3:GetObject"])
-        # Le préfixe compte : ouvrir le bucket entier exposerait le catalogue.
-        self.assertEqual(statement["Resource"], ["arn:aws:s3:::b/books/*"])
+        # Les préfixes comptent : ouvrir le bucket entier autoriserait le
+        # listing anonyme, qui doit rester fermé.
+        self.assertEqual(
+            statement["Resource"],
+            ["arn:aws:s3:::b/books/*", "arn:aws:s3:::b/catalog/*"],
+        )
 
     def test_reglage_absent_est_signale_pas_fatal(self):
         """MinIO n'implémente pas toute l'API S3 : un réglage refusé ne doit
