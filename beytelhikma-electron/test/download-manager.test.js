@@ -69,3 +69,100 @@ test('un téléchargement nominal installe le livre décompressé', async () => 
   assert.equal(fs.existsSync(path.join(storageRoot, 'downloads', 'ed-test-01.zst.part')), false);
   assert.equal(fs.existsSync(path.join(storageRoot, 'downloads', 'ed-test-01.sqlite.tmp')), false);
 });
+
+test('un SHA-256 non conforme échoue et ne laisse aucun fichier', async () => {
+  await assert.rejects(
+    () => installRelease({ release: { ...release(), sha256: 'f'.repeat(64) }, storageRoot }),
+    (error) => error.code === 'checksum' && error.message === 'الملف المُنزَّل تالف',
+  );
+  assert.equal(fs.existsSync(path.join(storageRoot, 'books', 'ed-test-01.sqlite')), false);
+  assert.equal(
+    fs.existsSync(path.join(storageRoot, 'downloads', 'ed-test-01.zst.part')),
+    false,
+    'un cache corrompu doit être jeté',
+  );
+});
+
+test('une 404 échoue avec le message dédié', async () => {
+  handler = (request, response) => {
+    response.writeHead(404).end();
+  };
+  await assert.rejects(
+    () => installRelease({ release: release(), storageRoot }),
+    (error) => error.code === 'notFound' && error.message === 'الملف غير متوفر على الخادم',
+  );
+});
+
+test('une coupure à mi-parcours est reprise par Range', async () => {
+  const cut = Math.floor(PACKED.length / 2);
+  const ranges = [];
+
+  // Première tentative : le serveur coupe la connexion au milieu.
+  handler = (request, response) => {
+    ranges.push(request.headers.range ?? null);
+    response.writeHead(200, {
+      'content-type': 'application/zstd',
+      'content-length': String(PACKED.length),
+    });
+    // La socket doit être vidée avant d'être détruite, sinon le client ne voit
+    // jamais la première moitié et n'a rien à reprendre.
+    response.write(PACKED.subarray(0, cut), () => {
+      setTimeout(() => response.destroy(), 20);
+    });
+  };
+  await assert.rejects(() => installRelease({ release: release(), storageRoot }));
+  const part = path.join(storageRoot, 'downloads', 'ed-test-01.zst.part');
+  assert.ok(fs.existsSync(part), 'le .part est conservé pour la reprise');
+
+  // Seconde tentative : le serveur honore Range.
+  handler = (request, response) => {
+    ranges.push(request.headers.range ?? null);
+    const offset = Number(/bytes=(\d+)-/.exec(request.headers.range ?? '')?.[1] ?? 0);
+    const rest = PACKED.subarray(offset);
+    response.writeHead(206, {
+      'content-type': 'application/zstd',
+      'content-length': String(rest.length),
+      'content-range': `bytes ${offset}-${PACKED.length - 1}/${PACKED.length}`,
+    });
+    response.end(rest);
+  };
+  const installed = await installRelease({ release: release(), storageRoot });
+
+  assert.deepEqual(fs.readFileSync(installed), PLAIN);
+  assert.equal(ranges[0], null, 'la première requête ne demande aucun intervalle');
+  assert.match(ranges[1], /^bytes=\d+-$/);
+});
+
+test('un serveur sans support de Range fait repartir de zéro', async () => {
+  fs.mkdirSync(path.join(storageRoot, 'downloads'), { recursive: true });
+  fs.writeFileSync(
+    path.join(storageRoot, 'downloads', 'ed-test-01.zst.part'),
+    PACKED.subarray(0, 64),
+  );
+  handler = (request, response) => {
+    // Range ignoré : réponse 200 complète.
+    response.writeHead(200, {
+      'content-type': 'application/zstd',
+      'content-length': String(PACKED.length),
+    });
+    response.end(PACKED);
+  };
+
+  const installed = await installRelease({ release: release(), storageRoot });
+  assert.deepEqual(fs.readFileSync(installed), PLAIN);
+});
+
+test('une annulation interrompt et efface le .part', async () => {
+  const controller = new AbortController();
+  handler = (request, response) => {
+    response.writeHead(200, { 'content-length': String(PACKED.length) });
+    response.write(PACKED.subarray(0, 32));
+    setTimeout(() => controller.abort(), 10);
+  };
+
+  await assert.rejects(
+    () => installRelease({ release: release(), storageRoot, signal: controller.signal }),
+    (error) => error.code === 'aborted',
+  );
+  assert.equal(fs.existsSync(path.join(storageRoot, 'downloads', 'ed-test-01.zst.part')), false);
+});

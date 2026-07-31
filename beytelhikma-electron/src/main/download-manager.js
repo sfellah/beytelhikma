@@ -56,19 +56,38 @@ export async function installRelease({ release, storageRoot, signal, onProgress 
   return target;
 }
 
-/** Télécharge les octets compressés dans [part]. */
+/** Télécharge les octets compressés dans [part], en reprenant s'il existe déjà. */
 async function fetchToPart({ release, part, signal, onProgress }) {
+  let offset = 0;
+  try {
+    offset = fs.statSync(part).size;
+  } catch {
+    offset = 0; // absent : téléchargement complet
+  }
+
   let response;
   try {
-    response = await fetch(release.url, { signal });
+    response = await fetch(release.url, {
+      signal,
+      headers: offset > 0 ? { Range: `bytes=${offset}-` } : {},
+    });
   } catch (error) {
+    if (isAbort(error, signal)) throw abandon(part, 'aborted', error);
     throw new DownloadError('network', error);
   }
-  if (response.status === 404) throw new DownloadError('notFound');
-  if (!response.ok) throw new DownloadError('network', new Error(`HTTP ${response.status}`));
 
-  const total = Number(response.headers.get('content-length')) || release.compressedSize || 0;
-  let received = 0;
+  if (response.status === 404) throw abandon(part, 'notFound');
+  if (!response.ok && response.status !== 206) {
+    throw new DownloadError('network', new Error(`HTTP ${response.status}`));
+  }
+
+  // Le serveur ignore Range : il renvoie tout, le .part accumulé est obsolète.
+  const resuming = response.status === 206;
+  if (!resuming) offset = 0;
+
+  const remaining = Number(response.headers.get('content-length')) || 0;
+  const total = offset + remaining || release.compressedSize || 0;
+  let received = offset;
   const counter = new Transform({
     transform(chunk, _encoding, callback) {
       received += chunk.length;
@@ -78,11 +97,31 @@ async function fetchToPart({ release, part, signal, onProgress }) {
   });
 
   try {
-    await pipeline(Readable.fromWeb(response.body), counter, fs.createWriteStream(part));
+    await pipeline(
+      Readable.fromWeb(response.body),
+      counter,
+      fs.createWriteStream(part, { flags: resuming ? 'a' : 'w' }),
+    );
   } catch (error) {
+    if (isAbort(error, signal)) throw abandon(part, 'aborted', error);
     if (error?.code === 'ENOSPC') throw new DownloadError('diskFull', error);
+    // Coupure réseau : le .part est conservé, la reprise repartira de son offset.
     throw new DownloadError('network', error);
   }
+}
+
+/**
+ * Une annulation remonte tantôt en `AbortError`, tantôt en erreur de flux
+ * quelconque selon l'endroit où le signal a frappé : le signal fait foi.
+ */
+function isAbort(error, signal) {
+  return signal?.aborted === true || error?.name === 'AbortError';
+}
+
+/** Supprime le .part devenu inutile puis fabrique l'erreur correspondante. */
+function abandon(part, code, cause) {
+  fs.rmSync(part, { force: true });
+  return new DownloadError(code, cause);
 }
 
 /** Décompresse [part], vérifie le hash, installe. */
