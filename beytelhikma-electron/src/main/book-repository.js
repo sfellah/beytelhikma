@@ -216,6 +216,39 @@ export class BookRepository {
   }
 
   /**
+   * Supprime le fichier du livre. [keepProgress] décide du sort de l'état
+   * utilisateur : conservé (le livre repasse en `removed`) ou effacé avec la
+   * ligne et les appartenances aux collections.
+   */
+  deleteBook(editionId, { keepProgress = true } = {}) {
+    return this.#guard('suppression du livre', async () => {
+      if (this.#downloads?.isBusy(editionId)) {
+        throw new Error('téléchargement en cours : annuler avant de supprimer');
+      }
+
+      this.#db.closeBook(editionId);
+      const root = this.#db.root;
+      fs.rmSync(path.join(root, 'books', `${editionId}.sqlite`), { force: true });
+      fs.rmSync(path.join(root, 'downloads', `${editionId}.zst.part`), { force: true });
+      fs.rmSync(path.join(root, 'downloads', `${editionId}.sqlite.tmp`), { force: true });
+
+      await this.#db.writeUser((user) => {
+        if (keepProgress) {
+          user.run(
+            `UPDATE downloaded_books
+                SET download_status = 'removed', downloaded_bytes = 0, local_path = NULL
+              WHERE edition_id = ?`,
+            [editionId],
+          );
+        } else {
+          user.run('DELETE FROM downloaded_books WHERE edition_id = ?', [editionId]);
+          user.run('DELETE FROM collection_books WHERE edition_id = ?', [editionId]);
+        }
+      });
+    });
+  }
+
+  /**
    * Confronte les fichiers réellement présents aux lignes de `downloaded_books`.
    * Remplace l'ancien `warmUp()`, qui déclarait tout le catalogue installé.
    */
@@ -660,6 +693,7 @@ export const REPOSITORY_METHODS = [
   'downloadBook',
   'cancelDownload',
   'retryDownload',
+  'deleteBook',
   'getCategories',
   'getRecentBooks',
   'getBooks',

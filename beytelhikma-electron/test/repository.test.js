@@ -5,7 +5,7 @@ import path from 'node:path';
 import test, { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { AppDatabase } from '../src/main/app-database.js';
+import { AppDatabase, all } from '../src/main/app-database.js';
 import { BookRepository, RepositoryError } from '../src/main/book-repository.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -151,6 +151,52 @@ test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne',
   await repository.reconcileLibrary();
   library = await repository.getLibrary();
   assert.ok(library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
+});
+
+test('supprimer en gardant la progression efface le fichier, pas la position', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-risala-01',
+    pageId: 2,
+    sequenceNum: 2,
+    percent: 0.4,
+  });
+
+  await repository.deleteBook('ed-risala-01', { keepProgress: true });
+
+  assert.equal(fs.existsSync(path.join(storageRoot, 'books', 'ed-risala-01.sqlite')), false);
+  const library = await repository.getLibrary();
+  assert.equal(
+    library.some((entry) => entry.book.editionId === 'ed-risala-01'),
+    false,
+  );
+
+  const progress = await repository.getProgress('ed-risala-01');
+  assert.equal(progress.pageId, 2);
+  assert.equal(progress.percent, 0.4);
+
+  // Réinstallation : la position est retrouvée telle quelle.
+  await repository.downloadBook('ed-risala-01');
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  assert.equal((await repository.getProgress('ed-risala-01')).pageId, 2);
+});
+
+test('supprimer totalement efface aussi la progression', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-risala-01',
+    pageId: 3,
+    sequenceNum: 3,
+    percent: 0.7,
+  });
+
+  await repository.deleteBook('ed-risala-01', { keepProgress: false });
+
+  assert.equal(await repository.getProgress('ed-risala-01'), null);
+  const user = await database.user();
+  assert.equal(
+    all(user, 'SELECT edition_id FROM downloaded_books WHERE edition_id = ?', ['ed-risala-01'])
+      .length,
+    0,
+  );
 });
 
 test('les réglages du lecteur sont persistés', async () => {
