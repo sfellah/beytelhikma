@@ -2407,6 +2407,7 @@ html:not([dir='rtl']) .scroller--at-start {
   align-items: center;
 }
 
+.authors__search-box .icon,
 .downloads__search-box .icon,
 .notes__search-box .icon {
   position: absolute;
@@ -2415,6 +2416,7 @@ html:not([dir='rtl']) .scroller--at-start {
   pointer-events: none;
 }
 
+.authors__search,
 .downloads__search,
 .notes__search {
   width: 18rem;
@@ -2430,6 +2432,7 @@ html:not([dir='rtl']) .scroller--at-start {
 }
 
 .downloads__search:focus,
+.authors__search:focus,
 .notes__search:focus {
   border-color: var(--primary);
 }
@@ -2934,4 +2937,91 @@ html:not([dir='rtl']) .scroller--at-start {
 .reader__tool.is-active {
   color: var(--primary);
   background: var(--emerald-veil);
+}
+
+
+/* ------------------------------------------------- listes paginées */
+
+/* Les barres d'outils et de pagination partagent la même assise : un écran
+   paginé se reconnaît d'un coup d'œil, quel que soit ce qu'il liste. */
+.authors__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.authors__search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.authors__index {
+  min-height: 120px;
+}
+
+.authors__pager,
+.library__pager {
+  margin-top: var(--space-lg);
+}
+
+/* Les siècles sans leurs chapelets de noms : la liste ne sert plus qu'à
+   entrer dans une époque, les auteurs se cherchent dans l'index. */
+.layers--compact .layer {
+  padding-block: var(--space-md);
+}
+
+.layers--compact .layer__label {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.layers--compact .layer:hover .layer__century {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* « Afficher plus » : un sommaire de plusieurs milliers d'entrées ne se monte
+   pas d'un bloc, il se déplie. */
+.toc__more,
+.reader__toc-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-sm);
+}
+
+.reader__toc-more {
+  padding: 0 var(--space-md) var(--space-md);
+}
+
+/* Une notice du corpus peut faire plusieurs milliers de mots : repliée, elle
+   laisse voir la suite de l'écran ; dépliée, elle se lit en entier. */
+.lead-card__bio-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.lead-card__bio.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lead-card__bio-toggle {
+  color: var(--deep-emerald);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.lead-card__bio-toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }

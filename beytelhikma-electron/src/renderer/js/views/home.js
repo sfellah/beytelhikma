@@ -19,7 +19,10 @@ export function homeView(host) {
 async function load() {
   const [resume, library, recent, categories, eras, featured] = await Promise.all([
     repository.getContinueReading(),
-    repository.getLibrary(),
+    // L'étagère est une bande, pas un inventaire : en demander une page évite
+    // de joindre le catalogue pour chaque livre installé, dont on n'affichera
+    // que quatre. Un de plus que `SHELF_LIMIT` : la reprise en sort.
+    repository.getLibrary({ limit: SHELF_LIMIT + 1, sort: 'recent' }),
     repository.getRecentBooks({ limit: 12 }),
     repository.getCategories(),
     repository.getEras(),
@@ -37,7 +40,10 @@ async function load() {
     resume,
     quote: page ? excerpt(page.bodyPlain) : null,
     // La reprise occupe déjà le héros : l'étagère montre le reste.
-    shelf: library.filter((entry) => entry.book.editionId !== resume?.book?.editionId),
+    shelf: library.rows
+      .filter((entry) => entry.book.editionId !== resume?.book?.editionId)
+      .slice(0, SHELF_LIMIT),
+    libraryTotal: library.total,
     recent,
     categories: categories.filter((category) => category.bookCount > 0),
     eras: eras.filter((era) => era.bookCount > 0),
@@ -53,7 +59,7 @@ function render(data) {
     { class: 'home' },
     heroSection(data),
     // `data-reveal` 1 est libre : le héros compte pour deux blocs visuels.
-    shelfSection(data.shelf),
+    shelfSection(data.shelf, data.libraryTotal),
     recentSection(data.recent),
     disciplinesSection(data.categories),
     erasSection(data.eras),
@@ -200,8 +206,14 @@ function continueCard({ book, resume, quote, open }) {
 
 const SHELF_LIMIT = 4;
 
+/**
+ * L'étagère montre quatre livres ; le sous-titre annonce, lui, tout ce qui est
+ * installé. Les deux nombres ne viennent donc pas du même endroit : `total`
+ * est compté par le dépôt, `entries` n'est que la page qu'on a demandée.
+ */
+
 /** Ce qui est *installé*, avec la progression réelle lue dans `user.sqlite`. */
-function shelfSection(entries) {
+function shelfSection(entries, total) {
   if (!entries.length) return null;
   const shown = entries.slice(0, SHELF_LIMIT);
 
@@ -215,8 +227,8 @@ function shelfSection(entries) {
     sectionHead(
       'shelf-title',
       'على رفّك',
-      `${entries.length} كتاب منزّل على هذا الجهاز`,
-      entries.length > SHELF_LIMIT
+      `${total} كتاب منزّل على هذا الجهاز`,
+      total > SHELF_LIMIT
         ? [
             h(
               'a',

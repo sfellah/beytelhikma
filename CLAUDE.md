@@ -82,6 +82,17 @@ Les quatre teintes de surlignage sortent des jetons du projet (`HIGHLIGHTS` dans
 
 Les outils de la barre haute s'accrochent par `data-tool` : les infobulles portent leur raccourci et changent, l'attribut est le contrat que `src/main/capture.js` et les tests suivent.
 
+**Pagination : un écran ne montre jamais tout, et ne prétend jamais le contraire.** Le corpus fait 8 589 livres et plusieurs milliers d'auteurs. Toute lecture qui peut en ramener plus d'un écran renvoie `{ rows, total }` — `getAuthors`, `getBooksIn`, `getLibrary`, `getCollectionBooks`, `getAnnotations`, `getManagedBooks`, `exploreBooks`. La règle qui compte : **un décompte affiché vient de SQL, jamais de `rows.length`.** Un `limit` sans `total` faisait dire à l'écran des auteurs « ٢٠٠ مؤلفًا » quand il y en a 113 — ou 8 000. `getAuthorStats` et `getEras` existent pour cette raison.
+
+Deux conséquences de forme :
+
+- `getLibrary` filtre les lignes de `downloaded_books` qui ne sont plus au catalogue. `saveProgress` accepte n'importe quel `edition_id` et pose une ligne « installée » : sans ce filtre, le total promettrait des pages que la jointure ne saurait pas remplir.
+- Le tri par titre ne peut pas se faire en SQL : le titre vit dans `catalog.sqlite`, l'installation dans `user.sqlite`, deux instances sql.js qu'aucun `ORDER BY` ne traverse. L'ordre est donc lu une fois côté catalogue (`#titleOrder`, gardé pour la session) et l'on y pioche ce qui est installé — un `IN (?,?,…)` de plusieurs milliers de paramètres, SQLite le refuserait.
+
+Les listes longues sans pagination possible (sommaire d'un livre) se **fenêtrent** côté vue : `TOC_WINDOW` entrées montées, le reste à la demande, plus un champ qui filtre sur le titre normalisé. Le lecteur garde le sommaire entier en mémoire — il lui sert à nommer le chapitre de chaque page — mais n'en dessine qu'une tranche.
+
+**Les méthodes exposées au rendu vivent dans deux listes** — `METHODS` de `src/preload/preload.cjs` et `REPOSITORY_METHODS` de `book-repository.js`. Une méthode ajoutée d'un seul côté ne casse rien au démarrage : elle échoue au premier clic. `test/repository.test.js` porte le test de parité.
+
 **Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire pour le client Flutter, mais ce portage ne les interroge jamais. La recherche s'appuie à la place sur :
 
 - les colonnes normalisées déjà présentes au schéma, `pages.body_search` et `toc.title_normalized`, interrogées en `LIKE` ;

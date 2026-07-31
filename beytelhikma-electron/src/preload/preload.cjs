@@ -10,6 +10,8 @@ const METHODS = [
   'getBookDetail',
   'getFeaturedAuthor',
   'getAuthors',
+  'getAuthorStats',
+  'getBooksIn',
   'getEras',
   'getBooksByCentury',
   'getBooksByAuthor',

@@ -1,11 +1,22 @@
 import { h } from '../dom.js';
-import { initial, ordinal } from '../format.js';
+import { arabicNumber, initial, ordinal } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { renderShell } from '../shell.js';
 import { cover } from '../components/cover.js';
+import { pagination, PAGE_SIZES } from '../components/pagination.js';
 import { reveal, sectionHead } from '../components/section.js';
-import { asyncView } from '../components/states.js';
+import { asyncView, emptyView, errorView, loadingView } from '../components/states.js';
+
+/** Tris de l'index : le fonds, l'alphabet, la chronologie. */
+const SORTS = [
+  { key: 'name', label: 'أبجديًا' },
+  { key: 'count', label: 'حسب عدد الكتب' },
+  { key: 'death', label: 'حسب سنة الوفاة' },
+];
+
+/** Le haut de l'écran ne montre que les plus présents : c'est une vitrine. */
+const PROMINENT = 7;
 
 /** Les auteurs du catalogue : le plus présent, les suivants, les siècles, tous. */
 export function authorsView(host) {
@@ -14,39 +25,44 @@ export function authorsView(host) {
   return null;
 }
 
+/**
+ * Le haut de l'écran et l'index sont deux lectures différentes du même fonds :
+ * la vitrine veut les plus présents, l'index veut l'ordre alphabétique et une
+ * page à la fois. Les compteurs, eux, sont comptés en SQL sur tout le fonds —
+ * les déduire d'une page donnerait un total faux dès le premier écran.
+ */
 async function load() {
-  const authors = await repository.getAuthors({ limit: 200 });
-  const [lead] = authors;
+  const [stats, prominent, eras] = await Promise.all([
+    repository.getAuthorStats(),
+    repository.getAuthors({ limit: PROMINENT, sort: 'count' }),
+    repository.getEras(),
+  ]);
+  const [lead] = prominent.rows;
   const leadBooks = lead
-    ? await repository.getBooksByAuthor(lead.authorId, { limit: 4 })
+    ? (await repository.getBooksIn({ scope: 'author', id: lead.authorId, limit: 4 })).rows
     : [];
-  return { authors, lead, leadBooks };
+  return { stats, prominent: prominent.rows, lead, leadBooks, eras };
 }
 
-function render({ authors, lead, leadBooks }) {
-  if (!authors.length) return null;
+function render({ stats, prominent, lead, leadBooks, eras }) {
+  if (!stats.authorCount) return null;
   return reveal(
     h(
       'div',
       { class: 'authors' },
-      headerSection(authors),
+      headerSection(stats),
       leadSection(lead, leadBooks),
-      prominentSection(authors.slice(1, 7)),
-      centuriesSection(authors),
-      indexSection(authors),
+      prominentSection(prominent.slice(1)),
+      centuriesSection(eras),
+      indexSection(),
     ),
   );
 }
 
 // ------------------------------------------------------------------ en-tête
 
-function headerSection(authors) {
-  const books = authors.reduce((total, author) => total + (author.bookCount ?? 0), 0);
-  const centuries = new Set(
-    authors.filter((author) => author.deathYearHijri).map(century),
-  );
-  const known = [...centuries].sort((a, b) => a - b);
-
+function headerSection(stats) {
+  const { authorCount, bookCount, firstCentury, lastCentury } = stats;
   return h(
     'section',
     { class: 'authors__header', 'aria-labelledby': 'authors-title', 'data-reveal': 0 },
@@ -54,14 +70,17 @@ function headerSection(authors) {
     h(
       'p',
       { class: 'body-lg authors__lede' },
-      known.length
-        ? `${authors.length} مؤلفًا، ${books} كتابًا، من ${ordinal(known[0])} إلى ${ordinal(known.at(-1))} الهجري.`
-        : `${authors.length} مؤلفًا، ${books} كتابًا في الفهرس.`,
+      firstCentury && lastCentury
+        ? `${arabicNumber(authorCount)} مؤلفًا، ${arabicNumber(bookCount)} كتابًا،` +
+          ` من ${ordinal(firstCentury)} إلى ${ordinal(lastCentury)} الهجري.`
+        : `${arabicNumber(authorCount)} مؤلفًا، ${arabicNumber(bookCount)} كتابًا في الفهرس.`,
     ),
   );
 }
 
 // --------------------------------------------------------- le plus présent
+
+const century = (author) => Math.floor((author.deathYearHijri - 1) / 100) + 1;
 
 function leadSection(lead, books) {
   if (!lead) return null;
@@ -99,7 +118,7 @@ function leadSection(lead, books) {
           ),
         ),
       ),
-      lead.bio && h('p', { class: 'body-md lead-card__bio' }, lead.bio),
+      lead.bio && leadBio(lead.bio),
       books.length > 0 &&
         h(
           'div',
@@ -121,6 +140,27 @@ function leadSection(lead, books) {
       ),
     ),
   );
+}
+
+/**
+ * Les notices du corpus vont de deux lignes à plusieurs milliers de mots. Sans
+ * repli, la plus longue poussait à elle seule tout le reste de l'écran — les
+ * médaillons, les siècles et l'index — sous la ligne de flottaison.
+ */
+function leadBio(text) {
+  const paragraph = h('p', { class: 'body-md lead-card__bio is-clamped' }, text);
+  const toggle = h(
+    'button',
+    {
+      class: 'lead-card__bio-toggle label-md',
+      onclick: () => {
+        const clamped = paragraph.classList.toggle('is-clamped');
+        toggle.textContent = clamped ? 'قراءة الترجمة كاملة' : 'طيّ الترجمة';
+      },
+    },
+    'قراءة الترجمة كاملة',
+  );
+  return h('div', { class: 'lead-card__bio-wrap' }, paragraph, toggle);
 }
 
 // ---------------------------------------------------------- les suivants
@@ -180,23 +220,15 @@ function prominentSection(authors) {
 
 // ------------------------------------------------------------- par siècle
 
-const century = (author) => Math.floor((author.deathYearHijri - 1) / 100) + 1;
-
 /**
  * Le regroupement par siècle de décès est le classement usuel du patrimoine :
  * c'est aussi la seule donnée temporelle du catalogue (`death_year_hijri`).
+ * Les décomptes viennent de `getEras`, comptés en SQL — les déduire d'une page
+ * d'auteurs ne donnerait le bon chiffre que pour un fonds minuscule.
  */
-function centuriesSection(authors) {
-  const dated = authors.filter((author) => author.deathYearHijri > 0);
+function centuriesSection(eras) {
+  const dated = eras.filter((era) => era.bookCount > 0);
   if (dated.length < 2) return null;
-
-  const groups = new Map();
-  for (const author of dated) {
-    const key = century(author);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(author);
-  }
-  const ordered = [...groups.entries()].sort(([a], [b]) => a - b);
 
   return h(
     'section',
@@ -208,30 +240,16 @@ function centuriesSection(authors) {
     sectionHead('centuries-title', 'طبقات المؤلفين', 'حسب قرن الوفاة الهجري'),
     h(
       'ol',
-      { class: 'layers' },
-      ordered.map(([key, group]) =>
+      { class: 'layers layers--compact' },
+      dated.map((era) =>
         h(
           'li',
           { class: 'layer' },
           h(
-            'div',
-            { class: 'layer__label' },
-            h('a', { class: 'title-md layer__century', href: `#/era/${key}` }, ordinal(key)),
-            h('span', { class: 'label-sm muted' }, `${group.length} مؤلف`),
-          ),
-          h(
-            'div',
-            { class: 'layer__people' },
-            group
-              .sort((a, b) => (a.deathYearHijri ?? 0) - (b.deathYearHijri ?? 0))
-              .map((author) =>
-                h(
-                  'a',
-                  { class: 'person-chip', href: `#/author/${author.authorId}` },
-                  h('span', {}, author.shortName ?? author.fullName),
-                  h('span', { class: 'person-chip__year' }, `ت ${author.deathYearHijri}`),
-                ),
-              ),
+            'a',
+            { class: 'layer__label', href: `#/era/${era.century}` },
+            h('span', { class: 'title-md layer__century' }, ordinal(era.century)),
+            h('span', { class: 'label-sm muted' }, `${arabicNumber(era.bookCount)} كتاب`),
           ),
         ),
       ),
@@ -241,10 +259,94 @@ function centuriesSection(authors) {
 
 // ------------------------------------------------------------------- index
 
-function indexSection(authors) {
-  const sorted = [...authors].sort((a, b) =>
-    (a.shortName ?? a.fullName).localeCompare(b.shortName ?? b.fullName, 'ar'),
+/**
+ * L'index complet, une page à la fois. Le corpus Shamela porte plusieurs
+ * milliers d'auteurs : les rendre tous d'un coup, c'était autant de nœuds DOM
+ * pour un écran qu'on ne lit jamais en entier.
+ */
+function indexSection() {
+  const state = { offset: 0, limit: PAGE_SIZES[0], sort: 'name', text: '' };
+  // `body` porte les quatre états ; la grille n'est montée que quand il y a
+  // des lignes — un `<div>` d'état n'a rien à faire dans un `<ul>`.
+  const body = h('div', { class: 'authors__index' }, loadingView());
+  const pager = h('div', { class: 'authors__pager' });
+  const subtitle = h('span', {});
+  let timer = null;
+  let token = 0;
+
+  const refresh = async () => {
+    const mine = ++token;
+    try {
+      const { rows, total } = await repository.getAuthors(state);
+      if (mine !== token || !body.isConnected) return;
+
+      subtitle.textContent = state.text
+        ? `${arabicNumber(total)} مؤلفًا يطابق « ${state.text} »`
+        : `${arabicNumber(total)} مؤلفًا في الفهرس`;
+
+      body.replaceChildren(
+        rows.length
+          ? h('ul', { class: 'author-grid' }, rows.map(authorTile))
+          : emptyView('لا مؤلف بهذا الاسم'),
+      );
+      pager.replaceChildren(
+        total > state.limit
+          ? pagination({
+              total,
+              offset: state.offset,
+              limit: state.limit,
+              onChange: (offset) => {
+                state.offset = offset;
+                refresh();
+              },
+              onPageSize: (limit) => {
+                Object.assign(state, { limit, offset: 0 });
+                refresh();
+              },
+            })
+          : h('div', {}),
+      );
+    } catch (error) {
+      if (mine !== token) return;
+      body.replaceChildren(errorView(error, refresh));
+    }
+  };
+
+  const search = h('input', {
+    type: 'search',
+    class: 'authors__search',
+    placeholder: 'ابحث عن مؤلف…',
+    oninput: (event) => {
+      clearTimeout(timer);
+      const value = event.target.value;
+      timer = setTimeout(() => {
+        Object.assign(state, { text: value.trim(), offset: 0 });
+        refresh();
+      }, 250);
+    },
+  });
+
+  const sorts = h(
+    'div',
+    { class: 'segmented' },
+    SORTS.map((entry) =>
+      h(
+        'button',
+        {
+          class: entry.key === state.sort ? 'is-active' : '',
+          onclick: (event) => {
+            Object.assign(state, { sort: entry.key, offset: 0 });
+            for (const button of sorts.children) button.classList.remove('is-active');
+            event.currentTarget.classList.add('is-active');
+            refresh();
+          },
+        },
+        entry.label,
+      ),
+    ),
   );
+
+  refresh();
 
   return h(
     'section',
@@ -253,42 +355,43 @@ function indexSection(authors) {
       'aria-labelledby': 'index-title',
       'data-reveal': 4,
     },
-    sectionHead('index-title', 'كل المؤلفين', `${authors.length} مؤلفًا بالترتيب الأبجدي`),
+    sectionHead('index-title', 'كل المؤلفين', subtitle),
     h(
-      'ul',
-      { class: 'author-grid' },
-      sorted.map((author) =>
+      'div',
+      { class: 'authors__toolbar' },
+      sorts,
+      h('div', { class: 'authors__search-box' }, icon('search', { size: 18 }), search),
+    ),
+    body,
+    pager,
+  );
+}
+
+function authorTile(author) {
+  return h(
+    'li',
+    {},
+    h(
+      'a',
+      { class: 'author-tile', href: `#/author/${author.authorId}` },
+      h('span', { class: 'portrait portrait--sm' }, initial(author.shortName ?? author.fullName)),
+      h(
+        'span',
+        { class: 'author-tile__text' },
         h(
-          'li',
-          {},
-          h(
-            'a',
-            { class: 'author-tile', href: `#/author/${author.authorId}` },
-            h(
-              'span',
-              { class: 'portrait portrait--sm' },
-              initial(author.shortName ?? author.fullName),
-            ),
-            h(
-              'span',
-              { class: 'author-tile__text' },
-              h(
-                'span',
-                { class: 'title-md author-tile__name clamp-1' },
-                author.shortName ?? author.fullName,
-              ),
-              h(
-                'span',
-                { class: 'label-sm muted truncate' },
-                author.deathYearHijri
-                  ? `ت ${author.deathYearHijri} هـ — ${author.bookCount} كتاب`
-                  : `${author.bookCount} كتاب`,
-              ),
-            ),
-            h('span', { class: 'author-tile__chevron' }, icon('arrowLeft', { size: 16 })),
-          ),
+          'span',
+          { class: 'title-md author-tile__name clamp-1' },
+          author.shortName ?? author.fullName,
+        ),
+        h(
+          'span',
+          { class: 'label-sm muted truncate' },
+          author.deathYearHijri
+            ? `ت ${author.deathYearHijri} هـ — ${author.bookCount} كتاب`
+            : `${author.bookCount} كتاب`,
         ),
       ),
+      h('span', { class: 'author-tile__chevron' }, icon('arrowLeft', { size: 16 })),
     ),
   );
 }

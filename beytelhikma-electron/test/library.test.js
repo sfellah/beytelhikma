@@ -146,7 +146,7 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
   repository0.createDownloadQueue();
   await repository0.reconcileLibrary();
   await install(repository0, 5);
-  assert.equal((await repository0.getLibrary()).length, 5);
+  assert.equal((await repository0.getLibrary()).total, 5);
   database0.close();
 
   // on remplace le catalogue par un fichier au même schéma mais vide
@@ -162,7 +162,7 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
     await database.initialize();
     const repository = new BookRepository(database);
     // pas de warmUp : les 5 lignes de l'ancienne bibliothèque sont toujours là
-    assert.equal((await repository.getLibrary()).length, 0, 'aucun livre fantôme');
+    assert.equal((await repository.getLibrary()).total, 0, 'aucun livre fantôme');
   } finally {
     database.close();
     fs.rmSync(root, { recursive: true, force: true });

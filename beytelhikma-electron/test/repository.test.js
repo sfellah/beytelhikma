@@ -6,7 +6,11 @@ import test, { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { AppDatabase, USER_DB_SCHEMA_VERSION, all } from '../src/main/app-database.js';
-import { BookRepository, RepositoryError } from '../src/main/book-repository.js';
+import {
+  BookRepository,
+  REPOSITORY_METHODS,
+  RepositoryError,
+} from '../src/main/book-repository.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -128,8 +132,9 @@ test('la progression survit à la réouverture de la base', async () => {
 
 test('la bibliothèque ne liste que les livres installés', async () => {
   const library = await repository.getLibrary();
-  assert.equal(library.length, 5);
-  assert.ok(library.every((entry) => entry.status === 'installed'));
+  assert.equal(library.total, 5);
+  assert.equal(library.counts.all, 5);
+  assert.ok(library.rows.every((entry) => entry.status === 'installed'));
 });
 
 test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne', async () => {
@@ -139,7 +144,7 @@ test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne',
   await repository.reconcileLibrary();
   let library = await repository.getLibrary();
   assert.equal(
-    library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'),
+    library.rows.some((entry) => entry.book.editionId === 'ed-muqaddima-01'),
     false,
   );
 
@@ -150,7 +155,7 @@ test('reconcileLibrary corrige une ligne sans fichier et un fichier sans ligne',
   );
   await repository.reconcileLibrary();
   library = await repository.getLibrary();
-  assert.ok(library.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
+  assert.ok(library.rows.some((entry) => entry.book.editionId === 'ed-muqaddima-01'));
 });
 
 test('les résumés portent le statut de téléchargement', async () => {
@@ -186,7 +191,7 @@ test('supprimer en gardant la progression efface le fichier, pas la position', a
   assert.equal(fs.existsSync(path.join(storageRoot, 'books', 'ed-risala-01.sqlite')), false);
   const library = await repository.getLibrary();
   assert.equal(
-    library.some((entry) => entry.book.editionId === 'ed-risala-01'),
+    library.rows.some((entry) => entry.book.editionId === 'ed-risala-01'),
     false,
   );
 
@@ -268,7 +273,7 @@ test('la recherche trouve avec et sans diacritiques', async () => {
 });
 
 test('l’autocomplétion des auteurs cherche sur le nom normalisé', async () => {
-  const authors = await repository.getAuthors();
+  const { rows: authors } = await repository.getAuthors();
   const target = authors[0];
   const suggestions = await repository.suggestValues('authors', target.fullName.slice(0, 4));
   assert.ok(suggestions.some((entry) => entry.value === target.authorId));
@@ -347,18 +352,19 @@ test('une collection se crée, se remplit et se vide sans toucher aux livres', a
   assert.equal(await repository.addToCollection(id, ids), 0, 'aucun doublon');
 
   const content = await repository.getCollectionBooks(id);
+  assert.equal(content.total, 3);
   assert.deepEqual(
-    content.map((book) => book.editionId),
+    content.rows.map((book) => book.editionId),
     ids,
     "l'ordre de la collection est conservé",
   );
-  assert.ok(content.every((book) => 'downloadStatus' in book));
+  assert.ok(content.rows.every((book) => 'downloadStatus' in book));
 
   collections = await repository.getCollections();
   assert.equal(collections.find((entry) => entry.id === id).bookCount, 3);
 
   await repository.removeFromCollection(id, ids[0]);
-  assert.equal((await repository.getCollectionBooks(id)).length, 2);
+  assert.equal((await repository.getCollectionBooks(id)).total, 2);
 
   await repository.renameCollection(id, 'مراجع');
   assert.equal((await repository.getCollections()).find((e) => e.id === id).name, 'مراجع');
@@ -369,7 +375,7 @@ test('une collection se crée, se remplit et se vide sans toucher aux livres', a
     false,
   );
   // Les livres n'ont pas bougé.
-  assert.equal((await repository.getLibrary()).length, 5);
+  assert.equal((await repository.getLibrary()).total, 5);
 });
 
 test('une collection refuse un nom vide', async () => {
@@ -405,13 +411,14 @@ test('deleteAllBooks vide le dossier et conserve les progressions', async () => 
   const removed = await repository.deleteAllBooks();
   assert.ok(removed >= 1);
   assert.deepEqual(database.installedBooks(), []);
-  assert.equal((await repository.getLibrary()).length, 0);
+  assert.equal((await repository.getLibrary()).total, 0);
   assert.equal((await repository.getProgress('ed-muqaddima-01')).pageId, 4);
 });
 
 test('les auteurs sont listés du plus au moins représenté', async () => {
-  const authors = await repository.getAuthors();
+  const { rows: authors, total } = await repository.getAuthors();
   assert.ok(authors.length >= 1);
+  assert.equal(total, authors.length, 'le total porte sur tout le fonds');
   for (const item of authors) {
     assert.ok(item.fullName);
     assert.ok(item.bookCount >= 1);
@@ -436,4 +443,169 @@ test("l'auteur en vedette a des œuvres", async () => {
   assert.ok(author.fullName);
   const books = await repository.getBooksByAuthor(author.authorId, { limit: 3 });
   assert.ok(books.length >= 1);
+});
+
+test('les auteurs se paginent, se trient et se cherchent sans mentir sur le total', async () => {
+  const first = await repository.getAuthors({ limit: 1 });
+  assert.equal(first.rows.length, 1);
+  assert.ok(first.total > 1, 'le total porte sur tout le fonds, pas sur la page');
+
+  const second = await repository.getAuthors({ limit: 1, offset: 1 });
+  assert.equal(second.total, first.total, 'le total ne bouge pas avec la page');
+  assert.notEqual(second.rows[0].authorId, first.rows[0].authorId);
+
+  // Le tri alphabétique replie les hamzas portées, comme `normalize_ar` : sans
+  // cela « أ » se rangerait avant « ا » et l'index paraîtrait désordonné.
+  const byName = await repository.getAuthors({ limit: 100, sort: 'name' });
+  const folded = byName.rows.map((item) =>
+    (item.shortName ?? item.fullName).replace(/[أإآ]/g, 'ا'),
+  );
+  assert.deepEqual(folded, [...folded].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+
+  const byDeath = await repository.getAuthors({ limit: 100, sort: 'death' });
+  const years = byDeath.rows.map((item) => item.deathYearHijri).filter(Boolean);
+  assert.deepEqual(years, [...years].sort((a, b) => a - b));
+
+  // La recherche passe par le nom normalisé : avec ou sans diacritiques.
+  const target = first.rows[0];
+  const found = await repository.getAuthors({ text: target.fullName.slice(0, 4) });
+  assert.ok(found.rows.some((item) => item.authorId === target.authorId));
+  assert.equal(found.total, found.rows.length);
+
+  assert.deepEqual(await repository.getAuthors({ text: 'zzzz' }), { rows: [], total: 0 });
+});
+
+test('le décompte des auteurs est compté en SQL, pas déduit d’une page', async () => {
+  const stats = await repository.getAuthorStats();
+  const everyone = await repository.getAuthors({ limit: 1000 });
+  assert.equal(stats.authorCount, everyone.total);
+  assert.ok(stats.bookCount >= stats.authorCount);
+  if (stats.firstCentury != null) {
+    assert.ok(stats.firstCentury <= stats.lastCentury);
+  }
+});
+
+test('getBooksIn pagine les trois listes et compte tout le lot', async () => {
+  const author = await repository.getFeaturedAuthor();
+  const byAuthor = await repository.getBooksIn({ scope: 'author', id: author.authorId });
+  assert.ok(byAuthor.total >= 1);
+  assert.equal(byAuthor.label, author.shortName ?? author.fullName);
+  assert.ok(byAuthor.rows.every((book) => 'downloadStatus' in book));
+
+  // Une page d'un seul livre ne change pas le total annoncé.
+  const narrow = await repository.getBooksIn({
+    scope: 'author',
+    id: author.authorId,
+    limit: 1,
+  });
+  assert.equal(narrow.rows.length, Math.min(1, byAuthor.total));
+  assert.equal(narrow.total, byAuthor.total);
+
+  const [category] = (await repository.getCategories()).filter((item) => item.bookCount > 0);
+  const byCategory = await repository.getBooksIn({ scope: 'category', id: category.categoryId });
+  assert.equal(byCategory.total, category.bookCount);
+  assert.equal(byCategory.label, category.label);
+
+  const [era] = await repository.getEras();
+  const byEra = await repository.getBooksIn({ scope: 'era', id: era.century });
+  assert.equal(byEra.total, era.bookCount);
+  assert.equal(byEra.label, null, 'un siècle se nomme dans la vue, pas en base');
+
+  await assert.rejects(() => repository.getBooksIn({ scope: 'nimportequoi', id: 1 }));
+});
+
+test('la bibliothèque se filtre, se trie et se pagine côté dépôt', async () => {
+  // Les tests précédents ont vidé la bibliothèque : on la repose.
+  await installAll(repository);
+  await repository.saveProgress({
+    editionId: 'ed-muqaddima-01',
+    pageId: 3,
+    sequenceNum: 3,
+    percent: 0.5,
+  });
+  await repository.saveProgress({
+    editionId: 'ed-bukhari-01',
+    pageId: 4,
+    sequenceNum: 4,
+    percent: 1,
+  });
+  // `saveProgress` accepte n'importe quel identifiant et pose une ligne
+  // « installée » : ce livre-là n'est pas au catalogue, il ne doit compter
+  // dans aucun décompte — sinon la pagination promettrait des pages vides.
+  await repository.saveProgress({
+    editionId: 'ed-fantome-01',
+    pageId: 1,
+    sequenceNum: 1,
+    percent: 1,
+  });
+
+  const all = await repository.getLibrary();
+  assert.equal(all.counts.all, 5);
+  assert.equal(all.counts.reading, 1);
+  assert.equal(all.counts.done, 1);
+
+  const reading = await repository.getLibrary({ filter: 'reading' });
+  assert.equal(reading.total, 1);
+  assert.equal(reading.rows[0].book.editionId, 'ed-muqaddima-01');
+  // Les décomptes restent ceux de toute la bibliothèque, sinon l'onglet qu'on
+  // ne regarde pas afficherait toujours zéro.
+  assert.deepEqual(reading.counts, all.counts);
+
+  const page = await repository.getLibrary({ limit: 2 });
+  assert.equal(page.rows.length, 2);
+  assert.equal(page.total, 5);
+  const next = await repository.getLibrary({ limit: 2, offset: 2 });
+  assert.ok(
+    next.rows.every(
+      (entry) => !page.rows.some((other) => other.book.editionId === entry.book.editionId),
+    ),
+    'pas de recouvrement entre les pages',
+  );
+
+  const byTitle = await repository.getLibrary({ sort: 'title', limit: 50 });
+  const titles = byTitle.rows.map((entry) => entry.book.title);
+  assert.deepEqual(titles, [...titles].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+});
+
+test('une collection paginée annonce tout son contenu et ce qui manque', async () => {
+  await installAll(repository);
+  const id = await repository.createCollection('كل شيء');
+  const books = await repository.getBooks({ limit: 5 });
+  await repository.addToCollection(id, books.map((book) => book.editionId));
+
+  const page = await repository.getCollectionBooks(id, { limit: 2 });
+  assert.equal(page.rows.length, 2);
+  assert.equal(page.total, 5);
+
+  // `missing` porte sur toute la collection : « télécharger le reste » ne peut
+  // pas ne proposer que ce qui tient dans la page affichée.
+  await repository.deleteBook(books[4].editionId, { keepProgress: true });
+  const after = await repository.getCollectionBooks(id, { limit: 2 });
+  assert.deepEqual(after.missing, [books[4].editionId]);
+
+  await repository.deleteCollection(id);
+});
+
+test('les deux listes de méthodes exposées ne peuvent pas diverger', async () => {
+  // `preload.cjs` décide ce que le rendu peut appeler, `REPOSITORY_METHODS` ce
+  // que le principal accepte. Une méthode ajoutée d'un seul côté ne casse rien
+  // au démarrage : elle échoue au premier clic, ce que personne ne voit venir.
+  const preload = fs.readFileSync(
+    path.join(projectRoot, 'src', 'preload', 'preload.cjs'),
+    'utf8',
+  );
+  const declared = [...preload.matchAll(/^\s*'([a-zA-Z]+)',$/gm)].map((match) => match[1]);
+  assert.ok(declared.length >= 40, 'les noms sont bien lus dans le pont');
+
+  assert.deepEqual(
+    declared.filter((name) => !REPOSITORY_METHODS.includes(name)),
+    [],
+    'exposées au rendu mais refusées par le principal',
+  );
+  // L'inverse est permis : `reconcileLibrary` est appelée par le principal au
+  // démarrage et n'a rien à faire dans le pont. Ce qui casse, c'est une méthode
+  // que le rendu croit pouvoir appeler et que le principal refuse.
+  for (const name of REPOSITORY_METHODS) {
+    assert.equal(typeof repository[name], 'function', `${name} n'existe pas sur le dépôt`);
+  }
 });

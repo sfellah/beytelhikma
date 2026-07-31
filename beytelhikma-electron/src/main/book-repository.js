@@ -18,6 +18,60 @@ export class RepositoryError extends Error {
 }
 
 /** Projection commune « carte de livre ». */
+/**
+ * Repli d'alif pour l'ordre alphabétique. `authors.full_name_ar` n'a pas de
+ * colonne normalisée au schéma, et `ORDER BY` trie sur les points de code :
+ * « أحمد » se rangerait avant « ابن » alors que l'usage les confond. On replie
+ * donc les trois hamzas portées comme le fait `normalize_ar` de
+ * `tools/_common.py` — c'est la seule divergence qui se voit à l'œil.
+ */
+const arabicOrder = (column) =>
+  `REPLACE(REPLACE(REPLACE(${column}, 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا')`;
+
+/** Tris proposés sur les auteurs. Clé inconnue : on retombe sur `count`. */
+const AUTHOR_SORTS = {
+  count: 'book_count DESC, a.full_name_ar',
+  name: `${arabicOrder('COALESCE(a.short_name_ar, a.full_name_ar)')} ASC`,
+  // Les auteurs sans date de décès ferment la marche : les dater est faux.
+  death: 'a.death_year_hijri IS NULL, a.death_year_hijri ASC, a.full_name_ar',
+};
+
+/**
+ * Les trois listes de livres qui méritent un écran à elles seules. Une seule
+ * requête paramétrée pour les trois : elles ne diffèrent que par leur filtre
+ * et par l'intitulé qui les nomme.
+ */
+const BOOK_SCOPES = {
+  author: {
+    where: 'e.edition_id IN (SELECT edition_id FROM edition_authors WHERE author_id = ?)',
+    params: (id) => [id],
+    label: 'SELECT COALESCE(short_name_ar, full_name_ar) AS label FROM authors WHERE author_id = ?',
+  },
+  category: {
+    where: 'e.category_id = ?',
+    params: (id) => [Number(id)],
+    label: 'SELECT label_ar AS label FROM categories WHERE category_id = ?',
+  },
+  era: {
+    where: `e.edition_id IN (
+      SELECT ea.edition_id
+      FROM edition_authors ea
+      JOIN authors a ON a.author_id = ea.author_id
+      WHERE a.death_year_hijri IS NOT NULL
+        AND (a.death_year_hijri - 1) / 100 + 1 = ?
+    )`,
+    params: (id) => [Number(id)],
+    label: null,
+  },
+};
+
+/** Filtres de la bibliothèque, appliqués sur la progression enregistrée. */
+const LIBRARY_FILTERS = {
+  all: () => true,
+  reading: (row) => (row.progress_percent ?? 0) > 0 && (row.progress_percent ?? 0) < 1,
+  done: (row) => (row.progress_percent ?? 0) >= 1,
+};
+
 const SUMMARY_SELECT = `
   SELECT e.edition_id,
          e.work_id,
@@ -29,6 +83,7 @@ const SUMMARY_SELECT = `
          e.cover_url,
          c.label_ar                                AS category_label,
          COALESCE(a.short_name_ar, a.full_name_ar) AS author_name,
+         a.death_year_hijri                        AS author_death_year,
          r.page_count                              AS page_count,
          r.published_at                            AS published_at
   FROM editions e
@@ -47,6 +102,9 @@ const bookSummary = (row) => ({
   categoryId: row.category_id ?? null,
   categoryLabel: row.category_label ?? null,
   authorName: row.author_name ?? null,
+  // Renseignée pour 69 % des auteurs : elle donne la reliure de la couverture
+  // (`src/shared/book-cover.js`), et son absence est un cas prévu, pas un trou.
+  authorDeathYear: row.author_death_year ?? null,
   volumeCount: row.volume_count ?? 1,
   language: row.language ?? 'ar',
   coverUrl: row.cover_url ?? null,
@@ -186,6 +244,8 @@ export class BookRepository {
   #db;
   #downloads = null;
   #nameIndex = null;
+  /** Ordre alphabétique du catalogue, construit une fois par session. */
+  #titleOrderCache = null;
 
   constructor(database, { downloads = null } = {}) {
     this.#db = database;
@@ -811,22 +871,132 @@ export class BookRepository {
     });
   }
 
-  /** Tous les auteurs du catalogue, avec le nombre d'éditions rattachées. */
-  getAuthors({ limit = 200 } = {}) {
+  /**
+   * Identifiants des auteurs dont le nom répond à [text], ou `null` quand il
+   * n'y a rien à filtrer. Le tri passe par l'index mémoire de `#names()` :
+   * `full_name_ar` n'est pas normalisé au schéma, un `LIKE` manquerait toute
+   * variante de hamza.
+   */
+  async #authorIdsMatching(text) {
+    const needle = normalizeArabic(text ?? '');
+    if (!needle) return null;
+    const { authors } = await this.#names();
+    return authors.filter((entry) => entry.needle.includes(needle)).map((entry) => entry.value);
+  }
+
+  /**
+   * Auteurs du catalogue, paginés, avec le nombre d'éditions rattachées.
+   *
+   * Le corpus Shamela en compte plusieurs milliers : les ramener tous pour n'en
+   * montrer qu'un écran chargeait la mémoire et, pire, laissait l'interface
+   * annoncer un total tronqué. `total` porte donc sur la sélection entière.
+   */
+  getAuthors({ offset = 0, limit = 60, sort = 'count', text = null } = {}) {
     return this.#guard('lecture des auteurs', async () => {
       const db = await this.#db.catalog();
-      return all(
+      const matching = await this.#authorIdsMatching(text);
+      // Un tableau vide est significatif : « aucun auteur », pas « pas de filtre ».
+      if (matching?.length === 0) return { rows: [], total: 0 };
+
+      const where = matching
+        ? `AND a.author_id IN (${matching.map(() => '?').join(',')})`
+        : '';
+      const params = matching ?? [];
+
+      const total =
+        first(
+          db,
+          `SELECT COUNT(*) AS n FROM (
+             SELECT a.author_id
+             FROM authors a
+             JOIN edition_authors ea ON ea.author_id = a.author_id
+             JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0
+             WHERE 1 = 1 ${where}
+             GROUP BY a.author_id
+           )`,
+          params,
+        )?.n ?? 0;
+
+      const rows = all(
         db,
         `SELECT a.*, COUNT(DISTINCT e.edition_id) AS book_count
          FROM authors a
          JOIN edition_authors ea ON ea.author_id = a.author_id
          JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0
+         WHERE 1 = 1 ${where}
          GROUP BY a.author_id
          HAVING book_count > 0
-         ORDER BY book_count DESC, a.full_name_ar
-         LIMIT ?`,
-        [limit],
+         ORDER BY ${AUTHOR_SORTS[sort] ?? AUTHOR_SORTS.count}
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset],
       ).map(author);
+
+      return { rows, total };
+    });
+  }
+
+  /**
+   * Ce que l'en-tête des auteurs annonce. Compté en SQL, sur tout le fonds :
+   * le déduire d'une page de résultats donnerait un chiffre faux dès que la
+   * liste dépasse un écran.
+   */
+  getAuthorStats() {
+    return this.#guard('lecture du décompte des auteurs', async () => {
+      const db = await this.#db.catalog();
+      const row =
+        first(
+          db,
+          `SELECT COUNT(DISTINCT a.author_id)  AS authors,
+                  COUNT(DISTINCT e.edition_id) AS books,
+                  MIN(CASE WHEN a.death_year_hijri > 0
+                           THEN (a.death_year_hijri - 1) / 100 + 1 END) AS first_century,
+                  MAX(CASE WHEN a.death_year_hijri > 0
+                           THEN (a.death_year_hijri - 1) / 100 + 1 END) AS last_century
+           FROM authors a
+           JOIN edition_authors ea ON ea.author_id = a.author_id
+           JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0`,
+        ) ?? {};
+      return {
+        authorCount: row.authors ?? 0,
+        bookCount: row.books ?? 0,
+        firstCentury: row.first_century ?? null,
+        lastCentury: row.last_century ?? null,
+      };
+    });
+  }
+
+  /**
+   * Une liste de livres qui mérite un écran : ceux d'un auteur, d'une
+   * discipline ou d'un siècle. `total` est compté à part — sans lui, l'écran ne
+   * pourrait qu'annoncer ce qu'il a reçu, c'est-à-dire mentir dès la page deux.
+   */
+  getBooksIn({ scope = 'author', id, offset = 0, limit = 24 } = {}) {
+    return this.#guard("lecture d'une liste de livres", async () => {
+      const target = BOOK_SCOPES[scope];
+      if (!target) throw new Error(`portée de liste inconnue : ${scope}`);
+
+      const db = await this.#db.catalog();
+      const params = target.params(id);
+
+      const total =
+        first(
+          db,
+          `SELECT COUNT(*) AS n FROM editions e
+            WHERE e.is_hidden = 0 AND ${target.where}`,
+          params,
+        )?.n ?? 0;
+
+      const rows = await this.#withDownloadStatus(
+        all(
+          db,
+          `${SUMMARY_SELECT} AND ${target.where}
+           GROUP BY e.edition_id ORDER BY e.title_ar LIMIT ? OFFSET ?`,
+          [...params, limit, offset],
+        ).map(bookSummary),
+      );
+
+      const label = target.label ? (first(db, target.label, [id])?.label ?? null) : null;
+      return { rows, total, label };
     });
   }
 
@@ -990,16 +1160,61 @@ export class BookRepository {
 
   // ------------------------------------------------------------ bibliothèque
 
-  getLibrary() {
+  /**
+   * Ordre alphabétique du catalogue, en identifiants seuls et gardé pour la
+   * session. Le titre vit dans `catalog.sqlite`, l'installation dans
+   * `user.sqlite` : deux fichiers, deux instances sql.js, aucun `ORDER BY` ne
+   * peut les traverser. On lit donc l'ordre une fois du côté catalogue et on y
+   * pioche ce qui est installé — plutôt qu'un `IN (?,?,…)` de plusieurs milliers
+   * de paramètres, que SQLite refuserait.
+   */
+  async #titleOrder() {
+    if (this.#titleOrderCache) return this.#titleOrderCache;
+    const catalog = await this.#db.catalog();
+    this.#titleOrderCache = all(
+      catalog,
+      'SELECT edition_id FROM editions WHERE is_hidden = 0 ORDER BY title_ar',
+    ).map((row) => row.edition_id);
+    return this.#titleOrderCache;
+  }
+
+  /**
+   * Bibliothèque paginée. Le tri et le filtre portent sur `user.sqlite`, qui ne
+   * contient qu'une ligne courte par livre installé ; seule la page demandée
+   * est ensuite jointe au catalogue. La jointure passe ainsi de N livres à
+   * `limit` — c'est elle qui coûtait, pas le décompte.
+   */
+  getLibrary({ offset = 0, limit = 24, filter = 'all', sort = 'recent' } = {}) {
     return this.#guard('lecture de la bibliothèque', async () => {
       const user = await this.#db.user();
+      const order = await this.#titleOrder();
+      // Une ligne de `downloaded_books` peut désigner une édition que le
+      // catalogue courant ne connaît plus. Elle ne compte pas : sinon le total
+      // annoncerait des pages que la jointure ne saurait pas remplir.
+      const known = new Set(order);
       const installed = all(
         user,
         `SELECT * FROM downloaded_books
          WHERE download_status = 'installed'
          ORDER BY last_opened_at DESC, downloaded_at DESC`,
-      );
-      return installed.length ? this.#joinWithCatalog(installed) : [];
+      ).filter((row) => known.has(row.edition_id));
+
+      const counts = {
+        all: installed.length,
+        reading: installed.filter(LIBRARY_FILTERS.reading).length,
+        done: installed.filter(LIBRARY_FILTERS.done).length,
+      };
+
+      let selected = installed.filter(LIBRARY_FILTERS[filter] ?? LIBRARY_FILTERS.all);
+      if (sort === 'title') {
+        const byId = new Map(selected.map((row) => [row.edition_id, row]));
+        selected = (await this.#titleOrder()).map((id) => byId.get(id)).filter(Boolean);
+      }
+
+      const rows = selected.length
+        ? await this.#joinWithCatalog(selected.slice(offset, offset + limit))
+        : [];
+      return { rows, total: selected.length, counts };
     });
   }
 
@@ -1188,30 +1403,44 @@ export class BookRepository {
     });
   }
 
-  getCollectionBooks(collectionId) {
+  /**
+   * Contenu d'une collection, paginé. Une collection peut porter tout le
+   * catalogue : seule la page demandée est jointe, et `missing` dit combien de
+   * livres restent à télécharger sur l'ensemble — pas sur la page, sinon le
+   * bouton « tout télécharger » proposerait moins qu'il n'y a.
+   */
+  getCollectionBooks(collectionId, { offset = 0, limit = 24 } = {}) {
     return this.#guard("lecture d'une collection", async () => {
       const user = await this.#db.user();
-      const rows = all(
+      const ids = all(
         user,
         'SELECT edition_id FROM collection_books WHERE collection_id = ? ORDER BY sort_order',
         [collectionId],
-      );
-      if (!rows.length) return [];
+      ).map((row) => row.edition_id);
+      if (!ids.length) return { rows: [], total: 0, missing: [] };
 
+      const installed = new Set(
+        all(
+          user,
+          "SELECT edition_id FROM downloaded_books WHERE download_status = 'installed'",
+        ).map((row) => row.edition_id),
+      );
+      const missing = ids.filter((id) => !installed.has(id));
+
+      const slice = ids.slice(offset, offset + limit);
       const catalog = await this.#db.catalog();
-      const ids = rows.map((row) => row.edition_id);
       const books = await this.#withDownloadStatus(
         all(
           catalog,
-          `${SUMMARY_SELECT} AND e.edition_id IN (${ids.map(() => '?').join(',')})
+          `${SUMMARY_SELECT} AND e.edition_id IN (${slice.map(() => '?').join(',')})
            GROUP BY e.edition_id`,
-          ids,
+          slice,
         ).map(bookSummary),
       );
       // L'ordre de la collection prime sur celui du catalogue ; une édition
       // absente du catalogue courant est simplement ignorée.
       const byId = new Map(books.map((book) => [book.editionId, book]));
-      return ids.map((id) => byId.get(id)).filter(Boolean);
+      return { rows: slice.map((id) => byId.get(id)).filter(Boolean), total: ids.length, missing };
     });
   }
 
@@ -1711,6 +1940,8 @@ export const REPOSITORY_METHODS = [
   'getBookDetail',
   'getFeaturedAuthor',
   'getAuthors',
+  'getAuthorStats',
+  'getBooksIn',
   'getEras',
   'getBooksByCentury',
   'getBooksByAuthor',

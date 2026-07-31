@@ -291,6 +291,19 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
     await shoot(window, name, route, selector, outDir, problems);
   }
 
+  // Les trois listes paginées (auteur, discipline, siècle) partagent un écran :
+  // en capturer une suffit à voir la grille, le sous-titre et la barre de pages.
+  const scoped = await window.webContents.executeJavaScript(
+    `window.beytelhikma.repository
+       .getFeaturedAuthor()
+       .then((author) => author?.authorId ?? null)`,
+  );
+  if (scoped) {
+    await shoot(window, 'author-books', `/author/${scoped}`, '.library__grid', outDir, problems);
+  } else {
+    problems.push("author-books : aucun auteur en vedette");
+  }
+
   await shootReaderStates(window, editionId, outDir, problems);
   await shootScrollMode(window, editionId, outDir, problems);
   await shootAnnotationState(window, editionId, outDir, problems);
@@ -312,6 +325,17 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   } else {
     problems.push("search-results : l'écran de recherche n'est jamais monté");
   }
+
+  // L'index des auteurs est paginé et vit en bas de l'écran : sans descendre,
+  // aucune capture ne montre la barre de pages ni le champ de recherche.
+  await shoot(window, 'authors', '/authors', '.author-grid', outDir, problems);
+  await window.webContents.executeJavaScript(
+    `document.querySelector('.authors__toolbar')?.scrollIntoView({ block: 'start' })`,
+  );
+  await wait(500);
+  const authorsIndex = await window.webContents.capturePage();
+  fs.writeFileSync(path.join(outDir, 'authors-index.png'), authorsIndex.toPNG());
+  console.log(`écrit : ${path.join(outDir, 'authors-index.png')}`);
 
   // Fenêtre haute : l'accueil entier, jusqu'aux disciplines et à l'auteur.
   window.setContentSize(width, 2700);

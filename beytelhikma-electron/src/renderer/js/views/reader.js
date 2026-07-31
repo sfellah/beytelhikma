@@ -8,7 +8,7 @@ import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
 import { confirmDialog, noteDialog, shortcutsDialog } from '../components/modal.js';
 import { errorView, loadingView } from '../components/states.js';
-import { arabicSearchPattern } from '../../../shared/arabic.js';
+import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
 
 const PAGE_WINDOW = 20;
 const MIN_FONT = 16;
@@ -20,6 +20,9 @@ const FLOW_KEEP = 40;
 const FLOW_STEP = 3;
 const NEAR_START = 600;
 const NEAR_END = 900;
+
+/** Entrées de sommaire montées d'un coup ; au-delà, on déplie à la demande. */
+const TOC_WINDOW = 80;
 
 const THEMES = [
   { key: 'paper', label: 'رق إفتراضي', swatch: '#fbf9f4', dot: '#001614' },
@@ -116,6 +119,13 @@ class Reader {
   #annotations = { highlights: [], notes: [], bookmarks: [] };
   /** Onglet courant du panneau des annotations. */
   #annotationKind = 'all';
+  /**
+   * Index dérivés, invalidés à chaque écriture d'annotation. Ils évitent de
+   * rebalayer tout le livre pour chaque page montée ou chaque ligne du panneau.
+   */
+  #highlightsByPage = null;
+  #tocByPage = null;
+  #pagesById = null;
   /**
    * Pages montées à l'écran, par position dans le livre. En mode page il n'y en
    * a qu'une ; en mode timer continu, une tranche glissante autour de la lecture.
@@ -481,10 +491,24 @@ class Reader {
     );
   }
 
-  /** Sommaire glissant : la même donnée que la fiche livre, à portée de page. */
+  /**
+   * Sommaire glissant : la même donnée que la fiche livre, à portée de page.
+   *
+   * Un sommaire du corpus Shamela porte couramment des milliers d'entrées : on
+   * n'en monte qu'une tranche, et un champ y cherche par titre. Le filtre passe
+   * par `title_normalized`, déjà produit par le pipeline — chercher sur le
+   * titre brut manquerait toute variante de hamza.
+   */
   #tocPanel() {
-    const body = this.#toc.length
-      ? this.#toc.map((entry) =>
+    const list = h('div', { class: 'reader__panel-body reader__toc-list' });
+    const more = h('div', { class: 'reader__toc-more' });
+    let matches = this.#toc;
+    let shown = 0;
+
+    const grow = () => {
+      const next = matches.slice(shown, shown + TOC_WINDOW);
+      list.append(
+        ...next.map((entry) =>
           h(
             'button',
             {
@@ -499,8 +523,54 @@ class Reader {
               `ص ${arabicNumber(entry.printedPageNum ?? entry.pageSequenceNum ?? '')}`,
             ),
           ),
-        )
-      : h('p', { class: 'label-md muted' }, 'لا يوجد فهرس لهذا الكتاب.');
+        ),
+      );
+      shown += next.length;
+      more.replaceChildren(
+        shown < matches.length
+          ? h(
+              'button',
+              { class: 'button button--tonal', onclick: grow },
+              h('span', {}, `عرض المزيد (${arabicNumber(matches.length - shown)})`),
+            )
+          : h('span', {}),
+      );
+    };
+
+    const apply = (term) => {
+      const needle = normalizeArabic(term ?? '');
+      matches = needle
+        ? this.#toc.filter((entry) => normalizeArabic(entry.title ?? '').includes(needle))
+        : this.#toc;
+      shown = 0;
+      list.replaceChildren();
+      if (!matches.length) {
+        list.append(
+          h(
+            'p',
+            { class: 'label-md muted' },
+            this.#toc.length ? 'لا عنوان بهذا الاسم.' : 'لا يوجد فهرس لهذا الكتاب.',
+          ),
+        );
+        more.replaceChildren();
+        return;
+      }
+      grow();
+    };
+
+    let timer = null;
+    const field = h('input', {
+      type: 'search',
+      class: 'reader__search-field',
+      placeholder: 'ابحث في الفهرس…',
+      oninput: (event) => {
+        clearTimeout(timer);
+        const value = event.target.value;
+        timer = setTimeout(() => apply(value), 200);
+      },
+    });
+
+    apply('');
 
     return h(
       'aside',
@@ -515,7 +585,11 @@ class Reader {
           icon('close', { size: 20 }),
         ),
       ),
-      h('div', { class: 'reader__panel-body reader__toc-list' }, body),
+      this.#toc.length > TOC_WINDOW
+        ? h('div', { class: 'reader__search-box' }, field)
+        : null,
+      list,
+      more,
     );
   }
 
@@ -725,28 +799,50 @@ class Reader {
    */
   #pageLabelFor(pageId) {
     if (pageId == null) return '';
-    const entry = this.#toc.find((item) => item.pageId === pageId);
+    // Deux index, construits à la demande puis gardés : le panneau appelle
+    // ceci une fois par annotation, et un livre peut porter des milliers
+    // d'entrées de sommaire comme de pages en cache.
+    this.#tocByPage ??= new Map(this.#toc.map((entry) => [entry.pageId, entry]));
+    const entry = this.#tocByPage.get(pageId);
     const printed = entry?.printedPageNum ?? entry?.pageSequenceNum;
     if (printed != null) return `ص ${arabicNumber(printed)}`;
-    const cached = [...this.#pages.values()].find((page) => page.pageId === pageId);
+
+    if (this.#pagesById?.size !== this.#pages.size) {
+      this.#pagesById = new Map([...this.#pages.values()].map((item) => [item.pageId, item]));
+    }
+    const cached = this.#pagesById.get(pageId);
     const number = cached?.printedPageNum ?? cached?.sequenceNum;
     return number == null ? '' : `ص ${arabicNumber(number)}`;
   }
 
   // ----------------------------------------------------------- annotations
 
-  /** Surlignages d'une page, marqués s'ils portent une note. */
+  /**
+   * Surlignages d'une page, marqués s'ils portent une note.
+   *
+   * L'index par page est construit une fois par écriture, pas une fois par
+   * page affichée : en fil continu, quarante pages montées voulaient dire
+   * quarante balayages de toutes les annotations du livre.
+   */
   #highlightsFor(pageId) {
-    const noted = new Set(
-      this.#annotations.notes.map((note) => note.highlightId).filter(Boolean),
-    );
-    return this.#annotations.highlights
-      .filter((highlight) => highlight.pageId === pageId)
-      .map((highlight) => ({ ...highlight, hasNote: noted.has(highlight.highlightId) }));
+    if (!this.#highlightsByPage) {
+      const noted = new Set(
+        this.#annotations.notes.map((note) => note.highlightId).filter(Boolean),
+      );
+      this.#highlightsByPage = new Map();
+      for (const highlight of this.#annotations.highlights) {
+        const bucket = this.#highlightsByPage.get(highlight.pageId);
+        const marked = { ...highlight, hasNote: noted.has(highlight.highlightId) };
+        if (bucket) bucket.push(marked);
+        else this.#highlightsByPage.set(highlight.pageId, [marked]);
+      }
+    }
+    return this.#highlightsByPage.get(pageId) ?? [];
   }
 
   /** Redessine les pages montées et le panneau après toute écriture. */
   #afterAnnotationChange() {
+    this.#highlightsByPage = null;
     this.#drawAnnotations();
     this.#syncBookmark();
     for (const block of this.#blocks.values()) this.#paintBlock(block);

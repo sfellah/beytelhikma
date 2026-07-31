@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { initial } from '../format.js';
+import { arabicNumber, initial } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -201,74 +201,131 @@ function buildTree(entries) {
   return roots;
 }
 
+/**
+ * Ce qu'un sommaire affiche d'une entrée : le numéro imprimé, et à défaut le
+ * rang de la page dans le livre. Jamais `pageId` — c'est l'identifiant source,
+ * global au corpus, il ne veut rien dire pour un lecteur.
+ */
+const tocPageLabel = (node) => {
+  const printed = node.printedPageNum ?? node.pageSequenceNum;
+  return printed == null ? '' : `ص ${arabicNumber(printed)}`;
+};
+
+/** Chapitres montés d'un coup ; au-delà, on déplie à la demande. */
+const TOC_WINDOW = 60;
+
 function tocSection(entries, openReader) {
   const roots = buildTree(entries);
+  const list = h('div', { class: 'toc__list' });
+  const more = h('div', { class: 'toc__more' });
+  let shown = 0;
+
+  // Un sommaire du corpus Shamela peut porter des milliers d'entrées : les
+  // monter toutes coûtait autant de nœuds DOM pour une liste qu'on parcourt
+  // rarement jusqu'au bout.
+  const grow = () => {
+    const next = roots.slice(shown, shown + TOC_WINDOW);
+    list.append(...next.map((node) => tocChapter(node, openReader)));
+    shown += next.length;
+    more.replaceChildren(
+      shown < roots.length
+        ? h(
+            'button',
+            { class: 'button button--tonal', onclick: grow },
+            h(
+              'span',
+              {},
+              `عرض المزيد (${arabicNumber(roots.length - shown)})`,
+            ),
+          )
+        : h('span', {}),
+    );
+  };
+  grow();
+
   return h(
     'section',
     { class: 'toc' },
-    h('h3', { class: 'title-md' }, icon('toc', { size: 20 }), 'فهرس المحتويات'),
     h(
+      'h3',
+      { class: 'title-md' },
+      icon('toc', { size: 20 }),
+      'فهرس المحتويات',
+      h('span', { class: 'label-sm muted' }, `${arabicNumber(roots.length)} فصلًا`),
+    ),
+    list,
+    more,
+  );
+}
+
+/**
+ * Un chapitre du sommaire. Les sous-entrées ne sont montées qu'à l'ouverture
+ * du `<details>` : un chapitre replié n'a pas à peser dans le document.
+ */
+function tocChapter(node, openReader) {
+  if (!node.children.length) {
+    return h(
       'div',
-      { class: 'toc__list' },
-      roots.map((node) =>
-        node.children.length
-          ? h(
-              'details',
-              { class: 'toc__chapter' },
-              h(
-                'summary',
-                {},
-                h(
-                  'span',
-                  { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                  icon('chevronLeft', { size: 18, className: 'icon--chevron' }),
-                  node.title,
-                ),
-                h(
-                  'span',
-                  {
-                    class: 'label-sm muted',
-                    title: 'فتح هذه الصفحة',
-                    onclick: (event) => {
-                      // Sans cela, le clic replierait aussi le chapitre.
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openReader(node.pageId);
-                    },
-                  },
-                  `ص ${node.pageId}`,
-                ),
-              ),
-              h(
-                'div',
-                { class: 'toc__children' },
-                node.children.map((child) =>
-                  h(
-                    'p',
-                    { class: 'toc__child', onclick: () => openReader(child.pageId) },
-                    h('span', {}, child.title),
-                    h('span', {}, String(child.pageId)),
-                  ),
-                ),
-              ),
-            )
-          : h(
-              'div',
-              { class: 'toc__chapter' },
-              h(
-                'div',
-                {
-                  class: 'toc__child',
-                  style: { padding: 'var(--space-md)' },
-                  onclick: () => openReader(node.pageId),
-                },
-                h('span', { class: 'label-md' }, node.title),
-                h('span', { class: 'label-sm muted' }, `ص ${node.pageId}`),
-              ),
+      { class: 'toc__chapter' },
+      h(
+        'div',
+        {
+          class: 'toc__child',
+          style: { padding: 'var(--space-md)' },
+          onclick: () => openReader(node.pageId),
+        },
+        h('span', { class: 'label-md' }, node.title),
+        h('span', { class: 'label-sm muted' }, tocPageLabel(node)),
+      ),
+    );
+  }
+
+  const children = h('div', { class: 'toc__children' });
+  const details = h(
+    'details',
+    {
+      class: 'toc__chapter',
+      ontoggle: () => {
+        if (!details.open || children.childElementCount) return;
+        children.append(
+          ...node.children.map((child) =>
+            h(
+              'p',
+              { class: 'toc__child', onclick: () => openReader(child.pageId) },
+              h('span', {}, child.title),
+              h('span', {}, tocPageLabel(child)),
             ),
+          ),
+        );
+      },
+    },
+    h(
+      'summary',
+      {},
+      h(
+        'span',
+        { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        icon('chevronLeft', { size: 18, className: 'icon--chevron' }),
+        node.title,
+      ),
+      h(
+        'span',
+        {
+          class: 'label-sm muted',
+          title: 'فتح هذه الصفحة',
+          onclick: (event) => {
+            // Sans cela, le clic replierait aussi le chapitre.
+            event.preventDefault();
+            event.stopPropagation();
+            openReader(node.pageId);
+          },
+        },
+        tocPageLabel(node),
       ),
     ),
+    children,
   );
+  return details;
 }
 
 function relatedSection(related) {

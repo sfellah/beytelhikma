@@ -145,6 +145,27 @@ fiche des raccourcis, `Échap` ferme le panneau ou revient en arrière. La fiche
 (`؟`) est la source à tenir à jour : c'est elle que l'utilisateur lit, la
 constante `SHORTCUTS` de `views/reader.js` en est le texte.
 
+### Pagination
+
+Le corpus fait 8 589 livres et plusieurs milliers d'auteurs : aucun écran ne
+peut tout montrer. Toute lecture qui déborde d'un écran renvoie
+`{ rows, total }`, et **le nombre affiché vient toujours de `total`, jamais de
+`rows.length`** — un `limit` sans `total` faisait annoncer à l'écran des
+auteurs le nombre qu'il avait reçu plutôt que le nombre qu'il y a.
+
+| Écran | Lecture | Compte à part |
+| --- | --- | --- |
+| `/authors` | `getAuthors` (tri, recherche) | `getAuthorStats`, `getEras` |
+| `/author/:id`, `/category/:id`, `/era/:id` | `getBooksIn` | `total` de la même requête |
+| `/library` | `getLibrary` (filtre, tri) | `counts` par onglet |
+| `/collection/:id` | `getCollectionBooks` | `total` et `missing` sur tout le lot |
+| `/notes`, `/downloads`, `/explore` | déjà paginés | — |
+
+Le sommaire d'un livre échappe à la règle : le lecteur en a besoin en entier
+pour nommer le chapitre de chaque page. Il est donc chargé d'un bloc mais
+**fenêtré à l'affichage** (`TOC_WINDOW`), avec un champ qui filtre sur le titre
+normalisé.
+
 ### Ancrage des annotations
 
 Un surlignage garde ses décalages **dans le texte rendu** de la page, plus le

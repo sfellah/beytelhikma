@@ -5,6 +5,7 @@ import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { confirmDialog } from '../components/modal.js';
+import { pagination, PAGE_SIZES } from '../components/pagination.js';
 import { asyncView, emptyView } from '../components/states.js';
 
 /**
@@ -140,17 +141,23 @@ export function collectionDetailView(host, params) {
   const content = renderShell(host, { active: 'library' });
   const { id } = params;
 
+  // Une collection peut porter tout le catalogue : on en montre une page, et
+  // `missing` est compté sur l'ensemble — sinon « tout télécharger »
+  // proposerait moins de livres qu'il n'y en a à prendre.
+  const query = { offset: 0, limit: PAGE_SIZES[0] };
+
   const load = async () => ({
     collection: (await repository.getCollections()).find((entry) => entry.id === id) ?? null,
-    books: await repository.getCollectionBooks(id),
+    page: await repository.getCollectionBooks(id, query),
   });
 
   const refresh = () => asyncView(content, load, render, { empty: 'هذه المجموعة فارغة' });
 
-  function render({ collection, books }) {
+  function render({ collection, page }) {
     if (!collection) return emptyView('لم نجد هذه المجموعة');
 
-    const missing = books.filter((book) => book.downloadStatus !== 'installed');
+    const books = page.rows;
+    const missing = page.missing;
 
     return h(
       'section',
@@ -177,7 +184,7 @@ export function collectionDetailView(host, params) {
               {
                 class: 'button button--filled',
                 onclick: async () => {
-                  await repository.downloadSelection(missing.map((book) => book.editionId));
+                  await repository.downloadSelection(missing);
                   toast(`أُضيف ${missing.length} كتابًا إلى قائمة التنزيل`);
                   refresh();
                 },
@@ -228,6 +235,20 @@ export function collectionDetailView(host, params) {
             ),
           )
         : emptyView('هذه المجموعة فارغة'),
+      page.total > query.limit &&
+        pagination({
+          total: page.total,
+          offset: query.offset,
+          limit: query.limit,
+          onChange: (offset) => {
+            query.offset = offset;
+            refresh();
+          },
+          onPageSize: (limit) => {
+            Object.assign(query, { limit, offset: 0 });
+            refresh();
+          },
+        }),
     );
   }
 
