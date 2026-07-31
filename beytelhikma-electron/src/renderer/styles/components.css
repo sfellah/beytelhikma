@@ -236,6 +236,44 @@
   color: var(--error);
 }
 
+/* ------------------------------------------------------------------ modale */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 45%);
+  z-index: 50;
+}
+
+.modal__panel {
+  width: min(30rem, calc(100vw - 2 * var(--space-lg)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.modal__actions .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.button--danger {
+  background: var(--error);
+  color: var(--on-error);
+}
+
 /* ------------------------------------------------------ titres section */
 
 .section-header {

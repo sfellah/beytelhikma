@@ -5,6 +5,7 @@ import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
+import { confirmDelete } from '../components/confirm-delete.js';
 import { cover } from '../components/cover.js';
 import { downloadAction } from '../components/download-action.js';
 import { asyncView } from '../components/states.js';
@@ -59,7 +60,12 @@ function render({ detail, toc, progress, related }) {
             progress,
             onOpen: () => openReader(progress?.pageId ?? null),
             onDelete: async () => {
-              await repository.deleteBook(book.editionId, { keepProgress: true });
+              const choice = await confirmDelete({
+                title: book.title,
+                hasProgress: Boolean(progress),
+              });
+              if (!choice) return;
+              await repository.deleteBook(book.editionId, { keepProgress: choice === 'keep' });
               navigate(`/book/${book.editionId}`);
             },
           }),
