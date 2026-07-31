@@ -40,6 +40,9 @@ GUTTER_X = 489
 MARK_HEIGHT = 256
 LOCKUP_WIDTH = 512
 ICON_SIZE = 512
+# Tailles portées par `icon.ico`. Windows pioche selon le contexte : 16 dans la
+# barre des tâches, 256 dans l'explorateur en grandes icônes.
+ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
 # Crème de l'application (`--surface` côté renderer) et encre de substitution.
 ICON_BACKGROUND = (251, 249, 244, 255)
@@ -115,6 +118,15 @@ def main() -> None:
         path = args.out / name
         image.save(path, optimize=True)
         print(f"{path.relative_to(REPO_ROOT)}  {image.width}×{image.height}")
+
+    # L'icône Windows sort du même dessin que `app-icon.png` : la dériver ici
+    # plutôt que de la convertir à la main est ce qui empêche l'icône de
+    # l'installeur de dater d'un logo que plus personne n'utilise.
+    ico_dir = REPO_ROOT / "beytelhikma-electron" / "build"
+    ico_dir.mkdir(parents=True, exist_ok=True)
+    ico = ico_dir / "icon.ico"
+    exports["app-icon.png"].save(ico, sizes=ICO_SIZES)
+    print(f"{ico.relative_to(REPO_ROOT)}  {len(ICO_SIZES)} tailles")
 
 
 if __name__ == "__main__":
