@@ -24,6 +24,15 @@ __pycache__/
 # Sortie de tools/import_shamela.py (plusieurs centaines de Mo, régénérable)
 /dist/
 
+# Graine de catalogue embarquée : artefact de build, récupérée du bucket par
+# `scripts/fetch-seed.mjs`. La versionner mettrait plusieurs Mo de binaire dans
+# l'historique à chaque publication. Le jeu d'exemple, lui, reste versionné.
+beytelhikma-electron/assets/catalog.sqlite.zst
+beytelhikma-electron/assets/catalog-seed.json
+
+# Artefacts d'electron-builder
+beytelhikma-electron/release/
+
 # Maquettes jetables du compagnon visuel de brainstorming
 .superpowers/
 
