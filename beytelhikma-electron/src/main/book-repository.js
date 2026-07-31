@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { normalizeArabic } from '../shared/arabic.js';
+import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
 import { all, first } from './app-database.js';
 import { buildCount, buildFacetQuery, buildList } from './catalog-query.js';
 import { DownloadQueue } from './download-manager.js';
@@ -107,6 +108,30 @@ const progress = (row) =>
         percent: row.progress_percent ?? 0,
         updatedAt: row.last_opened_at ?? null,
       };
+
+/** Caractères conservés de part et d'autre d'une correspondance. */
+const SNIPPET_MARGIN = 60;
+
+/**
+ * Extrait centré sur la première correspondance de [pattern] dans [text].
+ * Renvoie les trois morceaux séparément : l'interface décide de la mise en
+ * forme, et aucune chaîne HTML ne traverse l'IPC.
+ */
+function snippetAround(text, pattern) {
+  pattern.lastIndex = 0;
+  const match = pattern.exec(text ?? '');
+  if (!match) return { before: (text ?? '').slice(0, 120), match: '', after: '' };
+
+  const start = Math.max(0, match.index - SNIPPET_MARGIN);
+  const end = Math.min(text.length, match.index + match[0].length + SNIPPET_MARGIN);
+  return {
+    before: (start > 0 ? '…' : '') + text.slice(start, match.index).replace(/\s+/g, ' '),
+    match: match[0],
+    after:
+      text.slice(match.index + match[0].length, end).replace(/\s+/g, ' ') +
+      (end < text.length ? '…' : ''),
+  };
+}
 
 /**
  * Implémentation local-first : catalogue et livres lus dans les fichiers SQLite
@@ -841,6 +866,60 @@ export class BookRepository {
     });
   }
 
+  /**
+   * Recherche dans le contenu d'un livre.
+   *
+   * `pages_fts` n'est pas interrogeable — le build sql.js embarqué ne contient
+   * pas FTS5 — mais le schéma expose `pages.body_search` et
+   * `toc.title_normalized`, déjà normalisés par le pipeline. Un `LIKE` dessus
+   * donne le même rappel.
+   */
+  searchInBook(editionId, term, { limit = 50 } = {}) {
+    return this.#guard('recherche dans le livre', async () => {
+      const needle = normalizeArabic(term ?? '');
+      if (needle.length < 2) return { chapters: [], pages: [], term: needle };
+
+      const db = await this.#db.book(editionId);
+      // `%` et `_` sont des jokers LIKE : sans échappement, un terme les
+      // contenant ramènerait le livre entier.
+      const pattern = `%${needle.replace(/[\\%_]/g, '\\$&')}%`;
+      const highlight = arabicSearchPattern(needle);
+
+      const chapters = all(
+        db,
+        `SELECT t.toc_id, t.page_id, t.title_text, t.level,
+                p.printed_page_num, p.sequence_num
+           FROM toc t JOIN pages p ON p.page_id = t.page_id
+          WHERE t.title_normalized LIKE ? ESCAPE '\\'
+          ORDER BY t.sequence_num LIMIT ?`,
+        [pattern, limit],
+      ).map((row) => ({
+        tocId: row.toc_id,
+        pageId: row.page_id,
+        title: row.title_text,
+        level: row.level ?? 1,
+        printedPageNum: row.printed_page_num ?? null,
+        sequenceNum: row.sequence_num,
+      }));
+
+      const pages = all(
+        db,
+        `SELECT page_id, sequence_num, printed_page_num, body_plain
+           FROM pages
+          WHERE body_search LIKE ? ESCAPE '\\'
+          ORDER BY sequence_num LIMIT ?`,
+        [pattern, limit],
+      ).map((row) => ({
+        pageId: row.page_id,
+        sequenceNum: row.sequence_num,
+        printedPageNum: row.printed_page_num ?? null,
+        snippet: snippetAround(row.body_plain, highlight),
+      }));
+
+      return { chapters, pages, term: needle };
+    });
+  }
+
   getPageById(editionId, pageId) {
     return this.#guard("lecture d'une page", async () => {
       const db = await this.#db.book(editionId);
@@ -946,7 +1025,175 @@ export class BookRepository {
     });
   }
 
+  // ------------------------------------------------------------- collections
+
+  /**
+   * Collections personnelles. Elles vivent dans `user.sqlite` et ne contiennent
+   * que des références : supprimer une collection n'efface jamais un livre.
+   * Une collection peut contenir des livres non installés — c'est autant une
+   * liste d'envies qu'un rangement.
+   */
+  getCollections() {
+    return this.#guard('lecture des collections', async () => {
+      const user = await this.#db.user();
+      const installed = new Set(await this.#installedIds());
+      const rows = all(user, 'SELECT * FROM collections ORDER BY sort_order, created_at');
+      const links = all(user, 'SELECT collection_id, edition_id FROM collection_books');
+
+      return rows.map((row) => {
+        const members = links.filter((link) => link.collection_id === row.collection_id);
+        return {
+          id: row.collection_id,
+          name: row.name,
+          description: row.description ?? null,
+          bookCount: members.length,
+          installedCount: members.filter((link) => installed.has(link.edition_id)).length,
+          createdAt: row.created_at,
+        };
+      });
+    });
+  }
+
+  createCollection(name) {
+    return this.#guard("création d'une collection", async () => {
+      const label = String(name ?? '').trim();
+      if (!label) throw new Error('nom de collection vide');
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      await this.#db.writeUser((user) => {
+        user.run(
+          `INSERT INTO collections (collection_id, name, description, sort_order, created_at, updated_at)
+           VALUES (?,?,NULL,
+                   (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM collections), ?, ?)`,
+          [id, label, now, now],
+        );
+      });
+      return id;
+    });
+  }
+
+  renameCollection(collectionId, name) {
+    return this.#guard("renommage d'une collection", async () => {
+      const label = String(name ?? '').trim();
+      if (!label) throw new Error('nom de collection vide');
+      await this.#db.writeUser((user) => {
+        user.run('UPDATE collections SET name = ?, updated_at = ? WHERE collection_id = ?', [
+          label,
+          new Date().toISOString(),
+          collectionId,
+        ]);
+      });
+    });
+  }
+
+  deleteCollection(collectionId) {
+    return this.#guard("suppression d'une collection", async () => {
+      await this.#db.writeUser((user) => {
+        // Les liens partent, les livres restent installés.
+        user.run('DELETE FROM collection_books WHERE collection_id = ?', [collectionId]);
+        user.run('DELETE FROM collections WHERE collection_id = ?', [collectionId]);
+      });
+    });
+  }
+
+  addToCollection(collectionId, editionIds = []) {
+    return this.#guard('ajout à une collection', async () => {
+      if (!editionIds.length) return 0;
+      const now = new Date().toISOString();
+      let added = 0;
+      await this.#db.writeUser((user) => {
+        for (const editionId of editionIds) {
+          user.run(
+            `INSERT OR IGNORE INTO collection_books (collection_id, edition_id, sort_order, added_at)
+             VALUES (?,?,
+                     (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM collection_books
+                       WHERE collection_id = ?), ?)`,
+            [collectionId, editionId, collectionId, now],
+          );
+          // `getRowsModified` rend le compte du dernier statement : une
+          // insertion ignorée rend 0, une insertion effective rend 1.
+          if (user.getRowsModified() > 0) added += 1;
+        }
+      });
+      return added;
+    });
+  }
+
+  removeFromCollection(collectionId, editionId) {
+    return this.#guard("retrait d'une collection", async () => {
+      await this.#db.writeUser((user) => {
+        user.run('DELETE FROM collection_books WHERE collection_id = ? AND edition_id = ?', [
+          collectionId,
+          editionId,
+        ]);
+      });
+    });
+  }
+
+  getCollectionBooks(collectionId) {
+    return this.#guard("lecture d'une collection", async () => {
+      const user = await this.#db.user();
+      const rows = all(
+        user,
+        'SELECT edition_id FROM collection_books WHERE collection_id = ? ORDER BY sort_order',
+        [collectionId],
+      );
+      if (!rows.length) return [];
+
+      const catalog = await this.#db.catalog();
+      const ids = rows.map((row) => row.edition_id);
+      const books = await this.#withDownloadStatus(
+        all(
+          catalog,
+          `${SUMMARY_SELECT} AND e.edition_id IN (${ids.map(() => '?').join(',')})
+           GROUP BY e.edition_id`,
+          ids,
+        ).map(bookSummary),
+      );
+      // L'ordre de la collection prime sur celui du catalogue ; une édition
+      // absente du catalogue courant est simplement ignorée.
+      const byId = new Map(books.map((book) => [book.editionId, book]));
+      return ids.map((id) => byId.get(id)).filter(Boolean);
+    });
+  }
+
   // --------------------------------------------------------------- réglages
+
+  /** Efface tous les fichiers de livres, en conservant les progressions. */
+  deleteAllBooks() {
+    return this.#guard('suppression de tous les livres', async () => {
+      const ids = this.#db.installedBooks();
+      for (const editionId of ids) {
+        if (this.#downloads?.isBusy(editionId)) continue;
+        await this.deleteBook(editionId, { keepProgress: true });
+      }
+      return ids.length;
+    });
+  }
+
+  /** Applique `minio.base_url` à la file en cours, sans redémarrage. */
+  setDownloadBaseUrl(url) {
+    return this.#guard("réglage de l'adresse du serveur", async () => {
+      const value = String(url ?? '').trim();
+      await this.saveSetting('minio.base_url', value);
+      this.#downloads?.setBaseUrl(value || null);
+    });
+  }
+
+  /** Informations qu'on réclame quand quelque chose ne va pas. */
+  getAbout() {
+    return this.#guard("lecture des informations d'application", async () => {
+      const catalog = await this.#db.catalog();
+      const user = await this.#db.user();
+      return {
+        librarySource: this.#db.librarySource,
+        storageRoot: this.#db.root,
+        schemaVersion: first(user, 'SELECT schema_version FROM user_info')?.schema_version ?? null,
+        editionCount: first(catalog, 'SELECT COUNT(*) AS n FROM editions WHERE is_hidden = 0')?.n ?? 0,
+        categoryCount: first(catalog, 'SELECT COUNT(*) AS n FROM categories')?.n ?? 0,
+      };
+    });
+  }
 
   getSettings() {
     return this.#guard('lecture des réglages', async () => {
@@ -1001,10 +1248,21 @@ export const REPOSITORY_METHODS = [
   'getPageCount',
   'getPages',
   'getPageById',
+  'searchInBook',
   'getLibrary',
   'getContinueReading',
   'getProgress',
   'saveProgress',
   'getSettings',
   'saveSetting',
+  'getCollections',
+  'createCollection',
+  'renameCollection',
+  'deleteCollection',
+  'addToCollection',
+  'removeFromCollection',
+  'getCollectionBooks',
+  'deleteAllBooks',
+  'setDownloadBaseUrl',
+  'getAbout',
 ];

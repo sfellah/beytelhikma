@@ -35,6 +35,17 @@ const METHODS = [
   'suggestValues',
   'getSelectionWeight',
   'downloadSelection',
+  'searchInBook',
+  'getCollections',
+  'createCollection',
+  'renameCollection',
+  'deleteCollection',
+  'addToCollection',
+  'removeFromCollection',
+  'getCollectionBooks',
+  'deleteAllBooks',
+  'setDownloadBaseUrl',
+  'getAbout',
 ];
 
 const repository = {};

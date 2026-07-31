@@ -300,6 +300,115 @@ test('les réglages du lecteur sont persistés', async () => {
   assert.equal(settings['reader.theme'], 'night');
 });
 
+// --------------------------------------------------- recherche dans le livre
+
+test('la recherche interne trouve avec et sans diacritiques', async () => {
+  const page = await repository.getPageById('ed-muqaddima-01', 1);
+  const word = page.bodyPlain.split(/\s+/).find((token) => token.length >= 4);
+
+  const found = await repository.searchInBook('ed-muqaddima-01', word);
+  assert.ok(found.pages.length >= 1, `aucun résultat pour « ${word} »`);
+  const [hit] = found.pages;
+  assert.ok(hit.snippet.match.length > 0, "l'extrait doit porter la correspondance");
+  assert.ok(typeof hit.sequenceNum === 'number');
+});
+
+test('un terme trop court ne cherche rien', async () => {
+  const found = await repository.searchInBook('ed-muqaddima-01', 'ا');
+  assert.deepEqual(found.pages, []);
+  assert.deepEqual(found.chapters, []);
+});
+
+test('un joker LIKE ne ramène pas tout le livre', async () => {
+  const found = await repository.searchInBook('ed-muqaddima-01', '%%');
+  assert.deepEqual(found.pages, [], 'les % doivent être échappés, pas interprétés');
+});
+
+test('la recherche interne remonte aussi les titres du sommaire', async () => {
+  const toc = await repository.getToc('ed-muqaddima-01');
+  const word = toc[0].title.split(/\s+/).find((token) => token.length >= 3) ?? toc[0].title;
+  const found = await repository.searchInBook('ed-muqaddima-01', word);
+  assert.ok(found.chapters.length >= 1);
+  assert.ok(found.chapters.every((entry) => typeof entry.pageId === 'number'));
+});
+
+// ---------------------------------------------------------------- collections
+
+test('une collection se crée, se remplit et se vide sans toucher aux livres', async () => {
+  const id = await repository.createCollection('  أصول الفقه  ');
+  let collections = await repository.getCollections();
+  const created = collections.find((entry) => entry.id === id);
+  assert.equal(created.name, 'أصول الفقه', 'le nom est rogné');
+  assert.equal(created.bookCount, 0);
+
+  const books = await repository.getBooks({ limit: 3 });
+  const ids = books.map((book) => book.editionId);
+  assert.equal(await repository.addToCollection(id, ids), 3);
+  assert.equal(await repository.addToCollection(id, ids), 0, 'aucun doublon');
+
+  const content = await repository.getCollectionBooks(id);
+  assert.deepEqual(
+    content.map((book) => book.editionId),
+    ids,
+    "l'ordre de la collection est conservé",
+  );
+  assert.ok(content.every((book) => 'downloadStatus' in book));
+
+  collections = await repository.getCollections();
+  assert.equal(collections.find((entry) => entry.id === id).bookCount, 3);
+
+  await repository.removeFromCollection(id, ids[0]);
+  assert.equal((await repository.getCollectionBooks(id)).length, 2);
+
+  await repository.renameCollection(id, 'مراجع');
+  assert.equal((await repository.getCollections()).find((e) => e.id === id).name, 'مراجع');
+
+  await repository.deleteCollection(id);
+  assert.equal(
+    (await repository.getCollections()).some((entry) => entry.id === id),
+    false,
+  );
+  // Les livres n'ont pas bougé.
+  assert.equal((await repository.getLibrary()).length, 5);
+});
+
+test('une collection refuse un nom vide', async () => {
+  await assert.rejects(() => repository.createCollection('   '), RepositoryError);
+});
+
+// ------------------------------------------------------------------ réglages
+
+test('l’adresse du serveur est persistée et appliquée à la file', async () => {
+  await repository.setDownloadBaseUrl('http://127.0.0.1:9000/beytelhikma');
+  const settings = await repository.getSettings();
+  assert.equal(settings['minio.base_url'], 'http://127.0.0.1:9000/beytelhikma');
+  await repository.setDownloadBaseUrl('');
+  assert.equal((await repository.getSettings())['minio.base_url'], '');
+});
+
+test('les informations d’application décrivent la bibliothèque installée', async () => {
+  const about = await repository.getAbout();
+  assert.equal(about.editionCount, 5);
+  assert.ok(about.categoryCount >= 5);
+  assert.equal(about.schemaVersion, 1);
+  assert.ok(about.librarySource.endsWith('sample'));
+});
+
+test('deleteAllBooks vide le dossier et conserve les progressions', async () => {
+  await repository.saveProgress({
+    editionId: 'ed-muqaddima-01',
+    pageId: 4,
+    sequenceNum: 4,
+    percent: 0.8,
+  });
+
+  const removed = await repository.deleteAllBooks();
+  assert.ok(removed >= 1);
+  assert.deepEqual(database.installedBooks(), []);
+  assert.equal((await repository.getLibrary()).length, 0);
+  assert.equal((await repository.getProgress('ed-muqaddima-01')).pageId, 4);
+});
+
 test('les auteurs sont listés du plus au moins représenté', async () => {
   const authors = await repository.getAuthors();
   assert.ok(authors.length >= 1);

@@ -24,3 +24,39 @@ export function normalizeArabic(text) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** Ce que la normalisation a fusionné, le motif doit le rouvrir. */
+const CLASSES = {
+  ا: '[اأإآٱ]',
+  ي: '[يى]',
+  ه: '[هة]',
+};
+
+/** Signes que la normalisation retire : le texte d'origine peut en porter. */
+const SKIPPABLE = '[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06EDـ]*';
+
+const escapeRegExp = (char) => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Motif retrouvant un terme dans du texte **non normalisé**.
+ *
+ * `pages.body_search` est normalisé, `body_plain` ne l'est pas, et la
+ * normalisation change la longueur : une position trouvée dans l'un ne vaut
+ * rien dans l'autre. Ce motif s'applique donc au texte d'origine, ce qui donne
+ * la position réelle — nécessaire pour extraire un extrait juste et pour
+ * surligner au bon endroit.
+ */
+export function arabicSearchPattern(term, flags = 'g') {
+  const normalized = normalizeArabic(term);
+  // Un terme vide ne doit rien trouver : `new RegExp('')` filerait partout.
+  if (!normalized) return /(?!)/;
+
+  const body = [...normalized]
+    .map((char) => {
+      if (char === ' ') return '\\s+';
+      return CLASSES[char] ?? escapeRegExp(char);
+    })
+    .join(SKIPPABLE);
+
+  return new RegExp(`${SKIPPABLE}${body}`, flags);
+}
