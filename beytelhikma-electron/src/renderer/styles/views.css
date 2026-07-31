@@ -2144,3 +2144,133 @@ html:not([dir='rtl']) .scroller--at-start {
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* --------------------------------------------------------- collections */
+
+.collections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.collections__row {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.collection-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  min-width: 190px;
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface-container-lowest);
+  cursor: pointer;
+  text-align: start;
+}
+
+.collection-card:hover {
+  border-color: var(--deep-emerald);
+}
+
+.collection-card--new {
+  border-style: dashed;
+  color: var(--ink-mute);
+}
+
+.collection-card__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: var(--surface-container);
+  color: var(--deep-emerald);
+}
+
+.collection-card__name {
+  font-weight: 600;
+  max-width: 100%;
+}
+
+.collection-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.collection-page__actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------- إعدادات */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 46rem;
+}
+
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--rule);
+  background: var(--surface-container-lowest);
+}
+
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.settings__row-text {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.settings__choices {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.settings__choices .button.is-active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+}
+
+.settings__slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.settings__inline {
+  display: flex;
+  gap: var(--space-sm);
+  flex: 1 1 18rem;
+}
+
+.settings__field {
+  flex: 1;
+  min-width: 0;
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rule);
+  background: var(--surface-container-lowest);
+}

@@ -2,11 +2,13 @@ import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
 import { authorsView } from './views/authors.js';
 import { bookDetailView } from './views/book-detail.js';
+import { collectionDetailView } from './views/collections.js';
 import { downloadsView } from './views/downloads.js';
 import { exploreView } from './views/explore.js';
 import { homeView } from './views/home.js';
 import { collectionView, libraryView } from './views/library.js';
 import { readerView } from './views/reader.js';
+import { settingsView } from './views/settings.js';
 
 defineRoutes(
   {
@@ -18,13 +20,10 @@ defineRoutes(
     '/category/:id': collectionView('category'),
     '/author/:id': collectionView('author'),
     '/era/:id': collectionView('era'),
+    '/collection/:id': collectionDetailView,
     '/explore': exploreView,
     '/authors': authorsView,
-    '/settings': placeholderView(
-      'الإعدادات',
-      'إعدادات القراءة متاحة داخل القارئ نفسه (حجم الخط، المظهر، نوع الخط).',
-      'settings',
-    ),
+    '/settings': settingsView,
   },
   {
     fallback: placeholderView('الصفحة غير موجودة', 'تعذّر العثور على هذه الصفحة.', 'home'),

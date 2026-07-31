@@ -437,3 +437,42 @@
     background-position: 0 0;
   }
 }
+
+/* -------------------------------------------- sélecteur de collection */
+
+.picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.picker__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: start;
+}
+
+.picker__item:hover {
+  background: var(--surface-container);
+}
+
+.picker__create {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.picker__field {
+  flex: 1;
+  min-width: 0;
+  padding: 8px var(--space-sm);
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  background: var(--surface-container-lowest);
+}

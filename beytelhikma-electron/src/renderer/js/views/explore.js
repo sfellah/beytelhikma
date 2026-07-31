@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
+import { collectionPickerButton } from '../components/collection-button.js';
 import { confirmDialog } from '../components/modal.js';
 import { formatBytes } from '../components/download-action.js';
 import { facetPanel } from '../components/facet-panel.js';
@@ -292,6 +293,7 @@ export function exploreView(host, params) {
         icon('download', { size: 18 }),
         h('span', {}, 'تنزيل المحدد'),
       ),
+      collectionPickerButton(() => [...state.selection], { label: 'أضف إلى مجموعة' }),
       h(
         'button',
         {

@@ -5,6 +5,7 @@ import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
+import { collectionPickerButton } from '../components/collection-button.js';
 import { confirmDelete } from '../components/confirm-delete.js';
 import { cover } from '../components/cover.js';
 import { downloadAction } from '../components/download-action.js';
@@ -69,6 +70,7 @@ function render({ detail, toc, progress, related }) {
               navigate(`/book/${book.editionId}`);
             },
           }),
+          collectionPickerButton([book.editionId]),
           progress &&
             h(
               'div',

@@ -6,6 +6,7 @@ import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { asyncView, emptyView } from '../components/states.js';
+import { collectionsStrip } from './collections.js';
 
 const FILTERS = [
   { key: 'all', label: 'الكل', keep: () => true },
@@ -18,10 +19,14 @@ const SORTS = [
   { key: 'title', label: 'العنوان' },
 ];
 
-/** Bibliothèque : les livres installés, filtrables et triables. */
+/** Bibliothèque : les collections, puis les livres installés. */
 export function libraryView(host) {
   const content = renderShell(host, { active: 'library' });
-  asyncView(content, () => repository.getLibrary(), render, {
+  // Le bandeau des collections reste visible même sans livre installé : une
+  // collection peut n'être qu'une liste d'envies.
+  const books = h('div', {});
+  content.append(collectionsStrip(), books);
+  asyncView(books, () => repository.getLibrary(), render, {
     empty: 'مكتبتك فارغة بعد',
   });
   return null;
