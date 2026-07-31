@@ -8,6 +8,7 @@ import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
 import { confirmDialog, noteDialog, shortcutsDialog } from '../components/modal.js';
 import { errorView, loadingView } from '../components/states.js';
+import { themeChoices } from '../components/theme-choices.js';
 import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
 
 const PAGE_WINDOW = 20;
@@ -23,12 +24,6 @@ const NEAR_END = 900;
 
 /** Entrées de sommaire montées d'un coup ; au-delà, on déplie à la demande. */
 const TOC_WINDOW = 80;
-
-const THEMES = [
-  { key: 'paper', label: 'رق إفتراضي', swatch: '#fbf9f4', dot: '#001614' },
-  { key: 'white', label: 'أبيض ناصع', swatch: '#ffffff', dot: '#000000' },
-  { key: 'night', label: 'الوضع الليلي', swatch: '#14150f', dot: '#d5d3ca' },
-];
 
 // Trois familles embarquées (voir `styles/fonts.css`). Amiri est le naskh de
 // bibliothèque : c'est le défaut. Noto Naskh ouvre les contreformes pour qui
@@ -109,7 +104,8 @@ class Reader {
   #index = 0;
   #toc = [];
   #title = '';
-  #prefs = { size: 22, theme: 'paper', font: 'serif', mode: 'page' };
+  /** Le thème n'est plus une préférence de lecture : il est global (`theme.js`). */
+  #prefs = { size: 22, font: 'serif', mode: 'page' };
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
@@ -181,7 +177,6 @@ class Reader {
       this.#toc = toc;
       this.#prefs = {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
-        theme: prefs['reader.theme'] ?? 'paper',
         font: prefs['reader.font'] ?? 'serif',
         mode: MODES.some((mode) => mode.key === prefs['reader.mode'])
           ? prefs['reader.mode']
@@ -236,7 +231,10 @@ class Reader {
 
     const scroll = h('div', { class: 'reader__scroll no-scrollbar' }, pageHead, flow);
 
-    // --- barre haute : outils à droite (départ RTL), titre et fermeture à gauche ---
+    // --- barre haute : sortie au départ (droite RTL), titre au centre, outils à
+    // l'autre bout. Quitter n'est pas un outil parmi les outils : c'est le geste
+    // qu'on cherche en premier quand on ne veut plus lire, et une croix seule ne
+    // dit pas où elle ramène.
     // `data-tool` est le point d'accroche stable des captures et des tests :
     // les infobulles portent maintenant leur raccourci, elles bougent.
     const tool = (key, name, title, onclick) =>
@@ -253,12 +251,33 @@ class Reader {
       this.#toggleBookmark(),
     );
 
+    // La sortie garde `data-tool="close"` : c'est le contrat que suivent les
+    // captures et les tests, seul son habillage change. Le chevron pointe vers
+    // le début de ligne — en RTL, la droite — comme tout retour arrière.
+    const backButton = h(
+      'button',
+      {
+        class: 'reader__back',
+        'data-tool': 'close',
+        title: 'العودة إلى صفحة الكتاب (Esc)',
+        onclick: () => back(),
+      },
+      icon('chevronRight', { size: 20 }),
+      h('span', { class: 'reader__back-label label-md' }, 'رجوع'),
+    );
+
     const header = h(
       'header',
       { class: 'reader__header' },
       h(
         'div',
         { class: 'reader__bar' },
+        h('div', { class: 'reader__lead' }, backButton),
+        h(
+          'div',
+          { class: 'reader__titles' },
+          h('h1', { class: 'truncate' }, this.#title),
+        ),
         h(
           'div',
           { class: 'reader__tools' },
@@ -271,12 +290,6 @@ class Reader {
           tool('settings', 'formatSize', 'إعدادات القراءة', () => this.#togglePanel('settings')),
           tool('search', 'search', 'بحث في الكتاب (Ctrl+F)', () => this.#togglePanel('search')),
           fullscreenButton,
-        ),
-        h(
-          'div',
-          { class: 'reader__titles' },
-          h('h1', { class: 'truncate' }, this.#title),
-          tool('close', 'close', 'العودة للمكتبة', () => back()),
         ),
       ),
     );
@@ -326,9 +339,7 @@ class Reader {
     const root = h(
       'div',
       {
-        class:
-          `reader reader--${this.#prefs.theme} reader--font-${this.#prefs.font}` +
-          ` reader--${this.#prefs.mode}`,
+        class: `reader reader--font-${this.#prefs.font} reader--${this.#prefs.mode}`,
         style: { '--reader-size': `${this.#prefs.size}px` },
       },
       header,
@@ -383,18 +394,9 @@ class Reader {
       oninput: (event) => this.#setSize(Number(event.target.value)),
     });
 
-    const themeButtons = THEMES.map((theme) =>
-      h(
-        'button',
-        {
-          class: theme.key === this.#prefs.theme ? 'is-active' : '',
-          title: theme.label,
-          style: { background: theme.swatch },
-          onclick: () => this.#setTheme(theme.key),
-        },
-        h('span', { style: { background: theme.dot } }),
-      ),
-    );
+    // Le thème est global : les pastilles repeignent tout l'écran, pas la
+    // seule page. C'est ici qu'on en a le plus besoin — en lecture, le soir.
+    const themes = themeChoices();
 
     const modeButtons = MODES.map((mode) =>
       h(
@@ -426,7 +428,7 @@ class Reader {
       ),
     );
 
-    Object.assign(refs, { sizeValue, sizeSlider, themeButtons, fontButtons, modeButtons });
+    Object.assign(refs, { sizeValue, sizeSlider, fontButtons, modeButtons });
 
     return h(
       'aside',
@@ -479,7 +481,7 @@ class Reader {
           'div',
           {},
           h('label', { class: 'label-md' }, 'المظهر'),
-          h('div', { class: 'theme-choices' }, themeButtons),
+          themes.node,
         ),
         h(
           'div',
@@ -1277,11 +1279,20 @@ class Reader {
     const page = await this.#pageAt(index);
     if (!page) return;
 
+    // Sens du feuilletage. En RTL on avance vers la gauche : la page qui arrive
+    // vient donc du bord gauche quand on avance, du bord droit quand on revient.
+    // Une page rouverte au même rang — changement d'ambiance, de taille, de
+    // police — ne bouge pas : rien n'a tourné.
+    const turn = index === this.#index ? 0 : Math.sign(index - this.#index);
+
     const block = this.#makeBlock(index, page);
     this.#blocks = new Map([[index, block]]);
     this.#first = index;
     this.#last = index;
     this.#nodes.flow.replaceChildren(block.root);
+    if (turn) {
+      block.root.classList.add(turn > 0 ? 'is-turned-next' : 'is-turned-previous');
+    }
     this.#nodes.scroll.scrollTop = 0;
     this.#nodes.lastScroll = 0;
     this.#setCurrent(index, page, { save });
@@ -1489,16 +1500,6 @@ class Reader {
     this.#nodes.sizeValue.textContent = String(size);
     this.#nodes.sizeSlider.value = String(size);
     setSetting('reader.fontSize', size);
-  }
-
-  #setTheme(key) {
-    this.#prefs.theme = key;
-    this.#nodes.root.classList.remove('reader--paper', 'reader--white', 'reader--night');
-    this.#nodes.root.classList.add(`reader--${key}`);
-    this.#nodes.themeButtons.forEach((button, index) =>
-      button.classList.toggle('is-active', THEMES[index].key === key),
-    );
-    setSetting('reader.theme', key);
   }
 
   #setFont(key) {

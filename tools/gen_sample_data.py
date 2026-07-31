@@ -33,6 +33,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "beytelhikma", "assets", "sample")
 BOOKS_DIR = os.path.join(OUT_DIR, "books")
 
+# Le portage Electron embarque sa propre copie du jeu d'exemple : ses tests la
+# lisent sans passer par le client Flutter. Elle était recopiée à la main, donc
+# elle dérivait — un changement de schéma laissait les deux jeux désaccordés et
+# la suite Electron échouait loin de sa cause. Le générateur écrit les deux.
+MIRROR_DIRS = [os.path.join(ROOT, "beytelhikma-electron", "assets", "sample")]
+
 CONTENT_VERSION = 1
 
 
@@ -656,6 +662,23 @@ def build_catalog(manifests: dict) -> None:
     con.close()
 
 
+def mirror() -> None:
+    """Recopie le jeu produit dans les miroirs, à l'identique.
+
+    `shutil.copytree(dirs_exist_ok=True)` écrase mais ne supprime pas : un livre
+    retiré du jeu resterait dans le miroir. On repart donc d'un dossier vide.
+    """
+    import shutil
+
+    for target in MIRROR_DIRS:
+        parent = os.path.dirname(target)
+        if not os.path.isdir(parent):
+            continue  # implémentation absente de cette copie de travail
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(OUT_DIR, target)
+        print(f"miroir  -> {os.path.join(target, 'catalog.sqlite')}")
+
+
 def main() -> None:
     os.makedirs(BOOKS_DIR, exist_ok=True)
     manifests = {}
@@ -664,6 +687,7 @@ def main() -> None:
         print(f"book   {book['edition_id']:20s} {manifests[book['edition_id']]['page_count']} pages")
     build_catalog(manifests)
     print(f"catalog {len(BOOKS)} éditions -> {os.path.join(OUT_DIR, 'catalog.sqlite')}")
+    mirror()
 
 
 if __name__ == "__main__":

@@ -1315,11 +1315,6 @@ html:not([dir='rtl']) .scroller--at-start {
   --reader-font: var(--font-body);
   --reader-size: 22px;
   --reader-fill: 0%;
-  /* Force des teintes : un surlignage se voit sur papier, il se devine en
-     nuit — au-delà, la pastille claire mangerait l'encre. */
-  --highlight-strength: 42%;
-  --quote-strength: 26%;
-  --mark-strength: 55%;
 
   position: fixed;
   inset: 0;
@@ -1329,24 +1324,12 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-fg);
 }
 
-.reader--white {
-  --reader-bg: var(--surface-container-lowest);
-  --reader-fg: #131315;
-  --reader-muted: #404944;
-  --reader-rule: var(--outline-variant);
-}
-
-/* Nuit : le graphite de la palette, l'émeraude claire pour les repères. */
-.reader--night {
-  --reader-bg: #1a1c1a;
-  --reader-fg: #e6e3de;
-  --reader-muted: #b2b2ae;
-  --reader-rule: rgb(230 227 222 / 16%);
-  --reader-accent: var(--primary-fixed-dim);
-  --highlight-strength: 26%;
-  --quote-strength: 20%;
-  --mark-strength: 34%;
-}
+/* Le lecteur ne porte plus d'ambiance : le thème est global, posé sur `<html>`
+   par `js/theme.js`, et les six variables ci-dessus dérivent déjà des jetons.
+   Les anciennes règles `.reader--white` et `.reader--night` disaient en dur ce
+   que `:root[data-theme=…]` dit maintenant pour toute l'application — et
+   `--reader-accent: var(--primary-fixed-dim)` de la nuit n'avait plus d'objet,
+   `--primary` valant cette teinte claire dans ce thème. */
 
 /* Trois grains de lecture : Amiri (naskh de bibliothèque), Noto Naskh (plus
    ouvert donc plus lisible en petit corps), IBM Plex Sans Arabic (écran). */
@@ -1395,9 +1378,22 @@ html:not([dir='rtl']) .scroller--at-start {
   opacity: 0;
 }
 
-/* Maquette V2 : outils groupés au départ de la ligne, titre et fermeture à
-   l'autre bout — une seule hauteur de barre (56 px) en haut comme en bas. */
-.reader__bar,
+/* Trois zones, et le titre au milieu : la sortie au départ de la ligne (droite
+   en RTL), le nom du livre au centre, les outils à l'autre bout. Les deux
+   colonnes latérales sont des `1fr` égales — c'est ce qui met le titre au
+   milieu de la *barre* et non au milieu de ce qui reste. Une seule hauteur
+   (56 px) en haut comme en bas. */
+.reader__bar {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  height: 56px;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--space-md);
+}
+
 .reader__toolbar {
   display: flex;
   align-items: center;
@@ -1409,9 +1405,51 @@ html:not([dir='rtl']) .scroller--at-start {
   padding-inline: var(--space-md);
 }
 
+.reader__lead {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+}
+
+/* Sortie du lecteur : un libellé, pas une croix. Une croix ne dit pas où elle
+   ramène, et c'est le seul bouton de la barre dont on veut être certain avant
+   de cliquer. Le chevron pointe vers le début de ligne, comme tout retour. */
+.reader__back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-block: var(--space-sm);
+  padding-inline: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-pill);
+  color: var(--reader-muted);
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.reader__back .icon {
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.reader__back:hover {
+  background: color-mix(in srgb, var(--reader-fg) 8%, transparent);
+  color: var(--reader-fg);
+}
+
+/* Le chevron part vers là où le bouton ramène : à droite, en RTL. */
+.reader__back:hover .icon {
+  transform: translateX(3px);
+}
+
+.reader__back:active {
+  transform: scale(0.97);
+}
+
 .reader__tools {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: var(--space-xs);
   color: var(--reader-muted);
 }
@@ -1422,6 +1460,10 @@ html:not([dir='rtl']) .scroller--at-start {
   padding: var(--space-sm);
   border-radius: var(--radius-pill);
   color: inherit;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
 .reader__tool:hover {
@@ -1429,34 +1471,51 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-fg);
 }
 
+.reader__tool:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
 .reader__tool:disabled {
   opacity: 0.3;
   cursor: default;
   background: none;
+  transform: none;
 }
 
 .reader__titles {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  justify-self: center;
   min-width: 0;
   color: var(--reader-muted);
 }
 
+/* Le titre est ce qu'on lit : il porte donc la taille d'un titre, pas celle
+   d'un libellé d'outil. */
 .reader__titles h1 {
   font-family: var(--font-display);
-  font-size: var(--text-label-md);
-  line-height: var(--leading-label-md);
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
   font-weight: 700;
   color: var(--reader-accent);
 }
 
-/* Fenêtre étroite : le titre du livre reste en page, la barre garde ses outils
-   et la jauge récupère la place laissée par le pourcentage. */
+/* Fenêtre étroite : le titre reste — c'est lui qui dit où l'on est — mais il
+   redescend d'un cran et la sortie se réduit à son chevron. La jauge récupère
+   la place laissée par le pourcentage. */
 @media (max-width: 640px) {
-  .reader__titles h1,
-  .reader__percent {
+  .reader__percent,
+  .reader__back-label {
     display: none;
+  }
+
+  .reader__titles h1 {
+    font-size: var(--text-body-md);
+    line-height: var(--leading-label-md);
+  }
+
+  .reader__back {
+    padding: var(--space-sm);
   }
 
   .reader__bar,
@@ -1483,7 +1542,7 @@ html:not([dir='rtl']) .scroller--at-start {
   overflow-y: auto;
   padding: clamp(96px, 14vh, 160px) var(--space-gutter) 160px;
   cursor: text;
-  transition: padding-right 0.3s ease-in-out;
+  transition: padding-left var(--motion-slow) var(--ease-out);
 }
 
 /* Un panneau ouvert masquait un bord de la colonne de lecture. Sur une fenêtre
@@ -1491,7 +1550,7 @@ html:not([dir='rtl']) .scroller--at-start {
    est physique, comme l'ancrage du panneau. */
 @media (min-width: 1100px) {
   .reader.has-panel .reader__scroll {
-    padding-right: calc(320px + var(--space-gutter));
+    padding-left: calc(320px + var(--space-gutter));
   }
 }
 
@@ -1504,6 +1563,35 @@ html:not([dir='rtl']) .scroller--at-start {
 
 .reader__block {
   position: relative;
+}
+
+/* Le seul moment que ce lecteur met en scène : la page qui se pose. Elle
+   arrive du bord vers lequel on va — à gauche quand on avance en RTL — et
+   l'encre se fixe en fin de course (le flou part, il n'arrive jamais). Le
+   déplacement est court : c'est une feuille qui retombe, pas un carrousel.
+   Le fil continu n'en veut pas — là, le mouvement, c'est le défilement. */
+.reader--page .reader__block.is-turned-next {
+  animation: page-turn-next var(--motion-slow) var(--ease-out) both;
+}
+
+.reader--page .reader__block.is-turned-previous {
+  animation: page-turn-previous var(--motion-slow) var(--ease-out) both;
+}
+
+@keyframes page-turn-next {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+    filter: blur(2px);
+  }
+}
+
+@keyframes page-turn-previous {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+    filter: blur(2px);
+  }
 }
 
 /* Le pied imprimé fait déjà filet : en fil continu il sépare deux pages, il
@@ -1704,25 +1792,26 @@ html:not([dir='rtl']) .scroller--at-start {
   opacity: 0;
 }
 
-/* Les panneaux glissent depuis le bord droit *visuel*, celui où la barre haute
-   pose ses outils en RTL : la feuille sort sous le doigt qui l'a appelée.
-   `transform` ignore le sens d'écriture, on ancre donc volontairement en
-   physique. */
+/* Les panneaux glissent depuis le bord *visuel* où la barre haute pose ses
+   outils : la feuille sort sous le doigt qui l'a appelée. Les outils ayant
+   cédé le départ de ligne à la sortie du lecteur, ce bord est maintenant le
+   gauche. `transform` ignore le sens d'écriture, on ancre donc volontairement
+   en physique. */
 .reader__panel {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 0;
+  left: 0;
   width: 320px;
   max-width: 88vw;
   z-index: 30;
   display: flex;
   flex-direction: column;
   background: var(--reader-bg);
-  border-left: 1px solid var(--reader-rule);
+  border-right: 1px solid var(--reader-rule);
   box-shadow: var(--shadow-lg);
-  transform: translateX(100%);
-  transition: transform 0.3s ease-in-out;
+  transform: translateX(-100%);
+  transition: transform var(--motion-slow) var(--ease-out);
 }
 
 .reader__panel.is-open {
@@ -1876,29 +1965,8 @@ html:not([dir='rtl']) .scroller--at-start {
   background: color-mix(in srgb, var(--reader-fg) 8%, transparent);
 }
 
-.theme-choices {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
-}
-
-.theme-choices button {
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--outline-variant);
-}
-
-.theme-choices button.is-active {
-  border: 2px solid var(--reader-accent);
-}
-
-.theme-choices button > span {
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-pill);
-}
+/* Les pastilles de thème sont parties dans `components.css` : le même contrôle
+   sert maintenant au lecteur et aux réglages. */
 
 /* Mode de lecture : page imprimée ou fil continu, deux boutons qui se lisent
    comme des cartes — le libellé, puis ce que ça change. */
@@ -2240,7 +2308,7 @@ html:not([dir='rtl']) .scroller--at-start {
    repeignait en jaune de recherche toutes les couleurs choisies à la main. */
 .reader__result mark,
 .reader__match {
-  background: color-mix(in srgb, #e8cf9a var(--mark-strength, 55%), transparent);
+  background: color-mix(in srgb, var(--mark-color) var(--mark-strength, 55%), transparent);
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--reader-accent) 55%, transparent);
   color: inherit;
   border-radius: 2px;

@@ -13,6 +13,12 @@
     <link rel="stylesheet" href="styles/shell.css" />
     <link rel="stylesheet" href="styles/components.css" />
     <link rel="stylesheet" href="styles/views.css" />
+    <!-- Le thème se pose avant que `app.js` ne monte quoi que ce soit, depuis
+         un miroir `localStorage` lu en synchrone : `user.sqlite` arrive par IPC
+         après le premier rendu, et sans ce miroir ouvrir l'application en mode
+         nuit donnerait un éclair blanc. Module et non script inline : le CSP
+         ci-dessus est `script-src 'self'`. -->
+    <script type="module" src="js/theme.js"></script>
   </head>
   <body>
     <div id="app"></div>

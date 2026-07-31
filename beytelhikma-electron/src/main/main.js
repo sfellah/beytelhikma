@@ -22,9 +22,9 @@ async function openRepository() {
   repository = new BookRepository(database);
   const downloads = repository.createDownloadQueue();
 
-  // Réglage optionnel : pointer un autre MinIO sans régénérer le catalogue.
+  // Réglage optionnel : pointer un autre bucket sans republier le catalogue.
   const settings = await repository.getSettings();
-  downloads.setBaseUrl(settings['minio.base_url'] ?? null);
+  downloads.setBaseUrl(settings['distribution.base_url'] ?? null);
 
   downloads.on('change', (jobs) => {
     for (const window of BrowserWindow.getAllWindows()) {

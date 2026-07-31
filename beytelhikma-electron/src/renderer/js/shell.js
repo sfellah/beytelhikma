@@ -129,20 +129,18 @@ function rail(active) {
       { class: 'rail__list' },
       NAV.map((item) => railItem(item, active)),
     ),
-    h(
-      'div',
-      { class: 'rail__footer' },
-      railItem(
-        { key: 'settings', path: '/settings', label: 'الإعدادات', icon: 'sliders' },
-        active,
-      ),
-    ),
   );
 }
 
 /**
  * Barre supérieure : la marque, la recherche, les réglages. Pas de compte ni
  * de notifications — l'application est locale, il n'y a personne à notifier.
+ *
+ * Les réglages ne sont plus dans la navigation : le rail et la barre du bas
+ * listent ce qu'on lit, et régler n'est pas une destination de lecture. Le
+ * bouton de cette barre est donc le chemin unique vers `/settings`, à toutes
+ * les largeurs — une entrée qui change de place selon la fenêtre ne se
+ * retrouve pas.
  */
 function topbar() {
   // Deux destinations pour un même champ : `Entrée` cherche un livre dans le
@@ -224,13 +222,21 @@ function bottomNav(active) {
   );
 }
 
-/** Message éphémère : les écrans non implémentés le disent au lieu de rien. */
+/**
+ * Message éphémère : les écrans non implémentés le disent au lieu de rien.
+ * Le retrait passe par `is-leaving` puis un délai : arracher le nœud du DOM
+ * laissait le message disparaître d'un coup alors qu'il était arrivé en
+ * douceur — la sortie est simplement plus courte que l'entrée.
+ */
 export function toast(message) {
   const existing = document.querySelector('.toast');
   existing?.remove();
   const node = h('div', { class: 'toast label-md' }, message);
   document.body.append(node);
-  setTimeout(() => node.remove(), 2600);
+  setTimeout(() => {
+    node.classList.add('is-leaving');
+    setTimeout(() => node.remove(), 160);
+  }, 2600);
 }
 
 /** Vue des sections encore hors périmètre (استكشاف، المؤلفون، الإعدادات). */

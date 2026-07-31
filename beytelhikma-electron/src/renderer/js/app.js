@@ -1,5 +1,6 @@
 import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
+import { syncTheme } from './theme.js';
 import { authorsView } from './views/authors.js';
 import { bookDetailView } from './views/book-detail.js';
 import { collectionDetailView } from './views/collections.js';
@@ -33,5 +34,10 @@ defineRoutes(
     fallback: placeholderView('الصفحة غير موجودة', 'تعذّر العثور على هذه الصفحة.', 'home'),
   },
 );
+
+// L'écran est déjà peint depuis le miroir (`js/theme.js`, chargé avant celui-ci).
+// La réconciliation avec `user.sqlite` corrige un miroir absent ou périmé, sans
+// retarder le premier rendu.
+syncTheme();
 
 start(document.getElementById('app'), { initial: '/home' });

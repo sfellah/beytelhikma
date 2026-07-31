@@ -66,35 +66,46 @@
   gap: var(--space-xs);
 }
 
-.rail__footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding-top: var(--space-lg);
-}
-
 /* Élément actif : filet émeraude sur le bord *droit* du menu, comme le
-   prescrit `DESIGN.md` — en RTL c'est le bord de début de ligne. */
+   prescrit `DESIGN.md` — en RTL c'est le bord de début de ligne. Le filet est
+   dessiné par un pseudo-élément et non par la bordure : une bordure ne peut
+   que s'allumer, celui-ci se *déplie* depuis le centre, et c'est ce dépliage
+   qui rattache visuellement l'ancienne entrée active à la nouvelle. */
 .rail__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-md);
   padding: 10px var(--space-md);
   border-radius: var(--radius-lg);
-  border-inline-start: 4px solid transparent;
   color: var(--on-surface-variant);
   font-family: var(--font-label);
   font-size: var(--text-label-md);
   line-height: var(--leading-label-md);
   letter-spacing: 0.02em;
   font-weight: 500;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
+}
+
+.rail__item::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: -4px;
+  width: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  transform: scaleY(0);
+  transition: transform var(--motion-base) var(--ease-out);
 }
 
 .rail__item-icon {
   display: grid;
   place-items: center;
   flex: none;
+  transition: transform var(--motion-base) var(--ease-out);
 }
 
 .rail__item:hover {
@@ -102,11 +113,18 @@
   color: var(--on-surface);
 }
 
+.rail__item:hover .rail__item-icon {
+  transform: scale(1.08);
+}
+
 .rail__item.is-active {
   background: color-mix(in srgb, var(--secondary-container) 40%, transparent);
-  border-inline-start-color: var(--primary);
   color: var(--primary);
   font-weight: 600;
+}
+
+.rail__item.is-active::before {
+  transform: scaleY(1);
 }
 
 /* --------------------------------------------------------------- topbar */
@@ -223,16 +241,26 @@
   color: var(--on-surface-variant);
 }
 
+/* Seul chemin vers les réglages, et le même à toutes les largeurs : la
+   navigation ne les liste plus. Elle liste ce qu'on lit — régler n'est pas une
+   destination de lecture, et une entrée qui change de place selon la fenêtre
+   ne se retrouve pas. */
 .topbar__icon-button {
   display: flex;
   padding: 10px;
   border-radius: var(--radius-pill);
   color: var(--primary);
-  transition: background-color 0.2s;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
 .topbar__icon-button:hover {
   background: var(--secondary-container);
+}
+
+.topbar__icon-button:active {
+  transform: scale(0.92);
 }
 
 /* ----------------------------------------------------------------- main */
@@ -262,6 +290,7 @@
 }
 
 .bottom-nav__item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -271,12 +300,35 @@
   font-family: var(--font-label);
   font-size: 11px;
   font-weight: 500;
+  transition: color var(--motion-base) var(--ease-out);
 }
 
+/* La pastille est toujours montée, simplement repliée derrière l'icône : elle
+   s'ouvre en largeur sous le pouce au lieu d'apparaître d'un coup. Le fond est
+   un pseudo-élément — mis à l'échelle sur la boîte, il écraserait l'icône. */
 .bottom-nav__item .bottom-nav__bubble {
+  position: relative;
   padding: 2px var(--space-md);
-  border-radius: var(--radius-pill);
   display: flex;
+}
+
+.bottom-nav__bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-container);
+  transform: scaleX(0.35);
+  opacity: 0;
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.bottom-nav__item:active .bottom-nav__bubble::before {
+  transform: scaleX(0.9);
+  opacity: 0.5;
 }
 
 .bottom-nav__item.is-active {
@@ -284,8 +336,9 @@
   font-weight: 700;
 }
 
-.bottom-nav__item.is-active .bottom-nav__bubble {
-  background: var(--secondary-container);
+.bottom-nav__item.is-active .bottom-nav__bubble::before {
+  transform: scaleX(1);
+  opacity: 1;
 }
 
 /* --------------------------------------------------------------- toast */
@@ -303,7 +356,17 @@
   background: var(--inverse-surface);
   color: var(--inverse-on-surface);
   box-shadow: var(--shadow-lg);
-  animation: toast-in 0.2s ease;
+  animation: toast-in var(--motion-base) var(--ease-out);
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+/* Sortie plus courte que l'entrée : un message qui s'attarde en partant se lit
+   comme une lenteur de l'application. */
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 @keyframes toast-in {

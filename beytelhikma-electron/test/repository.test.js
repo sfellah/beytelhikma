@@ -28,7 +28,7 @@ before(async () => {
   repository = new BookRepository(database);
   repository.createDownloadQueue();
   await repository.reconcileLibrary();
-  // Les cinq livres d'exemple ont une `download_url` en `asset://` : le
+  // Les cinq livres d'exemple ont une `object_key` en `asset://` : le
   // gestionnaire les installe par copie, sans réseau.
   await installAll(repository);
 });
@@ -387,9 +387,9 @@ test('une collection refuse un nom vide', async () => {
 test('l’adresse du serveur est persistée et appliquée à la file', async () => {
   await repository.setDownloadBaseUrl('http://127.0.0.1:9000/beytelhikma');
   const settings = await repository.getSettings();
-  assert.equal(settings['minio.base_url'], 'http://127.0.0.1:9000/beytelhikma');
+  assert.equal(settings['distribution.base_url'], 'http://127.0.0.1:9000/beytelhikma');
   await repository.setDownloadBaseUrl('');
-  assert.equal((await repository.getSettings())['minio.base_url'], '');
+  assert.equal((await repository.getSettings())['distribution.base_url'], '');
 });
 
 test('les informations d’application décrivent la bibliothèque installée', async () => {

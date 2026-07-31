@@ -234,7 +234,7 @@ export class AppDatabase {
    * pas encore, si sa taille diffère, ou s'il est plus récent.
    *
    * La date compte autant que la taille : `tools/publish_minio.py` réécrit les
-   * `download_url` du catalogue sans forcément en changer la taille. Sans ce
+   * `object_key` du catalogue sans forcément en changer la taille. Sans ce
    * critère, l'application resterait sur l'ancien catalogue et continuerait de
    * chercher les livres en `local://`.
    */

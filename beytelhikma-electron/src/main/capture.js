@@ -267,6 +267,45 @@ async function shootReaderStates(window, editionId, outDir, problems) {
   }
 }
 
+/**
+ * Le thème est global : une capture claire ne dit plus rien de l'ambiance
+ * nuit, et une ambiance qu'aucune image ne montre est une ambiance qui dérive.
+ * On passe par les pastilles de `/settings` plutôt que par `data-theme` :
+ * c'est le chemin réel, écriture dans `user.sqlite` comprise. L'ordre du DOM
+ * est parchemin, blanc, nuit — indépendant du sens de lecture.
+ */
+async function shootNightTheme(window, editionId, outDir, problems) {
+  const contents = window.webContents;
+  await contents.executeJavaScript(`location.hash = '#/settings'`);
+  if (!(await waitForSelector(contents, '.theme-choices button'))) {
+    problems.push("thème nuit : les pastilles ne sont jamais montées");
+    return;
+  }
+
+  const pick = (index) =>
+    contents.executeJavaScript(
+      `document.querySelectorAll('.theme-choices button')[${index}].click()`,
+    );
+
+  try {
+    await pick(2);
+    await wait(400);
+    for (const [name, route, selector] of [
+      ['settings-night', '/settings', '.settings'],
+      ['home-night', '/home', '.featured'],
+      ['reader-night', `/reader/${editionId}`, '.reader__page'],
+    ]) {
+      await shoot(window, name, route, selector, outDir, problems);
+    }
+  } finally {
+    // Sans ce retour au parchemin, toute la fin de la campagne partirait en
+    // graphite et le réglage survivrait à la capture.
+    await contents.executeJavaScript(`location.hash = '#/settings'`);
+    if (await waitForSelector(contents, '.theme-choices button')) await pick(0);
+    await wait(300);
+  }
+}
+
 export async function captureRoutes(window, { outDir, width = 1360, height = 900 }) {
   fs.mkdirSync(outDir, { recursive: true });
   const problems = [];
@@ -336,6 +375,8 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   const authorsIndex = await window.webContents.capturePage();
   fs.writeFileSync(path.join(outDir, 'authors-index.png'), authorsIndex.toPNG());
   console.log(`écrit : ${path.join(outDir, 'authors-index.png')}`);
+
+  await shootNightTheme(window, editionId, outDir, problems);
 
   // Fenêtre haute : l'accueil entier, jusqu'aux disciplines et à l'auteur.
   window.setContentSize(width, 2700);

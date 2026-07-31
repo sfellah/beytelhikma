@@ -78,6 +78,7 @@ const SUMMARY_SELECT = `
          e.title_ar,
          e.subtitle_ar,
          e.category_id,
+         e.book_type_label,
          e.volume_count,
          e.language,
          e.cover_url,
@@ -101,6 +102,9 @@ const bookSummary = (row) => ({
   subtitle: row.subtitle_ar ?? null,
   categoryId: row.category_id ?? null,
   categoryLabel: row.category_label ?? null,
+  // Décide de la mise en page : tout ce qui n'est pas « كتاب » est un objet
+  // d'une autre nature (رسالة جامعية, مجلة, دروس مفرغة) et doit le montrer.
+  bookType: row.book_type_label ?? null,
   authorName: row.author_name ?? null,
   // Renseignée pour 69 % des auteurs : elle donne la reliure de la couverture
   // (`src/shared/book-cover.js`), et son absence est un cas prévu, pas un trou.
@@ -284,14 +288,14 @@ export class BookRepository {
     const catalog = await this.#db.catalog();
     const row = first(
       catalog,
-      `SELECT release_id, download_url, sha256, compressed_size, uncompressed_size
+      `SELECT release_id, object_key, sha256, compressed_size, uncompressed_size
        FROM book_releases WHERE edition_id = ? AND is_active = 1 LIMIT 1`,
       [editionId],
     );
     if (!row) return null;
     return {
       releaseId: row.release_id,
-      url: row.download_url,
+      objectKey: row.object_key,
       sha256: row.sha256,
       compressedSize: row.compressed_size ?? 0,
       uncompressedSize: row.uncompressed_size ?? 0,
@@ -1870,11 +1874,17 @@ export class BookRepository {
     });
   }
 
-  /** Applique `minio.base_url` à la file en cours, sans redémarrage. */
+  /**
+   * Applique `distribution.base_url` à la file en cours, sans redémarrage.
+   *
+   * Le catalogue ne porte que des clés relatives : changer cette valeur suffit
+   * à servir la même bibliothèque depuis un autre bucket, sans rien
+   * retélécharger de ce qui est déjà installé.
+   */
   setDownloadBaseUrl(url) {
     return this.#guard("réglage de l'adresse du serveur", async () => {
       const value = String(url ?? '').trim();
-      await this.saveSetting('minio.base_url', value);
+      await this.saveSetting('distribution.base_url', value);
       this.#downloads?.setBaseUrl(value || null);
     });
   }

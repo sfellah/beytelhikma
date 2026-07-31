@@ -48,7 +48,9 @@ test.afterEach(() => {
 
 const release = () => ({
   editionId: 'ed-test-01',
-  url: `${origin}/books/ed-test-01/1/book.sqlite.zst`,
+  // Clé absolue : ces tests éprouvent le transfert (Range, 404, coupure), pas
+  // la résolution. Une clé à schéma reste valide et court-circuite la base.
+  objectKey: `${origin}/books/ed-test-01/1/book.sqlite.zst`,
   sha256: SHA256,
   compressedSize: PACKED.length,
 });
@@ -173,7 +175,7 @@ test('une URL non HTTP est servie depuis la bibliothèque locale', async () => {
   fs.writeFileSync(path.join(source, 'books', 'ed-test-01.sqlite'), PLAIN);
 
   const installed = await installRelease({
-    release: { ...release(), url: 'asset://sample/books/ed-test-01.sqlite' },
+    release: { ...release(), objectKey: 'asset://sample/books/ed-test-01.sqlite' },
     storageRoot,
     librarySource: source,
   });
@@ -183,13 +185,14 @@ test('une URL non HTTP est servie depuis la bibliothèque locale', async () => {
 });
 
 /** Fabrique une file dont chaque livre pointe la même archive de test. */
-function queueFor({ url, persist = async () => {}, librarySource = null }) {
+function queueFor({ objectKey, baseUrl = null, persist = async () => {}, librarySource = null }) {
   return new DownloadQueue({
     storageRoot,
     librarySource,
+    baseUrl,
     resolveRelease: async (editionId) => ({
       releaseId: `rel-${editionId}`,
-      url: typeof url === 'function' ? url(editionId) : url,
+      objectKey: typeof objectKey === 'function' ? objectKey(editionId) : objectKey,
       sha256: SHA256,
       compressedSize: PACKED.length,
       uncompressedSize: PLAIN.length,
@@ -201,7 +204,7 @@ function queueFor({ url, persist = async () => {}, librarySource = null }) {
 test('la file traite les livres un par un et rapporte ses états', async () => {
   const states = [];
   const queue = queueFor({
-    url: (editionId) => `${origin}/books/${editionId}.zst`,
+    objectKey: (editionId) => `${origin}/books/${editionId}.zst`,
     persist: async (editionId, patch) => states.push([editionId, patch.status]),
   });
 
@@ -227,7 +230,7 @@ test('un échec laisse le job en failed jusqu’au réessai', async () => {
   handler = (request, response) => {
     response.writeHead(404).end();
   };
-  const queue = queueFor({ url: `${origin}/absent.zst` });
+  const queue = queueFor({ objectKey: `${origin}/absent.zst` });
 
   queue.enqueue('ed-a');
   await new Promise((resolve) => queue.once('idle', resolve));
@@ -240,10 +243,10 @@ test('un échec laisse le job en failed jusqu’au réessai', async () => {
   assert.deepEqual(queue.snapshot(), []);
 });
 
-test('setBaseUrl remplace l’origine de l’URL publiée', async () => {
-  const queue = queueFor({
-    url: 'http://minio.invalid:9000/beytelhikma/books/ed-x/1/book.sqlite.zst',
-  });
+test('une clé relative est résolue contre la base configurée', async () => {
+  // Le catalogue ne porte plus d'hôte : sans base appliquée, la clé ne mène
+  // nulle part. C'est le réglage seul qui décide d'où vient le livre.
+  const queue = queueFor({ objectKey: 'books/ed-x/1/book.sqlite.zst' });
   queue.setBaseUrl(origin);
 
   queue.enqueue('ed-x');

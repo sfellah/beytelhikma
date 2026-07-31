@@ -7,12 +7,7 @@ import { copyField } from '../components/copy-field.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { asyncView } from '../components/states.js';
-
-const THEMES = [
-  ['paper', 'ورقي'],
-  ['sepia', 'بني'],
-  ['night', 'ليلي'],
-];
+import { themeChoices } from '../components/theme-choices.js';
 
 const FONTS = [
   ['serif', 'نسخي'],
@@ -40,6 +35,7 @@ export function settingsView(host) {
       'section',
       { class: 'settings' },
       h('h1', { class: 'display-lg' }, 'الإعدادات'),
+      appearanceSection(),
       readingSection(prefs),
       storageSection(usage, refresh),
       serverSection(prefs, refresh),
@@ -79,8 +75,22 @@ function row(label, control, hint = null) {
 }
 
 /**
- * Les trois clés sont celles qu'écrit déjà le lecteur : les régler ici change
- * le point de départ des prochaines ouvertures, pas plus.
+ * Le thème n'a pas de valeur à recevoir en argument : `themeChoices` lit celui
+ * qui est posé sur `<html>`, et c'est la seule vérité affichable — les
+ * réglages peuvent avoir été chargés avant que `syncTheme` n'ait répondu.
+ */
+function appearanceSection() {
+  return group(
+    'المظهر',
+    'يُطبَّق فورًا على كل الشاشات.',
+    row('السمة', themeChoices().node, 'الفهرس والمكتبة والقارئ معًا'),
+  );
+}
+
+/**
+ * Les deux clés sont celles qu'écrit déjà le lecteur : les régler ici change
+ * le point de départ des prochaines ouvertures, pas plus. Le thème, lui, est
+ * passé au groupe المظهر ci-dessus — il ne se fait pas attendre.
  */
 function readingSection(prefs) {
   const size = Number(prefs['reader.fontSize'] ?? 22);
@@ -122,7 +132,6 @@ function readingSection(prefs) {
     'القراءة',
     'تُطبَّق عند فتح كتاب جديد.',
     row('حجم الخط', h('div', { class: 'settings__slider' }, slider, value)),
-    row('المظهر', choices('reader.theme', THEMES, prefs['reader.theme'] ?? 'paper')),
     row('نوع الخط', choices('reader.font', FONTS, prefs['reader.font'] ?? 'serif')),
   );
 }

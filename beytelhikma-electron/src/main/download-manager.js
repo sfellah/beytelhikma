@@ -6,6 +6,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
 
+import { resolveObject } from '../shared/distribution.js';
+
 /** Messages destinés à l'utilisateur, en arabe. */
 export const DOWNLOAD_MESSAGES = {
   network: 'تعذّر الاتصال بالخادم',
@@ -44,26 +46,30 @@ function hashTap(hash) {
 
 /**
  * Télécharge la release, la décompresse, vérifie son SHA-256 et l'installe.
- * Une URL de schéma non HTTP désigne un fichier de [librarySource] : c'est le
- * mode hors ligne, celui de `assets/sample` et de `dist/shamela`.
- * Renvoie le chemin du fichier installé.
+ *
+ * La release porte une **clé** (`release.objectKey`), pas une URL : c'est
+ * [baseUrl] qui décide d'où elle vient. Une clé de schéma non HTTP désigne un
+ * fichier de [librarySource] — mode hors ligne d'`assets/sample` et de
+ * `dist/shamela`. Renvoie le chemin du fichier installé.
  */
 export async function installRelease({
   release,
   storageRoot,
   librarySource = null,
+  baseUrl = null,
   signal,
   onProgress,
 }) {
   fs.mkdirSync(path.join(storageRoot, 'books'), { recursive: true });
   fs.mkdirSync(path.join(storageRoot, 'downloads'), { recursive: true });
 
-  if (!/^https?:/i.test(release.url)) {
+  const cible = resolveObject(baseUrl, release.objectKey);
+  if (cible.kind === 'library') {
     return installFromLibrary({ release, storageRoot, librarySource, onProgress });
   }
 
   const part = partPath(storageRoot, release.editionId);
-  await fetchToPart({ release, part, signal, onProgress });
+  await fetchToPart({ release: { ...release, url: cible.url }, part, signal, onProgress });
   const target = await unpackAndVerify({ release, part, storageRoot });
   fs.rmSync(part, { force: true });
   return target;
@@ -230,6 +236,7 @@ export class DownloadQueue extends EventEmitter {
     this.#baseUrl = baseUrl;
   }
 
+  /** Réglage `distribution.base_url` : préfixe des clés du catalogue. */
   setBaseUrl(url) {
     this.#baseUrl = url || null;
   }
@@ -324,9 +331,10 @@ export class DownloadQueue extends EventEmitter {
       });
 
       await installRelease({
-        release: { ...release, editionId, url: this.#applyBaseUrl(release.url) },
+        release: { ...release, editionId },
         storageRoot: this.#storageRoot,
         librarySource: this.#librarySource,
+        baseUrl: this.#baseUrl,
         signal: controller.signal,
         onProgress: (received, total) => {
           const current = this.#jobs.get(editionId);
@@ -371,13 +379,4 @@ export class DownloadQueue extends EventEmitter {
     }
   }
 
-  /** Réglage `minio.base_url` : remplace l'origine des URL du catalogue. */
-  #applyBaseUrl(url) {
-    if (!this.#baseUrl || !/^https?:/i.test(url)) return url;
-    const target = new URL(url);
-    const base = new URL(this.#baseUrl);
-    target.protocol = base.protocol;
-    target.host = base.host;
-    return target.toString();
-  }
 }

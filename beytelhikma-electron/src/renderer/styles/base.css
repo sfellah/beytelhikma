@@ -57,6 +57,12 @@ button {
   padding: 0;
 }
 
+/* Sans ceci, le curseur natif prend le violet du système : la seule pièce de
+   l'interface qui ignorait la palette. Le lecteur repose la sienne. */
+input[type='range'] {
+  accent-color: var(--primary);
+}
+
 /* Anneau de focus unique pour tout ce qui se prend au clavier : le contour
    natif disparaît sur les surfaces sombres, celui-ci non. */
 :focus-visible {
@@ -170,6 +176,7 @@ button {
 
 .clamp-1,
 .clamp-2,
+.clamp-3,
 .clamp-4 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -182,6 +189,10 @@ button {
 
 .clamp-2 {
   -webkit-line-clamp: 2;
+}
+
+.clamp-3 {
+  -webkit-line-clamp: 3;
 }
 
 .clamp-4 {

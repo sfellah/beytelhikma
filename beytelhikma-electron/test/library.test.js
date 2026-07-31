@@ -184,7 +184,7 @@ test('un catalogue republié de même taille est tout de même recopié', async 
   assert.ok(fs.existsSync(installed));
   database.close();
 
-  // `publish_minio.py` réécrit `download_url` : le contenu change, la taille
+  // `publish_minio.py` réécrit `object_key` : le contenu change, la taille
   // peut rester identique. Sans comparaison de date, la copie serait sautée.
   const before = fs.readFileSync(catalogPath);
   const patched = Buffer.from(before);
