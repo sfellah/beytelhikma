@@ -1,16 +1,3 @@
-# Dart / Flutter
-**/.dart_tool/
-# Sortie de build Flutter. La règle vise le client Flutter et non `**/build/` :
-# `beytelhikma-electron/build/` est le `buildResources` d'electron-builder, il
-# porte `icon.ico`, qui est un asset de marque versionné. Git ne sait pas
-# réinclure un fichier sous un dossier exclu — il faut donc exclure moins, pas
-# négocier ensuite.
-beytelhikma/build/
-beytelhikma/*/build/
-**/.flutter-plugins
-**/.flutter-plugins-dependencies
-**/generated_plugin_registrant.dart
-
 # IDE
 .idea/
 *.iml
@@ -19,9 +6,6 @@ beytelhikma/*/build/
 # OS
 Thumbs.db
 .DS_Store
-
-# Local config
-**/android/local.properties
 
 # Python (outils d'import)
 __pycache__/

@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from release_library import nettoie, tranches, version_suivante
+from release_library import lance, nettoie, tranches, version_suivante
 
 SHA = "a" * 64
 AUTRE = "b" * 64
@@ -69,6 +69,28 @@ class TranchesTest(unittest.TestCase):
 
     def test_aucun_livre_ne_donne_aucune_tranche(self):
         self.assertEqual(tranches([], 10), [])
+
+
+class LanceTest(unittest.TestCase):
+    """Le code 1 de l'importeur veut dire « des livres ont été sautés ».
+
+    Sur 8 589 livres, quelques sources sont défectueuses. Le prendre pour un
+    échec arrêtait toute la publication au premier sommaire bancal.
+    """
+
+    def _sort(self, code):
+        return [sys.executable, "-c", f"raise SystemExit({code})"]
+
+    def test_code_tolere_ne_leve_pas(self):
+        self.assertEqual(lance(self._sort(1), codes_ok=(0, 1)), 1)
+
+    def test_code_bloquant_leve(self):
+        with self.assertRaises(SystemExit):
+            lance(self._sort(2), codes_ok=(0, 1))
+
+    def test_par_defaut_seul_zero_passe(self):
+        with self.assertRaises(SystemExit):
+            lance(self._sort(1))
 
 
 def _catalogue(racine, editions):

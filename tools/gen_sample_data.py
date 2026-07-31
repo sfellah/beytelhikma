@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Génère les bases SQLite d'exemple (catalog + book) conformes à DATAMODEL.md.
 
-Sortie : beytelhikma/assets/sample/
+Sortie : beytelhikma-electron/assets/sample/
     catalog.sqlite
     books/<edition_id>.sqlite
 
@@ -30,14 +30,13 @@ from _common import (
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(ROOT, "beytelhikma", "assets", "sample")
+OUT_DIR = os.path.join(ROOT, "beytelhikma-electron", "assets", "sample")
 BOOKS_DIR = os.path.join(OUT_DIR, "books")
 
-# Le portage Electron embarque sa propre copie du jeu d'exemple : ses tests la
-# lisent sans passer par le client Flutter. Elle était recopiée à la main, donc
-# elle dérivait — un changement de schéma laissait les deux jeux désaccordés et
-# la suite Electron échouait loin de sa cause. Le générateur écrit les deux.
-MIRROR_DIRS = [os.path.join(ROOT, "beytelhikma-electron", "assets", "sample")]
+# Autres copies du jeu d'exemple à tenir synchrones. Vide depuis le retrait du
+# client Flutter ; le mécanisme reste, car deux copies recopiées à la main ont
+# déjà dérivé (un changement de schéma les avait laissées désaccordées).
+MIRROR_DIRS: list[str] = []
 
 CONTENT_VERSION = 1
 

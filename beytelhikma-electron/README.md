@@ -1,8 +1,9 @@
 # Beyt El Hikma — Electron
 
-Portage Electron de l'application **بيت الحكمة** (bibliothèque numérique arabe et
-lecteur), calqué sur les maquettes de `../ui-examples/`. Même modèle de données
-et même découpage que l'application Flutter voisine : local-first, aucune API.
+Application Electron **بيت الحكمة** (bibliothèque numérique arabe et lecteur),
+calquée sur les maquettes de `../ui-examples/`. Modèle de données de
+`../DATAMODEL.md` : local-first, aucune API. Née comme portage d'un client
+Flutter aujourd'hui retiré, elle est l'implémentation unique.
 
 ## Démarrer
 
@@ -89,7 +90,7 @@ src/renderer/   interface (ES modules, CSS maison, aucun bundler)
   styles/       jetons de la maquette, coquille, composants, vues
 ```
 
-Règles reprises de l'application Flutter :
+Règles du projet :
 
 - **Le rendu ne touche jamais SQLite.** Il appelle `window.beytelhikma.repository`,
   qui passe par IPC vers `BookRepository` ; toute erreur remonte en

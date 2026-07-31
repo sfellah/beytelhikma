@@ -14,9 +14,9 @@
  *   teinte fonce et plus la dorure monte. Variable continue et non rupture de
  *   style : une date absente donne une patine médiane, qui ne se remarque pas.
  *
- * Reflet **exact** de `lib/utils/book_cover.dart` : mêmes clés, mêmes teintes,
- * mêmes seuils. `test/book-cover.test.js` porte la table de parité — sans elle
- * les deux clients dériveraient comme ont dérivé leurs palettes d'origine.
+ * Seule table du projet : tout client qui renaîtrait ailleurs devra la refléter
+ * exactement et porter un test de parité qui lit cette source — c'est faute
+ * d'un tel test que les palettes des deux clients d'origine avaient divergé.
  *
  * Voir `docs/superpowers/specs/2026-07-31-couvertures-composees-design.md`.
  */

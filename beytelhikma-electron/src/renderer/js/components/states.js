@@ -3,7 +3,7 @@ import { icon } from '../icons.js';
 
 /**
  * Les quatre états que chaque vue doit traiter explicitement :
- * `loading / success / empty / error` (comme `AsyncView` côté Flutter).
+ * `loading / success / empty / error`.
  */
 export function loadingView(message = 'جارٍ التحميل…') {
   return h(

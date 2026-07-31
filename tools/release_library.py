@@ -110,11 +110,20 @@ def ecrit_version(chemin, version):
     con.close()
 
 
-def lance(commande, **kwargs):
+def lance(commande, codes_ok=(0,), **kwargs):
+    """Exécute et vérifie le code de retour. Renvoie ce code.
+
+    `codes_ok` existe pour l'importeur, qui rend **1 dès qu'un livre est sauté**
+    et 2 pour une erreur bloquante. Sur 8 589 livres du corpus réel, quelques
+    sources sont défectueuses — un sommaire qui pointe une page absente, par
+    exemple — et l'importeur est fait pour les sauter en les signalant. Traiter
+    ce 1 comme un échec arrêtait toute la publication au premier livre bancal.
+    """
     print(f"$ {' '.join(commande)}", flush=True)
     resultat = subprocess.run(commande, cwd=RACINE, **kwargs)
-    if resultat.returncode != 0:
+    if resultat.returncode not in codes_ok:
         raise SystemExit(f"échec : {' '.join(commande)}")
+    return resultat.returncode
 
 
 # ------------------------------------------------------------------ étapes
@@ -137,7 +146,9 @@ def importe(args, book_ids=None, compress=True):
     commande += ["--jobs", str(args.jobs), "--resume"]
     if compress:
         commande.append("--compress")
-    lance(commande)
+    # 1 = des livres ont été sautés, et ils sont déjà détaillés dans la sortie
+    # de l'importeur et dans son rapport. 2 reste bloquant.
+    return lance(commande, codes_ok=(0, 1))
 
 
 def selection(args):
@@ -327,18 +338,26 @@ def monte_par_tranches(args, bucket, region):
         return
 
     libere_total = 0
+    tranches_incompletes = []
     for numero, lot in enumerate(lots, start=1):
         poids = sum(b.size for b in lot) / 1024 / 1024
         print(f"\n--- tranche {numero}/{len(lots)} : {len(lot)} livres, "
               f"{poids:.0f} Mo de source ---", flush=True)
 
-        importe(args, book_ids=[b.book_id for b in lot])
+        if importe(args, book_ids=[b.book_id for b in lot]) == 1:
+            tranches_incompletes.append(numero)
         supprimes, liberes = publie_tranche(
             args.src, bucket, region, [edition_id(b.book_id) for b in lot]
         )
         libere_total += liberes
         print(f"tranche {numero} montée — {supprimes} fichiers effacés, "
               f"{liberes / 1048576:.0f} Mo rendus au disque", flush=True)
+
+    if tranches_incompletes:
+        # Un saut silencieux serait un livre absent du catalogue que personne ne
+        # chercherait : le détail est dans `import-report.csv`.
+        print(f"\n{len(tranches_incompletes)} tranche(s) ont sauté des livres "
+              f"(sources défectueuses) : {tranches_incompletes}", file=sys.stderr)
 
     print(f"\ntoutes les tranches sont montées ({libere_total / 1073741824:.1f} Go rendus). "
           "Reconstruction du catalogue complet…", flush=True)

@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -247,73 +245,5 @@ test('coverStyle survit à un livre sans catégorie, sans auteur ni pagination',
     assert.equal(style.age, PATINA_UNDATED_AGE);
     assert.match(style.from, /^#[0-9a-f]{6}$/);
     assert.ok(style.gilt > 0 && style.gilt < 1);
-  }
-});
-
-/* ------------------------------------------------------------ parité Flutter */
-
-const dartSource = () => {
-  const path = fileURLToPath(
-    new URL('../../beytelhikma/lib/utils/book_cover.dart', import.meta.url),
-  );
-  return readFileSync(path, 'utf8');
-};
-
-/**
- * `lib/utils/book_cover.dart` porte les mêmes tables. Les palettes d'origine
- * avaient déjà divergé entre les deux clients faute d'un test comme celui-ci :
- * les teintes de `cover.js` et de `cover_image.dart` n'ont jamais été les mêmes,
- * et rien ne l'a signalé. On lit donc le fichier Dart et on compare.
- */
-test('la table Dart porte les mêmes teintes que la table JS', () => {
-  const source = dartSource();
-  for (const [family, { from, to }] of Object.entries(COVER_FAMILIES)) {
-    const entry = new RegExp(`'${family}'\\s*:\\s*CoverMaterial\\(([^)]*)\\)`, 's').exec(
-      source,
-    );
-    assert.ok(entry, `famille ${family} absente de book_cover.dart`);
-    const hex = (value) => `0xFF${value.slice(1).toUpperCase()}`;
-    assert.ok(
-      entry[1].includes(hex(from)),
-      `famille ${family} : ${from} attendu dans book_cover.dart`,
-    );
-    assert.ok(
-      entry[1].includes(hex(to)),
-      `famille ${family} : ${to} attendu dans book_cover.dart`,
-    );
-  }
-});
-
-test('la table Dart porte les mêmes seuils de forme', () => {
-  const source = dartSource();
-  assert.match(source, new RegExp(`treatiseMaxPages = ${TREATISE_MAX_PAGES}\\b`));
-  assert.match(source, new RegExp(`bookMaxPages = ${BOOK_MAX_PAGES}\\b`));
-  assert.match(source, /pages <= treatiseMaxPages\) return CoverShape\.treatise/);
-  assert.match(source, /pages > bookMaxPages\) return CoverShape\.tome/);
-  assert.match(source, /volumeCount \?\? 1\) > 1\) return CoverShape\.compendium/);
-});
-
-test('la table Dart porte les mêmes constantes de patine', () => {
-  const source = dartSource();
-  for (const [name, value] of [
-    ['patinaUndatedAge', PATINA_UNDATED_AGE],
-    ['patinaDarken', PATINA_DARKEN],
-    ['patinaGiltMin', PATINA_GILT_MIN],
-    ['patinaGiltRange', PATINA_GILT_RANGE],
-  ]) {
-    assert.match(
-      source,
-      new RegExp(`${name} = ${String(value).replace('.', '\\.')}\\b`),
-      `constante ${name} absente ou divergente dans book_cover.dart`,
-    );
-  }
-});
-
-test('la table Dart range les mêmes libellés dans les mêmes familles', () => {
-  const source = dartSource();
-  for (const [label, expected] of CATEGORY_PARITY) {
-    const entry = new RegExp(`'${label}'\\s*:\\s*'([a-z]+)'`).exec(source);
-    assert.ok(entry, `libellé ${label} absent de book_cover.dart`);
-    assert.equal(entry[1], expected, `libellé ${label}`);
   }
 });

@@ -115,10 +115,10 @@ const USER_SCHEMA = [
   ...ANNOTATION_SCHEMA,
   `CREATE TABLE user_info (schema_version INTEGER NOT NULL)`,
   `INSERT INTO user_info (schema_version) VALUES (${USER_DB_SCHEMA_VERSION})`,
-  // sqflite, côté Flutter, se fie à `user_version` pour décider s'il doit créer
-  // le schéma. Sans cette ligne il lit 0, rejoue ses `CREATE TABLE` sur des
-  // tables déjà présentes et refuse d'ouvrir la base : les deux clients ne
-  // peuvent alors pas partager une même racine de bibliothèque.
+  // `user_version` reste posé : c'est le contrat qu'un autre client (l'ex-port
+  // Flutter s'y fiait via sqflite) lirait pour décider s'il doit créer le
+  // schéma. Sans lui, un client tiers lit 0, rejoue ses `CREATE TABLE` et
+  // refuse d'ouvrir la base — impossible de partager une racine de bibliothèque.
   `PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`,
 ];
 
@@ -393,8 +393,8 @@ export class AppDatabase {
 
   /**
    * Rejoue les paliers manquants sur une base existante. `user_version` fait
-   * foi : c'est aussi ce que lit sqflite côté Flutter, les deux clients doivent
-   * donc voir la même valeur après migration.
+   * foi : c'est le PRAGMA standard SQLite, celui que tout autre client lirait,
+   * et il doit porter la même valeur après migration.
    */
   #migrateUser() {
     const db = this.#user;
@@ -405,8 +405,8 @@ export class AppDatabase {
       for (const statement of USER_MIGRATIONS[step] ?? []) db.run(statement);
     }
     db.run(`PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`);
-    // `user_info` est propre à ce portage : une base créée par le client Flutter
-    // ne l'a pas, et son absence ne doit pas faire échouer la migration.
+    // `user_info` est propre à cette implémentation : une base créée par un
+    // autre client ne l'a pas, et son absence ne doit pas casser la migration.
     if (first(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='user_info'")) {
       db.run('UPDATE user_info SET schema_version = ?', [USER_DB_SCHEMA_VERSION]);
     }

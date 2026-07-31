@@ -63,9 +63,8 @@ def strip_html(html: str) -> str:
     return text.strip()
 
 
-# Miroir de `_entities` dans beytelhikma/lib/utils/arabic_html_parser.dart :
-# le texte brut stocké en base doit correspondre à ce que les deux clients
-# affichent une fois le HTML décodé.
+# Le texte brut stocké en base doit correspondre à ce que le client affiche
+# une fois le HTML décodé (décodage des entités côté rendu Electron).
 ENTITIES = {
     "&nbsp;": " ",
     "&amp;": "&",

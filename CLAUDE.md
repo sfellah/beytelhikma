@@ -4,21 +4,19 @@ Guidance pour Claude Code sur ce projet.
 
 ## Projet
 
-**Beyt El Hikma** — application mobile Flutter/Dart de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). Voir `README.md` pour l'objectif complet et la structure cible.
-
-Deux implémentations coexistent, mêmes bases et mêmes règles : `beytelhikma/` (Flutter, référence) et `beytelhikma-electron/` (portage bureau Electron, voir son `README.md`).
+**Beyt El Hikma** — application de bureau Electron de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). L'implémentation vit dans `beytelhikma-electron/` (voir son `README.md`). Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique.
 
 ## Commandes
 
 ```bash
-cd beytelhikma
-flutter pub get          # dépendances
-flutter run              # lancer l'app
-flutter test             # tests
-flutter analyze          # lint / analyse statique
-dart format lib test     # formatage
+# application (depuis beytelhikma-electron/)
+npm install           # dépendances
+npm start             # lancer l'app
+npm test              # suite de tests (node --test)
+npm run seed          # récupère la graine de catalogue depuis le bucket
+npm run release:win   # tests + graine + installeur NSIS et portable
 
-python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple
+python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple -> beytelhikma-electron/assets/sample/
 python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
 
 # import du corpus Shamela 4 (depuis la racine)
@@ -31,10 +29,6 @@ cd tools && python -m unittest discover -s shamela/tests -t .   # tests de l'imp
 python tools/release_library.py --dry-run     # dit ce qui serait publié
 python tools/release_library.py               # tout, dans l'ordre
 python tools/release_library.py --skip-import # republier sans réimporter
-
-# chaîne application (depuis beytelhikma-electron/)
-npm run seed          # récupère la graine de catalogue depuis le bucket
-npm run release:win   # tests + graine + installeur NSIS et portable
 
 # publication des livres vers S3 — MinIO ou AWS (depuis la racine)
 export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…          # ou AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
@@ -59,7 +53,14 @@ python tools/publish_minio.py --endpoint aws --bucket <bucket> --catalog-only
 | `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc)  | lecture seule  |
 | `user.sqlite`              | bibliothèque, progression, réglages       | lecture/écriture |
 
-**Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` (portage Electron) qui les installe depuis le bucket : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
+**Structure du code Electron** (`beytelhikma-electron/src/`) :
+
+- `main/` — processus principal : `app-database.js` (ouverture des trois bases, sql.js), `book-repository.js` (toutes les lectures/écritures exposées au rendu), `download-manager.js`, `catalog-updater.js`, `main.js` (fenêtre + IPC).
+- `preload/preload.cjs` — pont IPC, liste blanche `METHODS`.
+- `renderer/` — UI (vues dans `js/views/`, composants, `styles/tokens.css`).
+- `shared/` — modules purs utilisés des deux côtés : `arabic.js`, `book-cover.js`, `distribution.js`, `theme.js`. Certains sont des miroirs de `tools/` (voir plus bas) : ne jamais les dupliquer ailleurs.
+
+**Le catalogue est local, les livres se téléchargent.** `catalog.sqlite` est copié depuis la bibliothèque source au premier accès : l'exploration marche donc hors ligne. Les fichiers de livres, eux, ne sont plus copiés automatiquement — `AppDatabase.book()` exige un fichier installé et lève `BookNotInstalledError` sinon. C'est `src/main/download-manager.js` qui les installe depuis le bucket : `GET` HTTP anonyme reprenable par en-tête `Range`, décompression zstd en flux, SHA-256 vérifié, `rename` atomique. Voir `docs/superpowers/specs/2026-07-31-minio-book-lifecycle-design.md`.
 
 **Le catalogue ne porte aucun hôte.** `book_releases.object_key` (schéma **2**, ex-`download_url`) contient une clé relative — `books/<edition_id>/<content_version>/book.sqlite.zst` — que le client colle derrière le réglage `distribution.base_url`. La règle tient en une ligne : **la présence de `://` marque un absolu**. C'est elle qui garde `asset://` (dans `assets/sample`) et `local://` (dans `dist/shamela`) utilisables hors ligne, et qui fait qu'un catalogue publié à l'ancienne, avec des URL complètes, continue de fonctionner.
 
@@ -79,35 +80,21 @@ L'installation vérifie le SHA-256 **avant** le `rename`, qui est le dernier ges
 
 Voir `docs/superpowers/specs/2026-07-31-source-distribution-configurable-design.md`.
 
-**Le jeu d'exemple a deux copies**, `beytelhikma/assets/sample` et `beytelhikma-electron/assets/sample` : les tests Electron lisent la seconde sans passer par le client Flutter. `gen_sample_data.py` écrit les deux (`MIRROR_DIRS`). Elle était recopiée à la main, donc elle dérivait — un renommage de colonne l'a laissée au schéma 1 et la suite Electron a échoué loin de sa cause.
-
-Les bases d'exemple (5 livres, 3 à 5 pages) sont produites par `tools/gen_sample_data.py` : ne jamais les éditer à la main, modifier le générateur.
+**Le jeu d'exemple** (5 livres, 3 à 5 pages) vit dans `beytelhikma-electron/assets/sample` et est produit par `tools/gen_sample_data.py` : ne jamais l'éditer à la main, modifier le générateur. `MIRROR_DIRS` (vide aujourd'hui) reste dans le générateur : quand une seconde copie existait, la recopie manuelle avait dérivé et la suite de tests échouait loin de sa cause.
 
 **Le DDL vit dans `tools/_common.py`** (`BOOK_SCHEMA`, `CATALOG_SCHEMA`), importé à la fois par `gen_sample_data.py` et par l'importeur Shamela : une seule source de vérité, donc aucune dérive possible entre les données d'exemple et les données réelles. `tools/shamela/tests/test_pipeline.py::SchemaParityTest` échoue si ce n'est plus le cas.
 
-`tools/import_shamela.py` transforme le corpus Shamela 4 (`C:\shamela-data`, 8 589 livres) vers `dist/shamela/` (non versionné), au même schéma. L'app le consomme via `AppDatabase.withRoot(Directory('.../dist/shamela'))`. Voir `tools/notebooks/01_un_livre_vers_sqlite.ipynb` pour la transformation d'un livre commentée étape par étape.
+`tools/import_shamela.py` transforme le corpus Shamela 4 (`C:\shamela-data`, 8 589 livres) vers `dist/shamela/` (non versionné), au même schéma. L'app le consomme via `new AppDatabase({ librarySource: '.../dist/shamela' })`. Voir `tools/notebooks/01_un_livre_vers_sqlite.ipynb` pour la transformation d'un livre commentée étape par étape.
 
-Séparation stricte en trois couches — ne jamais les mélanger :
+**Séparation stricte** : l'UI (renderer) ne touche jamais une base — toute donnée passe par le pont IPC vers `BookRepository`, et les erreurs remontent typées (`RepositoryError`, `BookNotInstalledError`, `DownloadError`). Chaque vue gère explicitement 4 états : `loading / success / empty / error`.
 
-- **`lib/models/`** — classes de données immuables reflétant le schéma SQLite (BookSummary, BookDetail, Author, BookCategory, Volume, BookPage, TocEntry, ReadingProgress, LibraryEntry). `fromMap`/`toJson`, champs nullables tolérés (les données source sont incomplètes).
-- **`lib/repositories/`** — interface `BookRepository` + implémentation `SqliteBookRepository`. **L'UI ne dépend que de l'interface**, injectée par `RepositoryScope` ; les erreurs remontent en `RepositoryException`.
-- **`lib/screens/` + `lib/widgets/`** — UI. Chaque écran gère explicitement 4 états : `loading / success / empty / error` (voir `AsyncView`).
+## Écrans
 
-## Écrans principaux
+Accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`, file + table paginée de tout le catalogue avec taille, pages, statut, suppression par lot), **collections** (`/collection/:id`), **recherche transversale** (`/search`), **mes notes** (`/notes`), **réglages** (`/settings`).
 
-1. `screens/home/` — accueil (reprise de lecture, nouveautés, disciplines, auteur en vedette) ; `screens/library/` — livres installés.
-2. `screens/book_detail/` — fiche livre (métadonnées présentes uniquement, volumes, sommaire hiérarchique).
-3. `screens/reader/` — lecteur : une page imprimée par écran, balayage RTL, sélection de texte (`SelectionArea`), taille de police réglable (boutons, pincement, feuille de réglages), ambiances ورقي/بني/ليلي, progression écrite dans `user.sqlite`.
+Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design.
 
-Le rendu du contenu passe par `lib/utils/arabic_html_parser.dart` (HTML minimal → blocs typés → `TextSpan`) : pas de WebView, pas de `flutter_html`, afin de garder le contrôle sur la typographie arabe et la sélection.
-
-Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design des écrans Flutter.
-
-## État par implémentation
-
-Le portage Electron est en avance sur le client Flutter. Écrans livrés côté Electron : accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`, file + table paginée de tout le catalogue avec taille, pages, statut, suppression par lot), **collections** (`/collection/:id`), **recherche transversale** (`/search`), **mes notes** (`/notes`), **réglages** (`/settings`).
-
-**Annotations.** `user.sqlite` porte les trois tables de `DATAMODEL.md` — `bookmarks`, `highlights`, `notes` — depuis la version de schéma **2**. La migration est additive et rejouée à l'ouverture des deux côtés (`AppDatabase.#migrateUser` en Electron, `onUpgrade` en Flutter) : les deux clients doivent lire le même `user_version`, sinon ils ne peuvent plus partager une racine de bibliothèque. Un surlignage s'ancre sur des décalages du texte rendu **et** sur le passage avec son contexte : les décalages seuls ne survivraient pas à une réédition (voir `src/renderer/js/annotations.js`).
+**Annotations.** `user.sqlite` porte les trois tables de `DATAMODEL.md` — `bookmarks`, `highlights`, `notes` — depuis la version de schéma **2**. La migration est additive et rejouée à l'ouverture (`AppDatabase.#migrateUser`) : tout client qui partagerait une racine de bibliothèque doit lire le même `user_version`. Un surlignage s'ancre sur des décalages du texte rendu **et** sur le passage avec son contexte : les décalages seuls ne survivraient pas à une réédition (voir `src/renderer/js/annotations.js`).
 
 Les quatre teintes de surlignage sortent des jetons du projet (`HIGHLIGHTS` dans `views/reader.js`) et se posent à opacité variable selon l'ambiance (`--highlight-strength`, déclarée dans `tokens.css` et abaissée par le thème nuit) : une pastille claire sur fond de nuit mangerait l'encre. Le fond de recherche porte la classe `reader__match` et **jamais** le sélecteur `.reader__page mark` — celui-ci l'emportait par spécificité sur `.reader__highlight` et repeignait en jaune toutes les couleurs choisies.
 
@@ -138,7 +125,7 @@ Les listes longues sans pagination possible (sommaire d'un livre) se **fenêtren
 
 **Les méthodes exposées au rendu vivent dans deux listes** — `METHODS` de `src/preload/preload.cjs` et `REPOSITORY_METHODS` de `book-repository.js`. Une méthode ajoutée d'un seul côté ne casse rien au démarrage : elle échoue au premier clic. `test/repository.test.js` porte le test de parité.
 
-**Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire pour le client Flutter, mais ce portage ne les interroge jamais. La recherche s'appuie à la place sur :
+**Attention : le build sql.js embarqué ne contient pas FTS5**, seulement FTS4 (la chaîne `fts5` est absente de `sql-wasm.wasm`). `catalog_fts` et `pages_fts` sont donc illisibles depuis Electron — le pipeline continue de les produire (elles restent au schéma, un futur client pourrait les lire), mais l'application ne les interroge jamais. La recherche s'appuie à la place sur :
 
 - les colonnes normalisées déjà présentes au schéma, `pages.body_search` et `toc.title_normalized`, interrogées en `LIKE` ;
 - un index mémoire des titres, auteurs et éditeurs, normalisé par `src/shared/arabic.js`.
@@ -151,7 +138,7 @@ Les listes longues sans pagination possible (sommaire d'un livre) se **fenêtren
 - la **famille** de la catégorie donne la teinte et le motif parmi neuf, indexée par `categoryLabel` normalisé et non par `category_id`, qui ne concorde pas entre `assets/sample` et `dist/shamela` ;
 - le **siècle** de l'auteur donne la patine, en variable **continue** : plus c'est ancien, plus la teinte fonce et plus la dorure monte. C'est ce qui permet aux 29 % d'éditions sans `death_year_hijri` de prendre une patine médiane au lieu d'un style à part qui signifierait « on ne sait pas ».
 
-Les tables vivent dans `src/shared/book-cover.js` et `lib/utils/book_cover.dart`, en miroir l'une de l'autre ; `test/book-cover.test.js` lit le fichier Dart et compare — c'est faute d'un tel test que les palettes d'origine avaient divergé. Attention : `/explore` passe par `catalog-query.js`, projection distincte de `SUMMARY_SELECT` ; les deux doivent porter `book_type_label` et `death_year_hijri`, sinon l'écran entier tombe sur les replis. Voir `docs/superpowers/specs/2026-07-31-couvertures-composees-design.md`.
+Les tables vivent dans `src/shared/book-cover.js`, seul (le miroir Dart a disparu avec le client Flutter). Attention : `/explore` passe par `catalog-query.js`, projection distincte de `SUMMARY_SELECT` ; les deux doivent porter `book_type_label` et `death_year_hijri`, sinon l'écran entier tombe sur les replis. Voir `docs/superpowers/specs/2026-07-31-couvertures-composees-design.md`.
 
 La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
 
@@ -177,18 +164,17 @@ La graine (`assets/catalog.sqlite.zst`) est **téléchargée depuis le bucket au
 
 `beytelhikma-electron/build/` est le `buildResources` d'electron-builder, pas un dossier de sortie : il porte `icon.ico`, dérivé de `app-icon.png` par `tools/gen_brand_assets.py`. Il n'est donc pas ignorable en bloc — git ne réinclut rien sous un dossier exclu. Ce qui est artefact y est nommé un par un (`build/screenshots/`), et les artefacts d'empaquetage sortent dans `release/`.
 
-Reste à faire : alignement du client Flutter sur le téléchargement, l'exploration, les annotations et la source de distribution — le miroir Dart de `src/shared/distribution.js` n'existe pas encore. Et le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) : le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement copie toujours le catalogue depuis le dossier source local.
+Reste à faire : le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) — le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement en développement copie toujours le catalogue depuis le dossier source local.
 
 ## i18n / RTL (critique)
 
 - Locales : `ar`, `fr`, `en`.
-- Direction de **l'interface** = locale de l'app ; direction du **contenu** = langue du livre. Un livre arabe se lit en RTL même si l'UI est en français — utiliser `Directionality` explicitement dans le lecteur et les titres.
-- Ne jamais coder en dur des alignements gauche/droite : utiliser `start`/`end` (`EdgeInsetsDirectional`, `AlignmentDirectional`, `TextAlign.start`).
+- Direction de **l'interface** = locale de l'app ; direction du **contenu** = langue du livre. Un livre arabe se lit en RTL même si l'UI est en français — poser `dir` explicitement sur le contenu du lecteur et les titres.
+- Ne jamais coder en dur des alignements gauche/droite : propriétés CSS logiques (`margin-inline-start`, `text-align: start`, `inset-inline-end`…).
 - Polices arabes dédiées (Amiri / Noto Naskh) séparées des polices latines.
 
 ## Conventions
 
 - Pas de contenu statique dans l'UI : toute donnée passe par le repository.
-- Widgets partagés réutilisables dans `lib/widgets/` (BookCard, CoverImage, LoadingView, ErrorView, EmptyView).
-- Nommage fichiers : `snake_case.dart`.
-- Respecter `analysis_options.yaml` ; lancer `flutter analyze` avant de conclure une tâche.
+- Composants partagés réutilisables dans `src/renderer/js/components/`.
+- `npm test` (depuis `beytelhikma-electron/`) doit être vert avant de conclure une tâche.
