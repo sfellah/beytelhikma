@@ -1,0 +1,417 @@
+<!DOCTYPE html><html dir="rtl" lang="ar" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>The Scriptorial - Book Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;family=Inter:wght@100..900&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=Playfair+Display:wght@100..900&amp;family=Source+Serif+4:wght@100..900&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#1b1c19",
+                        "tertiary-fixed": "#cae7f3",
+                        "surface-container-high": "#eae8e3",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#0d2b34",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#aecbd7",
+                        "parchment-bg": "#fbf9f4",
+                        "on-secondary-fixed": "#291800",
+                        "on-secondary-fixed-variant": "#594320",
+                        "outline-variant": "#c0c8c6",
+                        "background": "#fbf9f4",
+                        "surface-container": "#f0eee9",
+                        "surface-container-low": "#f5f3ee",
+                        "primary": "#001614",
+                        "on-tertiary-container": "#77939e",
+                        "on-surface-variant": "#414847",
+                        "secondary-fixed": "#ffddb0",
+                        "on-primary": "#ffffff",
+                        "secondary": "#735a35",
+                        "on-secondary-container": "#785e39",
+                        "primary-container": "#002d29",
+                        "surface-bright": "#fbf9f4",
+                        "surface-dim": "#dbdad5",
+                        "on-tertiary-fixed": "#001f28",
+                        "surface": "#fbf9f4",
+                        "surface-tint": "#3e6560",
+                        "slate-teal": "#0c2a33",
+                        "secondary-fixed-dim": "#e2c194",
+                        "inverse-surface": "#30312e",
+                        "inverse-on-surface": "#f2f1ec",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#e4e2dd",
+                        "outline": "#717977",
+                        "on-secondary": "#ffffff",
+                        "deep-emerald": "#002d29",
+                        "on-tertiary-fixed-variant": "#2f4b54",
+                        "on-primary-fixed-variant": "#264d49",
+                        "inverse-primary": "#a5cfc8",
+                        "antique-gold": "#735a35",
+                        "primary-fixed": "#c1ebe4",
+                        "on-primary-container": "#6e9690",
+                        "primary-fixed-dim": "#a5cfc8",
+                        "on-surface": "#1b1c19",
+                        "error": "#ba1a1a",
+                        "tertiary": "#00161c",
+                        "secondary-container": "#fddaac",
+                        "surface-variant": "#e4e2dd",
+                        "on-primary-fixed": "#00201d",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-muted": "#c0c8c6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "md": "16px",
+                        "container-max": "1200px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "xl": "32px",
+                        "gutter": "20px",
+                        "sm": "8px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Playfair Display"],
+                        "body-lg": ["\"Source Serif 4\""],
+                        "title-md": ["Playfair Display"],
+                        "headline-lg": ["Playfair Display"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["\"Source Serif 4\""]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "30px", "fontWeight": "400" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.03em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "26px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: theme('colors.surface-container');
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.outline-variant');
+            border-radius: theme('borderRadius.full');
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline');
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex selection:bg-antique-gold/20 selection:text-deep-emerald">
+<!-- TopNavBar (Mobile) - Hidden on md+ -->
+<nav class="md:hidden flex justify-between items-center px-lg py-md w-full bg-surface/90 backdrop-blur-md text-primary font-title-md border-b border-outline-variant/30 fixed top-0 z-50">
+<div class="font-headline-lg-mobile text-deep-emerald">The Scriptorial</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined hover:text-primary transition-colors cursor-pointer" data-icon="search">search</span>
+<span class="material-symbols-outlined hover:text-primary transition-colors cursor-pointer" data-icon="notifications">notifications</span>
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border border-outline-variant/30">
+<img alt="Scholarly Profile of Alexander Mark" class="w-full h-full object-cover" data-alt="A small circular profile picture of Alexander Mark, a scholarly gentleman with a neat beard, wearing a classic tweed jacket, set against a muted beige library background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_34XAZ3bsQjNhs0YTPb-ZZWGkcIO3yPxn1pBakksdFCsNeD-uuU8QneqtCMp3YklZgNagiFaRvA0ryU1L8s4lTy0MbxNiShmGlqIHojo0ZvKAuwnUf2GGAWct7pOD14V4xnyhUCPmZvg41jgPFXEjRnY5B4GH0Ac9g2CYq2YwhlNu4MW8PC0Z39NI-f0LGjKfPGRdw-D3EI4hawzxwNiQpQ9rG_h34yc2AYRFJjwWxetL1YhkaupnZQ">
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Desktop) - Hidden on mobile -->
+<aside class="hidden md:flex flex-col h-full py-xl bg-parchment-bg text-deep-emerald fixed right-0 top-0 shadow-md shadow-deep-emerald/5 z-40 bg-surface-container-low shadow-sm border-l border-outline-variant/30 w-20">
+<div class="px-xl mb-xl text-center hidden">
+<div class="w-20 h-20 mx-auto rounded-full bg-surface-variant overflow-hidden border border-outline-variant/30 mb-sm">
+<img alt="The Scriptorial Emblem" class="w-full h-full object-cover" data-alt="An ornate, classical emblem of an open book surrounded by subtle botanical illustrations in deep emerald ink on a parchment-textured background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbACHyqjnUG9XhwSnBhgw-C3f-Uic_nZ0fXkW5cfAN1lx5T3bQi9Wy10g3PfShnELaum750mpWyAf4WHxVfyG723G53CUsLg3FMiCMi93hZP1NP0ndPUCTjHFi7OYD3BwYRzqB_RFXsk5ZcqQQz9ECU50Gvj5-tcMNdPhXxjYQubwH_JqUu6SOYcUtX-USt_4cIwguBeSuSy9P3OedDIPZ4NFeuTzcB45XK0431qqwVFtfyRzmQJHQmQ">
+</div>
+<h1 class="font-headline-lg text-deep-emerald">The Scriptorial</h1>
+<p class="font-label-sm text-on-surface-variant uppercase tracking-widest mt-xs">Scholarly Archive</p>
+</div>
+<nav class="flex-1 px-sm space-y-xs">
+<a class="flex items-center gap-lg text-on-surface-variant p-md hover:bg-surface-container-high rounded-full transition-colors group justify-center" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="home">home</span>
+<span class="font-label-md hidden">الرئيسية</span>
+</a>
+<a class="flex items-center gap-lg bg-secondary-container text-on-secondary-container rounded-full p-md transition-colors font-bold shadow-sm justify-center" href="#">
+<span class="material-symbols-outlined fill text-deep-emerald" data-icon="auto_stories" data-weight="fill">auto_stories</span>
+<span class="font-label-md hidden">المكتبة</span>
+</a>
+<a class="flex items-center gap-lg text-on-surface-variant p-md hover:bg-surface-container-high rounded-full transition-colors group justify-center" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="explore">explore</span>
+<span class="font-label-md hidden">استكشف</span>
+</a>
+<a class="flex items-center gap-lg text-on-surface-variant p-md hover:bg-surface-container-high rounded-full transition-colors group justify-center" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="history_edu">history_edu</span>
+<span class="font-label-md hidden">المؤلفون</span>
+</a>
+<a class="flex items-center gap-lg text-on-surface-variant p-md hover:bg-surface-container-high rounded-full transition-colors group justify-center" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="menu_book">menu_book</span>
+<span class="font-label-md hidden">التخصصات</span>
+</a>
+</nav>
+<div class="px-sm mt-auto space-y-xs">
+<a class="flex items-center gap-lg text-on-surface-variant mx-md p-md hover:bg-surface-container-high rounded-full transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="settings">settings</span>
+<span class="font-label-md">الإعدادات</span>
+</a>
+<a class="flex items-center gap-lg text-on-surface-variant mx-md p-md hover:bg-surface-container-high rounded-full transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-deep-emerald transition-colors" data-icon="logout">logout</span>
+<span class="font-label-md">تسجيل الخروج</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 pt-20 md:pt-0 min-h-screen md:pr-20">
+<!-- TopAppBar (Desktop Search) -->
+<header class="hidden md:flex justify-between items-center px-xl py-lg w-full max-w-container-max mx-auto border-b border-outline-variant/30 sticky top-0 bg-surface/90 backdrop-blur-md z-30">
+<div class="flex-1 max-w-xl">
+<div class="relative group">
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-deep-emerald transition-colors">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full py-3 pr-12 pl-4 font-label-md text-on-surface placeholder:text-outline-variant focus:ring-2 focus:ring-deep-emerald/20 transition-shadow" placeholder="البحث عن اسم كتاب، مؤلف، طبعة..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-lg mr-xl">
+<button class="text-on-surface-variant hover:text-deep-emerald transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="flex items-center gap-sm cursor-pointer hover:bg-surface-container-low p-sm rounded-full transition-colors">
+<span class="font-label-md text-on-surface">Alexander Mark</span>
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline-variant/30">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A small circular profile picture of Alexander Mark, a scholarly gentleman with a neat beard, wearing a classic tweed jacket, set against a muted beige library background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxQj2BhnrCqMgxgB0pH_ns7fW5aY9lufvuMjwhuljOY3pwcPQswlNe0mc26oKS5wpsYvyK_X0eCavOZRdxKnosVagXcO6Wg6FFnJ_Xfp4U8ozkLJbGUK2MmpJqx_IyLeu0boQO5Kyj3kCf5o4fu8r7AWPTyDnALxzkBiJj2IMHZRVxYgVglLCI8dBkoFU4NW1fJ35x6IkxXlbtEU9W1BVb86WN2zXaXNSCXhpxEyX_0DrfEWQYp6Rs6g">
+</div>
+</div>
+</div>
+</header>
+<div class="max-w-container-max mx-auto px-md md:px-xl py-xl">
+<!-- Breadcrumb & Back -->
+<div class="flex items-center gap-sm text-on-surface-variant font-label-sm mb-lg">
+<button class="hover:text-deep-emerald transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                    العودة للمكتبة
+                </button>
+<span class="text-outline-variant">/</span>
+<span class="hover:text-deep-emerald cursor-pointer transition-colors">التاريخ الإسلامي</span>
+<span class="text-outline-variant">/</span>
+<span class="text-on-surface font-semibold">مقدمة ابن خلدون</span>
+</div>
+<!-- Bento Grid Layout for Book Details -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg mb-xxl">
+<!-- Left Column (Visuals & Actions) -->
+<div class="lg:col-span-4 flex flex-col gap-lg relative">
+<!-- Book Cover -->
+<div class="rounded-xl overflow-hidden shadow-lg shadow-deep-emerald/10 border border-outline-variant/20 relative group">
+<img alt="مقدمة ابن خلدون" class="w-full aspect-[2/3] object-cover transition-transform duration-500 group-hover:scale-105" data-alt="A highly detailed, photorealistic book cover of 'Muqaddimah' by Ibn Khaldun. The cover features intricate Islamic geometric patterns in deep gold and emerald green on a distressed, aged leather background. The Arabic title is elegantly embossed in classical Thuluth calligraphy. A subtle light source highlights the texture of the binding." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAU71Dbk01eZPTJlxBN2o04Reg1BNXmSBE04iu0Kg5MmhVXA9zbl33FdT3sidJ7u2CtLn2FcCTj6zlQ-YXZWsfUu4KPrlpR-8_8MSE9JuHSSM6Wmgh5wBakXEYTggm14CiYWQJV1dm_-HX6z9jcnPkn9EJ7e8yntGYUS-bkw2JHMu9LrxGkLYwSRUluxDnbGxWs6Fv0a84cDWfb919KSrqnnDIzmMdBhayjG72O8IkQwU4RvCdFHO2xEw">
+<div class="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-md">
+<span class="text-on-primary font-label-sm bg-primary/50 backdrop-blur-sm px-3 py-1 rounded-full border border-on-primary/20">الطبعة الأولى تحقيق د. علي عبد الواحد وافي</span>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-md">
+<button class="w-full bg-deep-emerald text-on-primary font-title-md py-4 rounded-full flex justify-center items-center gap-sm hover:bg-primary transition-colors shadow-sm active:scale-[0.98]">
+<span class="material-symbols-outlined fill" data-weight="fill">menu_book</span>
+                            ابدأ القراءة
+                        </button>
+<div class="flex gap-md">
+<button class="flex-1 bg-surface-container-low text-deep-emerald font-label-md py-3 rounded-full flex justify-center items-center gap-sm hover:bg-surface-container-high transition-colors border border-outline-variant/30">
+<span class="material-symbols-outlined">download</span>
+                                تحميل PDF
+                            </button>
+<button class="w-12 h-12 bg-surface-container-low text-on-surface-variant rounded-full flex justify-center items-center hover:bg-surface-container-high transition-colors border border-outline-variant/30 hover:text-deep-emerald" title="إضافة للمفضلة">
+<span class="material-symbols-outlined">bookmark_add</span>
+</button>
+<button class="w-12 h-12 bg-surface-container-low text-on-surface-variant rounded-full flex justify-center items-center hover:bg-surface-container-high transition-colors border border-outline-variant/30 hover:text-deep-emerald" title="مشاركة">
+<span class="material-symbols-outlined">share</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right Column (Details & Metadata) -->
+<div class="lg:col-span-8 flex flex-col gap-xl">
+<!-- Header Info -->
+<div>
+<div class="flex flex-wrap gap-sm mb-md">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full font-label-sm border border-secondary/20">تاريخ</span>
+<span class="bg-surface-container-low text-on-surface-variant px-3 py-1 rounded-full font-label-sm border border-outline-variant/30">فلسفة</span>
+<span class="bg-surface-container-low text-on-surface-variant px-3 py-1 rounded-full font-label-sm border border-outline-variant/30">علم اجتماع</span>
+</div>
+<h1 class="font-display-lg text-deep-emerald mb-sm leading-tight">مقدمة ابن خلدون</h1>
+<!-- Author Badge -->
+<div class="flex items-center gap-md mb-lg">
+<div class="w-12 h-12 rounded-full overflow-hidden border border-antique-gold/50">
+<img alt="ابن خلدون" class="w-full h-full object-cover" data-alt="A classical portrait illustration of the medieval scholar Ibn Khaldun, rendered in a refined, monochromatic line-art style resembling an old etching. He is depicted wearing traditional 14th-century North African scholarly robes and a turban, against a plain parchment background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1vTnNx6zyS4h_v73qyd32doSsPxgIOfQi10YmlD0S3Qb3vh4PDLbdHTydxBeH20p7glYS8SEwhrDPeJvzGPLiq_XijyHMcYNPR2ebO0fZUwRVWi3A9yF8miJuoFnte5ckK4BKK6BkHDxS-9Vw6HF90CpIp_8ldvZmP7kwb7obdyxXNNDkyaZtmNaDBvyoSUe8HS7MoinnO7P2px6nHI2fTZeqohPX4kRJ7SuB5G1c2vSO1N7HANHI8A">
+</div>
+<div>
+<p class="font-title-md text-on-surface">عبد الرحمن بن خلدون</p>
+<p class="font-label-sm text-on-surface-variant">المؤلف • 1332 - 1406 م</p>
+</div>
+<button class="mr-auto font-label-sm text-antique-gold hover:text-secondary transition-colors underline underline-offset-4">عرض أعماله</button>
+</div>
+</div>
+<!-- Synopsis / Abstract -->
+<div class="prose prose-lg text-on-surface-variant font-body-lg leading-relaxed">
+<p class="">
+                            تعد "المقدمة" من أهم الكتب التي ألفها العلامة عبد الرحمن بن خلدون في عام 1377م، وهي في الأصل مقدمة لموسوعته الضخمة "كتاب العبر". يُعتبر هذا العمل التأسيسي بمثابة حجر الزاوية لعلوم الاجتماع الحديثة، والديموغرافيا، والتاريخ الثقافي.
+                        </p>
+<p class="mt-4">
+                            يستعرض الكتاب بأسلوب تحليلي عميق نشوء الدول وسقوطها، والعوامل المؤثرة في العمران البشري، مبنياً نظريته الشهيرة في "العصبية" كقوة محركة للتاريخ. عمل لا غنى عنه لكل باحث في التراث الإنساني.
+                        </p>
+</div>
+<!-- Metadata Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md bg-surface-container-low p-lg rounded-xl border border-outline-variant/20">
+<div>
+<p class="font-label-sm text-outline mb-1 uppercase tracking-wider">العصر</p>
+<p class="font-label-md text-on-surface">العصر المملوكي</p>
+</div>
+<div>
+<p class="font-label-sm text-outline mb-1 uppercase tracking-wider">اللغة الأصلية</p>
+<p class="font-label-md text-on-surface">العربية الكلاسيكية</p>
+</div>
+<div>
+<p class="font-label-sm text-outline mb-1 uppercase tracking-wider">عدد الصفحات</p>
+<p class="font-label-md text-on-surface">632 صفحة</p>
+</div>
+<div>
+<p class="font-label-sm text-outline mb-1 uppercase tracking-wider">الناشر الحالي</p>
+<p class="font-label-md text-on-surface">دار المعارف (طبعة 2010)</p>
+</div>
+</div>
+<!-- Table of Contents (Interactive) -->
+<div class="mt-md">
+<h3 class="font-title-md text-deep-emerald mb-md flex items-center gap-sm border-b border-outline-variant/30 pb-sm">
+<span class="material-symbols-outlined">toc</span>
+                            فهرس المحتويات
+                        </h3>
+<div class="space-y-xs bg-surface-container-low/50 rounded-lg p-sm border border-outline-variant/20 max-h-64 overflow-y-auto">
+<!-- Chapter Items -->
+<details class="group bg-surface rounded-md border border-outline-variant/30 overflow-hidden">
+<summary class="flex justify-between items-center p-md cursor-pointer font-label-md text-on-surface hover:bg-surface-container-low transition-colors list-none">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-outline group-open:rotate-90 transition-transform">chevron_left</span>
+                                        الباب الأول: في العمران البشري
+                                    </div>
+<span class="text-outline-variant font-body-md">ص 45</span>
+</summary>
+<div class="px-xl py-sm bg-surface-container-low/30 border-t border-outline-variant/20 space-y-sm text-on-surface-variant font-label-sm">
+<p class="flex justify-between hover:text-deep-emerald cursor-pointer"><span class="">الفصل الأول: في أن الاجتماع الإنساني ضروري</span> <span class="">47</span></p>
+<p class="flex justify-between hover:text-deep-emerald cursor-pointer"><span class="">الفصل الثاني: في قسط العمران من الأرض</span> <span class="">52</span></p>
+<p class="flex justify-between hover:text-deep-emerald cursor-pointer"><span class="">الفصل الثالث: في المعتدل من الأقاليم والمنحرف</span> <span class="">58</span></p>
+</div>
+</details>
+<details class="group bg-surface rounded-md border border-outline-variant/30 overflow-hidden">
+<summary class="flex justify-between items-center p-md cursor-pointer font-label-md text-on-surface hover:bg-surface-container-low transition-colors list-none">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-outline group-open:rotate-90 transition-transform">chevron_left</span>
+                                        الباب الثاني: في العمران البدوي والأمم الوحشية
+                                    </div>
+<span class="text-outline-variant font-body-md">ص 120</span>
+</summary>
+<div class="px-xl py-sm bg-surface-container-low/30 border-t border-outline-variant/20 space-y-sm text-on-surface-variant font-label-sm">
+<p class="flex justify-between hover:text-deep-emerald cursor-pointer"><span class="">الفصل الأول: في أجيال البدو</span> <span class="">122</span></p>
+</div>
+</details>
+<div class="p-md text-center text-outline-variant font-label-sm">
+                                يعرض هذا الفهرس الأبواب الرئيسية فقط
+                            </div>
+</div>
+</div>
+</div>
+</div>
+<!-- Related Works Section (Horizontal Scroll) -->
+<section class="border-t border-outline-variant/30 pt-xl mt-xxl">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-headline-lg text-deep-emerald">أعمال ذات صلة</h2>
+<p class="font-body-md text-on-surface-variant mt-xs">مؤلفات كلاسيكية في التاريخ والفلسفة</p>
+</div>
+<div class="flex gap-sm">
+<button class="w-10 h-10 rounded-full border border-outline-variant/50 flex items-center justify-center hover:bg-surface-container-low hover:text-deep-emerald transition-colors disabled:opacity-50">
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<button class="w-10 h-10 rounded-full border border-outline-variant/50 flex items-center justify-center hover:bg-surface-container-low hover:text-deep-emerald transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+</div>
+</div>
+<div class="flex overflow-x-auto gap-lg pb-md snap-x snap-mandatory scrollbar-hide">
+<!-- Related Book Card 1 -->
+<div class="min-w-[200px] w-[200px] snap-start flex flex-col gap-sm group cursor-pointer">
+<div class="rounded-lg overflow-hidden shadow-sm border border-outline-variant/20 relative">
+<img alt="الأيام" class="w-full aspect-[2/3] object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A photorealistic book cover of 'Al-Ayyam' by Taha Hussein. The design is minimalist, featuring a sepia-toned archival photograph of an Egyptian village landscape, overlaid with elegant, bold Arabic typography in a deep brown ink on a textured cream background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCgHgu1DCiUot8YGnNeBG0lRCZTLnsH3lD03cSqs7eCmm-dtMc9OD-9Mas1RwH85ywPKFmWGbJy9JrOAjui1yEyAYEQxeg0ddG7lkS7OHhEIXWcaPngikRG1ExUsxQmI2rVp_QSM9XHkbAXTzDSAdCcYj1bmCrZHs6IrG7AGIrhGX0j2gWTYRPAtdaNWrNe_-0KTIRbLqyhoIYef8t6edQwvSMFXBwzJS2ZNUaTfTDd_tDnhKTkr2OYQ">
+</div>
+<div>
+<h4 class="font-title-md text-on-surface group-hover:text-deep-emerald transition-colors line-clamp-1">الأيام</h4>
+<p class="font-label-sm text-outline-variant">طه حسين</p>
+</div>
+</div>
+<!-- Related Book Card 2 -->
+<div class="min-w-[200px] w-[200px] snap-start flex flex-col gap-sm group cursor-pointer">
+<div class="rounded-lg overflow-hidden shadow-sm border border-outline-variant/20 relative">
+<img alt="تهافت الفلاسفة" class="w-full aspect-[2/3] object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A highly detailed book cover for 'Tahafut al-Falasifa' by Al-Ghazali. The cover features a complex, abstract geometric mosaic pattern representing philosophical debate, utilizing rich indigo, gold, and crimson tones. The title is prominently displayed in classic Kufic script." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzU-tdpa55qhjuBK-ZGgH6xtBYN0DenDR56z22GdC2kvevmS9teWSCTORml_eBL5N-t9-PrztKvJJQvQLeOz4vb99wDLBg4WrBnIPb7NoTRBz-JmZtZQK63CZbRUPOnwZyMGyXdKgXosmnJwTqRHfK0DRRjuTNeX3bjLSAU3BF0JeTf60ASeXjENXCYtkjrsxRZ-RspZ4iZ5ra26dPFPWaDU34VOtDOJ_UPEhQkrQJijiKPO2KfayFJw">
+</div>
+<div>
+<h4 class="font-title-md text-on-surface group-hover:text-deep-emerald transition-colors line-clamp-1">تهافت الفلاسفة</h4>
+<p class="font-label-sm text-outline-variant">أبو حامد الغزالي</p>
+</div>
+</div>
+<!-- Related Book Card 3 -->
+<div class="min-w-[200px] w-[200px] snap-start flex flex-col gap-sm group cursor-pointer">
+<div class="rounded-lg overflow-hidden shadow-sm border border-outline-variant/20 relative">
+<img alt="كتاب الحيوان" class="w-full aspect-[2/3] object-cover group-hover:scale-105 transition-transform duration-300" data-alt="An ornate book cover for 'Kitab al-Hayawan' by Al-Jahiz. The cover mimics an ancient illuminated manuscript, featuring stylized, miniature-style illustrations of various animals interlaced with golden arabesque vines on a deep forest green leather-like texture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtd4ypMXBmmqmMOYeFfTxSr7yTM7LqCnG66hsmKUHTpfB830qb-jJxjqkOS8Lvaneq14zvMARs5qKBvUUIbF75XvocJBHnxMHp3WgBhDiV-etpjNCdpMJMyX81Ff2_2pkS9ykgX-ZKgf38Ezh-CHoHgmsVhFC0Cwm4Gef0TgCwYRbXP-c1L44SZ-UQyOPFEONX-ohxD4HlE3MbMQjw_wFiHjTm5IIf52GS5mf_iZ6tAsE5-5EMbq6HWA">
+</div>
+<div>
+<h4 class="font-title-md text-on-surface group-hover:text-deep-emerald transition-colors line-clamp-1">كتاب الحيوان</h4>
+<p class="font-label-sm text-outline-variant">الجاحظ</p>
+</div>
+</div>
+<!-- Related Book Card 4 -->
+<div class="min-w-[200px] w-[200px] snap-start flex flex-col gap-sm group cursor-pointer">
+<div class="rounded-lg overflow-hidden shadow-sm border border-outline-variant/20 relative">
+<img alt="حي بن يقظان" class="w-full aspect-[2/3] object-cover group-hover:scale-105 transition-transform duration-300" data-alt="A sophisticated book cover for 'Hayy ibn Yaqdhan' by Ibn Tufail. The design showcases a lone figure standing on an isolated island under a starry night sky, rendered in a soft watercolor style with muted blues and greys. The Arabic title floats elegantly above." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpYKA1e_0VkIZyo5bfoGEgrFsvrNKiyFKZvreFBR1SekBe0omfhkzjd9aTtcG210gMJKMA85509lU0W7AatSTagDYFScGiSiDCVHvc95CAAujkPpLyjFkEDM4nmrzBrnX3asSaEhWSTUMmFRoDLDo6PEIv93NWnfizQl2DPDnZk3gT9ulnibtpCWFXF3KVIPFVsgpXRFeWQ0b9OQRY9cLYRmoGKSTQZZxCSGaRNBBmoHVvS4aR-nzsAg">
+</div>
+<div>
+<h4 class="font-title-md text-on-surface group-hover:text-deep-emerald transition-colors line-clamp-1">حي بن يقظان</h4>
+<p class="font-label-sm text-outline-variant">ابن طفيل</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<style>
+        /* Utility to hide scrollbar but keep functionality */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+
+
+</body></html>

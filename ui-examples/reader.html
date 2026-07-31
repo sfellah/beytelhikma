@@ -1,0 +1,298 @@
+<!DOCTYPE html><html dir="rtl" lang="ar" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>The Scriptorial - Immersive Reader</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&amp;family=Cairo:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#1b1c19",
+                        "tertiary-fixed": "#cae7f3",
+                        "surface-container-high": "#eae8e3",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#0d2b34",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#aecbd7",
+                        "parchment-bg": "#fbf9f4",
+                        "on-secondary-fixed": "#291800",
+                        "on-secondary-fixed-variant": "#594320",
+                        "outline-variant": "#c0c8c6",
+                        "background": "#fbf9f4",
+                        "surface-container": "#f0eee9",
+                        "surface-container-low": "#f5f3ee",
+                        "primary": "#001614",
+                        "on-tertiary-container": "#77939e",
+                        "on-surface-variant": "#414847",
+                        "secondary-fixed": "#ffddb0",
+                        "on-primary": "#ffffff",
+                        "secondary": "#735a35",
+                        "on-secondary-container": "#785e39",
+                        "primary-container": "#002d29",
+                        "surface-bright": "#fbf9f4",
+                        "surface-dim": "#dbdad5",
+                        "on-tertiary-fixed": "#001f28",
+                        "surface": "#fbf9f4",
+                        "surface-tint": "#3e6560",
+                        "slate-teal": "#0c2a33",
+                        "secondary-fixed-dim": "#e2c194",
+                        "inverse-surface": "#30312e",
+                        "inverse-on-surface": "#f2f1ec",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#e4e2dd",
+                        "outline": "#717977",
+                        "on-secondary": "#ffffff",
+                        "deep-emerald": "#002d29",
+                        "on-tertiary-fixed-variant": "#2f4b54",
+                        "on-primary-fixed-variant": "#264d49",
+                        "inverse-primary": "#a5cfc8",
+                        "antique-gold": "#735a35",
+                        "primary-fixed": "#c1ebe4",
+                        "on-primary-container": "#6e9690",
+                        "primary-fixed-dim": "#a5cfc8",
+                        "on-surface": "#1b1c19",
+                        "error": "#ba1a1a",
+                        "tertiary": "#00161c",
+                        "secondary-container": "#fddaac",
+                        "surface-variant": "#e4e2dd",
+                        "on-primary-fixed": "#00201d",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-muted": "#c0c8c6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "md": "16px",
+                        "container-max": "1200px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "xl": "32px",
+                        "gutter": "20px",
+                        "sm": "8px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Cairo", "sans-serif"],
+                        "label-md": ["Cairo", "sans-serif"],
+                        "display-lg": ["Cairo", "sans-serif"],
+                        "body-lg": ["Amiri", "serif"],
+                        "title-md": ["Cairo", "sans-serif"],
+                        "headline-lg": ["Cairo", "sans-serif"],
+                        "label-sm": ["Cairo", "sans-serif"],
+                        "body-md": ["Amiri", "serif"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["22px", { "lineHeight": "40px", "fontWeight": "400" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.03em", "fontWeight": "500" }],
+                        "body-md": ["18px", { "lineHeight": "32px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.parchment-bg');
+            color: theme('colors.on-background');
+        }
+        
+        .reader-content p {
+            margin-bottom: 1.5em;
+            text-align: justify;
+        }
+
+        /* Hide scrollbar for cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.outline-variant');
+            border-radius: theme('borderRadius.full');
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline');
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col selection:bg-antique-gold/30 selection:text-primary">
+<!-- Top Navigation Area (Minimal for Reader) -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-parchment-bg/90 backdrop-blur-md transition-transform duration-300 transform translate-y-0" id="reader-header">
+<div class="max-w-container-max mx-auto px-lg py-md flex justify-between items-center">
+<!-- Back / Library Link -->
+<a aria-label="العودة إلى المكتبة" class="flex items-center gap-sm text-on-surface-variant hover:text-primary transition-colors group cursor-pointer" href="#">
+<span class="material-symbols-outlined transition-transform group-hover:-translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-label-md text-label-md hidden sm:inline-block">العودة للمكتبة</span>
+</a>
+<!-- Book Title -->
+<div class="text-center absolute left-1/2 -translate-x-1/2">
+<h1 class="font-title-md text-title-md text-primary truncate max-w-[200px] sm:max-w-[400px]">مقدمة ابن خلدون</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">الفصل الأول: في العمران البشري على الجملة</p>
+</div>
+<!-- Header Actions -->
+<div class="flex items-center gap-md">
+<button aria-label="إشارات مرجعية" class="p-sm text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-low">
+<span class="material-symbols-outlined" data-icon="bookmark_border">bookmark_border</span>
+</button>
+<button aria-label="إعدادات القراءة" class="p-sm text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-low" onclick="document.getElementById('settings-panel').classList.toggle('translate-x-full');">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Reader Canvas -->
+<main class="flex-grow pt-24 pb-32 px-md sm:px-lg md:px-xl mx-auto w-full max-w-3xl relative">
+<article class="reader-content font-body-lg text-body-lg text-on-surface transition-all duration-300" id="reading-content">
+<p class="">
+                اعلم أن العمران البشري، أعني الاجتماع الإنساني، ضروري، ويعبر الحكماء عن هذا بقولهم: الإنسان مدني بالطبع، أي لا بد له من الاجتماع الذي هو المدنية في اصطلاحهم، وهو معنى العمران. وبيانه أن الله سبحانه خلق الإنسان وركبه على صورة لا يصح حياتها وبقاؤها إلا بالغذاء، وهداه إلى التماسه بفطرته، وبما ركب فيه من القدرة على تحصيله.
+            </p>
+<p class="">
+                إلا أن قدرة الواحد من البشر قاصرة عن تحصيل حاجته من ذلك الغذاء، غير موفية له بمادة حياته منه. ولو فرضنا منه أقل ما يمكن فرضه وهو قوت يوم من الحنطة مثلاً، فلا يحصل إلا بعلاج كثير من الطحن والعجن والطبخ. وكل واحد من هذه الأعمال الثلاثة يحتاج إلى مواعين وآلات لا تتم إلا بصناعات متعددة من حداد ونجار وفاخوري.
+            </p>
+<p class="">
+                هب أنه يأكله حباً من غير علاج، فهو أيضاً يحتاج في تحصيله حباً إلى أعمال أخرى أكثر من هذه، من الزراعة والحصاد والدراس الذي يخرج الحب من غلاف السنبل. ويحتاج كل واحد من هذه إلى آلات متعددة وصنائع كثيرة، أكثر من الأولى بكثير.
+            </p>
+<p class="">
+                ويستحيل أن توفي بذلك كله أو ببعضه قدرة الواحد. فلا بد من اجتماع القدر الكثير من أبناء جنسه ليحصل القوت له ولهم، فيحصل بالتعاون قدر الكفاية من الحاجة لأكثر منهم بأضعاف.
+            </p>
+<p class="">
+                وكذلك يحتاج كل واحد منهم في الدفاع عن نفسه إلى الاستعانة بأبناء جنسه. لأن الله سبحانه لما ركب الطباع في الحيوانات كلها، وقسم القدر بينها، جعل حظوظ كثير من الحيوانات العجم من القدرة أكمل من حظ الإنسان.
+            </p>
+<p class="">
+                فإذا كان الإنسان بمفرده، قصرت قدرته عن مدافعة سبع واحد، فضلاً عن عدة سباع، ولم يصح له البقاء. وإذا اجتمع مع أبناء جنسه، وحصل التعاون بينهم، تضاعفت القدرة، وحصلت المدافعة، وتم البقاء المكتوب له.
+            </p>
+<p class="">
+                ولهذا كان الاجتماع البشري ضرورياً، وبدونه لا يتم وجودهم، ولا مراد الله سبحانه من اعتمار العالم بهم واستخلافه إياهم. وهذا هو معنى العمران الذي جعلناه موضوعاً لهذا العلم.
+            </p>
+</article>
+</main>
+<!-- Settings Sidebar (Sliding Panel) -->
+<aside class="fixed top-0 left-0 bottom-0 bg-surface-container shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out border-r border-outline-variant/30 flex flex-col sm:max-w-[220px]" id="settings-panel" style="width: 220px;">
+<div class="border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-low p-md">
+<h2 class="font-title-md text-title-md text-primary">إعدادات القراءة</h2>
+<button aria-label="إغلاق" class="p-sm text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-high" onclick="document.getElementById('settings-panel').classList.add('translate-x-full');">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="flex-grow overflow-y-auto flex flex-col gap-xl p-md">
+<!-- Font Size -->
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-sm">حجم الخط</label>
+<div class="flex items-center gap-md bg-surface p-sm rounded-xl border border-outline-variant/50">
+<button aria-label="تصغير الخط" class="p-sm text-on-surface hover:text-primary hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="text_decrease">text_decrease</span>
+</button>
+<input class="w-full accent-deep-emerald h-1 bg-surface-variant rounded-full appearance-none outline-none" max="32" min="16" type="range" value="22">
+<button aria-label="تكبير الخط" class="p-sm text-on-surface hover:text-primary hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="text_increase">text_increase</span>
+</button>
+</div>
+</div>
+<!-- Themes -->
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-sm">المظهر</label>
+<div class="grid grid-cols-3 gap-sm">
+<button aria-label="رق إفتراضي" class="h-12 rounded-lg border-2 border-primary bg-parchment-bg flex items-center justify-center transition-all">
+<span class="w-4 h-4 rounded-full bg-primary block"></span>
+</button>
+<button aria-label="أبيض ناصع" class="h-12 rounded-lg border border-outline-variant bg-white flex items-center justify-center hover:border-primary/50 transition-all">
+<span class="w-4 h-4 rounded-full bg-black block"></span>
+</button>
+<button aria-label="الوضع الليلي" class="h-12 rounded-lg border border-outline-variant bg-[#1a1a1a] flex items-center justify-center hover:border-primary/50 transition-all">
+<span class="w-4 h-4 rounded-full bg-gray-300 block"></span>
+</button>
+</div>
+</div>
+<!-- Font Family -->
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant block mb-sm">نوع الخط</label>
+<div class="flex flex-col gap-xs">
+<button class="text-right p-md rounded-lg bg-surface-container-low border border-primary/20 hover:bg-surface-container transition-colors flex justify-between items-center">
+<span class="font-body-lg text-body-lg text-primary">أميري (تقليدي)</span>
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check">check</span>
+</button>
+<button class="text-right p-md rounded-lg bg-surface border border-transparent hover:bg-surface-container transition-colors">
+<span class="font-headline-lg-mobile text-body-lg text-on-surface-variant" style="font-family: 'Cairo', sans-serif;">كايرو (حديث)</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+<!-- Bottom Progress Bar -->
+<footer class="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md border-t border-outline-variant/20 px-md py-sm transition-transform duration-300 transform translate-y-0" id="reader-footer">
+<div class="max-w-3xl mx-auto flex flex-col gap-sm">
+<!-- Progress Slider -->
+<div class="group relative flex items-center w-full h-8 cursor-pointer">
+<!-- Track background -->
+<div class="absolute left-0 right-0 h-1 bg-surface-variant rounded-full"></div>
+<!-- Track progress -->
+<div class="absolute left-0 right-0 h-1 bg-primary rounded-full" style="width: 35%;"></div>
+<!-- Thumb (visible on hover) -->
+<div class="absolute h-4 w-4 bg-primary rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity transform -translate-y-1/2 top-1/2" style="left: 35%; margin-left: -8px;"></div>
+<input class="absolute inset-0 w-full opacity-0 cursor-pointer" max="100" min="0" type="range" value="35">
+</div>
+<!-- Progress Info -->
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">صفحة 45 من 342</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">الفصل الأول</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">35%</span>
+</div>
+</div>
+</footer>
+<script>
+        // Simple scroll hiding logic for a distraction-free experience
+        let lastScrollY = window.scrollY;
+        const header = document.getElementById('reader-header');
+        const footer = document.getElementById('reader-footer');
+
+        window.addEventListener('scroll', () => {
+            const currentScrollY = window.scrollY;
+            
+            if (currentScrollY > 100) {
+                if (currentScrollY > lastScrollY) {
+                    // Scrolling down - hide
+                    header.classList.add('-translate-y-full');
+                    footer.classList.add('translate-y-full');
+                } else {
+                    // Scrolling up - show
+                    header.classList.remove('-translate-y-full');
+                    footer.classList.remove('translate-y-full');
+                }
+            } else {
+                // Top of page - show
+                header.classList.remove('-translate-y-full');
+                footer.classList.remove('translate-y-full');
+            }
+            
+            lastScrollY = currentScrollY;
+        });
+
+        // Click on content toggles UI (common reader behavior)
+        document.getElementById('reading-content').addEventListener('click', () => {
+            header.classList.toggle('-translate-y-full');
+            footer.classList.toggle('translate-y-full');
+        });
+    </script>
+
+
+</body></html>

@@ -1,0 +1,11 @@
+{
+  "edition_id": "ed-bukhari-01",
+  "title_ar": "صحيح البخاري",
+  "schema_version": 1,
+  "content_version": 1,
+  "page_count": 5,
+  "toc_count": 4,
+  "content_hash": "5d80e4be6d921726a1781685efb9ca04d3b1d92e8fe13dbdd2f6e2d766ba24f2",
+  "sha256": "65875f91f904a9b3e195013d7632c3dc6e7c2e4f611c8b797bc0cd0f32a6765c",
+  "size": 65536
+}
