@@ -76,6 +76,16 @@ test('une facette est comptée sans son propre filtre', () => {
   assert.deepEqual(own.params, ['كتاب']);
 });
 
+test('la recherche texte arrive résolue en identifiants', () => {
+  const hit = buildWhere({ ids: ['ed-a', 'ed-b'] }, none);
+  assert.match(hit.sql, /e\.edition_id IN \(\?,\?\)/);
+  assert.deepEqual(hit.params, ['ed-a', 'ed-b']);
+
+  // Un tableau vide veut dire « aucun résultat », pas « pas de filtre ».
+  assert.equal(buildWhere({ ids: [] }, none).sql, '(1 = 0)');
+  assert.equal(buildWhere({}, none).sql, '1 = 1');
+});
+
 test('une facette inconnue est refusée', () => {
   assert.throws(() => buildFacetQuery({}, 'rm -rf', none), /facette inconnue/);
 });

@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { normalizeArabic } from '../shared/arabic.js';
 import { all, first } from './app-database.js';
+import { buildCount, buildFacetQuery, buildList } from './catalog-query.js';
 import { DownloadQueue } from './download-manager.js';
 
 /** Erreur remontée à l'interface : message lisible + cause technique. */
@@ -114,6 +116,7 @@ const progress = (row) =>
 export class BookRepository {
   #db;
   #downloads = null;
+  #nameIndex = null;
 
   constructor(database, { downloads = null } = {}) {
     this.#db = database;
@@ -358,6 +361,208 @@ export class BookRepository {
       book.downloadStatus = live.get(book.editionId) ?? byId.get(book.editionId) ?? null;
     }
     return summaries;
+  }
+
+  // ------------------------------------------------------------- exploration
+
+  /** Identifiants des livres installés, pour le filtre de statut. */
+  async #installedIds() {
+    const user = await this.#db.user();
+    return all(
+      user,
+      "SELECT edition_id FROM downloaded_books WHERE download_status = 'installed'",
+    ).map((row) => row.edition_id);
+  }
+
+  /**
+   * Index mémoire des titres, des auteurs et des éditeurs, tous normalisés.
+   *
+   * Deux raisons de ne pas faire ça en SQL. D'abord `authors.full_name_ar`,
+   * `editions.publisher_ar` et `editions.title_ar` ne sont pas normalisés en
+   * base et le schéma ne bouge pas : un `LIKE` manquerait toute variante de
+   * hamza. Ensuite `catalog_fts` est inutilisable ici — le build sql.js
+   * embarqué ne contient pas le module FTS5, seulement FTS4.
+   *
+   * Quelques milliers de chaînes, construites une fois par session.
+   */
+  async #names() {
+    if (this.#nameIndex) return this.#nameIndex;
+    const catalog = await this.#db.catalog();
+
+    const titles = all(
+      catalog,
+      `SELECT edition_id, title_ar, subtitle_ar FROM editions WHERE is_hidden = 0`,
+    ).map((row) => ({
+      editionId: row.edition_id,
+      needle: normalizeArabic(`${row.title_ar} ${row.subtitle_ar ?? ''}`),
+    }));
+
+    const authors = all(
+      catalog,
+      `SELECT a.author_id, COALESCE(a.short_name_ar, a.full_name_ar) AS label,
+              a.full_name_ar, COUNT(DISTINCT e.edition_id) AS n
+         FROM authors a
+         JOIN edition_authors ea ON ea.author_id = a.author_id
+         JOIN editions e         ON e.edition_id = ea.edition_id AND e.is_hidden = 0
+        GROUP BY a.author_id`,
+    ).map((row) => ({
+      value: row.author_id,
+      label: row.label,
+      count: row.n,
+      needle: normalizeArabic(`${row.full_name_ar} ${row.label}`),
+    }));
+
+    const publishers = all(
+      catalog,
+      `SELECT publisher_ar AS label, COUNT(*) AS n FROM editions
+        WHERE is_hidden = 0 AND publisher_ar IS NOT NULL AND publisher_ar <> ''
+        GROUP BY publisher_ar`,
+    ).map((row) => ({
+      value: row.label,
+      label: row.label,
+      count: row.n,
+      needle: normalizeArabic(row.label),
+    }));
+
+    this.#nameIndex = { titles, authors, publishers };
+    return this.#nameIndex;
+  }
+
+  /**
+   * Traduit `text` en une liste d'`edition_id`. Un terme peut désigner un titre
+   * **ou** un auteur : les deux ensembles sont réunis, jamais croisés. La
+   * requête sortante ne porte plus de texte, seulement des identifiants.
+   */
+  async #resolveText(query) {
+    if (!query.text?.trim()) return query;
+    const needle = normalizeArabic(query.text);
+    if (!needle) return query;
+
+    const { titles, authors } = await this.#names();
+    const ids = new Set(
+      titles.filter((entry) => entry.needle.includes(needle)).map((entry) => entry.editionId),
+    );
+
+    const matchedAuthors = authors
+      .filter((entry) => entry.needle.includes(needle))
+      .map((entry) => entry.value);
+    if (matchedAuthors.length) {
+      const catalog = await this.#db.catalog();
+      for (const row of all(
+        catalog,
+        `SELECT edition_id FROM edition_authors
+          WHERE author_id IN (${matchedAuthors.map(() => '?').join(',')})`,
+        matchedAuthors,
+      )) {
+        ids.add(row.edition_id);
+      }
+    }
+
+    // Un tableau vide est significatif : « aucun résultat », pas « pas de filtre ».
+    return { ...query, text: null, ids: [...ids] };
+  }
+
+  exploreBooks(query = {}) {
+    return this.#guard('exploration du catalogue', async () => {
+      const db = await this.#db.catalog();
+      const options = { installedIds: await this.#installedIds() };
+      const resolved = await this.#resolveText(query);
+      const list = buildList(resolved, options);
+      const count = buildCount(resolved, options);
+      const books = await this.#withDownloadStatus(
+        all(db, list.sql, list.params).map(bookSummary),
+      );
+      const totals = first(db, count.sql, count.params) ?? { n: 0, bytes: 0 };
+      return { books, total: totals.n, bytes: totals.bytes };
+    });
+  }
+
+  getFacets(query = {}) {
+    return this.#guard('lecture des facettes', async () => {
+      const db = await this.#db.catalog();
+      const options = { installedIds: await this.#installedIds() };
+      const resolved = await this.#resolveText(query);
+
+      const labelsById = new Map(
+        all(db, 'SELECT category_id, label_ar FROM categories').map((row) => [
+          row.category_id,
+          row.label_ar,
+        ]),
+      );
+      const facet = (key, label) => {
+        const built = buildFacetQuery(resolved, key, options);
+        return all(db, built.sql, built.params).map((row) => ({
+          value: row.value,
+          label: label(row.value),
+          count: row.n,
+        }));
+      };
+
+      // Le statut se compte à part : ses deux valeurs ne sortent pas d'un GROUP BY.
+      const withoutStatus = { ...resolved, status: null };
+      const countFor = (status) => {
+        const built = buildCount({ ...withoutStatus, status }, options);
+        return first(db, built.sql, built.params)?.n ?? 0;
+      };
+
+      return {
+        categories: facet('categories', (id) => labelsById.get(id) ?? String(id)),
+        types: facet('types', (value) => value),
+        centuries: facet('centuries', (value) => `القرن ${value}`),
+        publishers: facet('publishers', (value) => value).slice(0, 30),
+        status: [
+          { value: 'installed', label: 'مُنزَّل', count: countFor('installed') },
+          { value: 'missing', label: 'غير مُنزَّل', count: countFor('missing') },
+        ],
+      };
+    });
+  }
+
+  suggestValues(facetKey, term) {
+    return this.#guard('suggestion de valeurs', async () => {
+      const index = await this.#names();
+      const list = index[facetKey];
+      if (!list) throw new Error(`facette sans suggestions : ${facetKey}`);
+      const needle = normalizeArabic(term ?? '');
+      if (needle.length < 2) return [];
+      return list
+        .filter((entry) => entry.needle.includes(needle))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20)
+        .map(({ value, label, count }) => ({ value, label, count }));
+    });
+  }
+
+  getSelectionWeight(editionIds = []) {
+    return this.#guard('pesée de la sélection', async () => {
+      if (!editionIds.length) return { count: 0, bytes: 0 };
+      const installed = new Set(await this.#installedIds());
+      const pending = editionIds.filter((id) => !installed.has(id));
+      if (!pending.length) return { count: 0, bytes: 0 };
+      const db = await this.#db.catalog();
+      const row = first(
+        db,
+        `SELECT COUNT(*) AS n, COALESCE(SUM(compressed_size), 0) AS bytes
+           FROM book_releases
+          WHERE is_active = 1 AND edition_id IN (${pending.map(() => '?').join(',')})`,
+        pending,
+      );
+      return { count: row?.n ?? 0, bytes: row?.bytes ?? 0 };
+    });
+  }
+
+  downloadSelection(editionIds = []) {
+    return this.#guard('mise en file de la sélection', async () => {
+      if (!this.#downloads) throw new Error('gestionnaire de téléchargement absent');
+      const installed = new Set(await this.#installedIds());
+      let queued = 0;
+      for (const editionId of editionIds) {
+        if (installed.has(editionId)) continue;
+        this.#downloads.enqueue(editionId);
+        queued += 1;
+      }
+      return queued;
+    });
   }
 
   // --------------------------------------------------------------- catalogue
@@ -777,6 +982,11 @@ export const REPOSITORY_METHODS = [
   'getDownloads',
   'clearFailedDownloads',
   'getStorageUsage',
+  'exploreBooks',
+  'getFacets',
+  'suggestValues',
+  'getSelectionWeight',
+  'downloadSelection',
   'getCategories',
   'getRecentBooks',
   'getBooks',

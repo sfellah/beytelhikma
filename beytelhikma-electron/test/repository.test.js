@@ -219,6 +219,79 @@ test('supprimer totalement efface aussi la progression', async () => {
   );
 });
 
+test('l’exploration sans filtre renvoie tout le catalogue', async () => {
+  const { books, total } = await repository.exploreBooks({});
+  assert.equal(total, 5);
+  assert.equal(books.length, 5);
+  assert.ok(books.every((book) => 'downloadStatus' in book));
+});
+
+test('les filtres se combinent en ET, leurs valeurs en OU', async () => {
+  const categories = (await repository.getCategories()).filter((c) => c.bookCount > 0);
+  const [first, second] = categories;
+  const one = await repository.exploreBooks({ categories: [first.categoryId] });
+  const two = await repository.exploreBooks({
+    categories: [first.categoryId, second.categoryId],
+  });
+  assert.equal(one.total, first.bookCount);
+  assert.equal(two.total, first.bookCount + second.bookCount);
+});
+
+test('le filtre de statut s’appuie sur les livres réellement installés', async () => {
+  const installed = await repository.exploreBooks({ status: 'installed' });
+  const missing = await repository.exploreBooks({ status: 'missing' });
+  assert.equal(installed.total, database.installedBooks().length);
+  assert.equal(installed.total + missing.total, 5);
+});
+
+test('le compteur d’une facette ignore son propre filtre', async () => {
+  const categories = (await repository.getCategories()).filter((c) => c.bookCount > 0);
+  const target = categories[0];
+  const facets = await repository.getFacets({ categories: [target.categoryId] });
+
+  // Les catégories non choisies gardent un compte non nul : on peut en ajouter.
+  const others = facets.categories.filter((entry) => entry.value !== target.categoryId);
+  assert.ok(
+    others.some((entry) => entry.count > 0),
+    'les sœurs ne tombent pas à zéro',
+  );
+  // Le type, lui, est bien restreint à la catégorie choisie.
+  const typeTotal = facets.types.reduce((sum, entry) => sum + entry.count, 0);
+  assert.equal(typeTotal, target.bookCount);
+});
+
+test('la recherche trouve avec et sans diacritiques', async () => {
+  const withMarks = await repository.exploreBooks({ text: 'مقدمة' });
+  assert.ok(withMarks.total >= 1);
+  const bare = await repository.exploreBooks({ text: 'مقدمه' });
+  assert.equal(bare.total, withMarks.total);
+});
+
+test('l’autocomplétion des auteurs cherche sur le nom normalisé', async () => {
+  const authors = await repository.getAuthors();
+  const target = authors[0];
+  const suggestions = await repository.suggestValues('authors', target.fullName.slice(0, 4));
+  assert.ok(suggestions.some((entry) => entry.value === target.authorId));
+  assert.ok(suggestions.every((entry) => entry.count >= 1));
+  assert.deepEqual(await repository.suggestValues('authors', 'ا'), [], 'moins de 2 caractères');
+});
+
+test('la sélection se pèse et se met en file, sans les déjà installés', async () => {
+  await repository.deleteBook('ed-muqaddima-01', { keepProgress: true });
+  const missing = await repository.exploreBooks({ status: 'missing' });
+  assert.ok(missing.total >= 1);
+
+  const ids = missing.books.map((book) => book.editionId);
+  const weight = await repository.getSelectionWeight(ids);
+  assert.equal(weight.count, ids.length);
+  assert.ok(weight.bytes > 0);
+
+  const queued = await repository.downloadSelection(ids);
+  assert.equal(queued, ids.length);
+  await new Promise((resolve) => repository.downloads.once('idle', resolve));
+  assert.equal((await repository.exploreBooks({ status: 'missing' })).total, 0);
+});
+
 test('les réglages du lecteur sont persistés', async () => {
   await repository.saveSetting('reader.fontSize', '26');
   await repository.saveSetting('reader.theme', 'night');

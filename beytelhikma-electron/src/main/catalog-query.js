@@ -1,5 +1,3 @@
-import { normalizeArabic } from '../shared/arabic.js';
-
 /**
  * Construction des requêtes d'exploration du catalogue. Ce module ne touche
  * aucune base : il ne fabrique que du SQL et des paramètres liés, ce qui le
@@ -84,19 +82,13 @@ function condition(key, query, installedIds) {
       const operator = query.status === 'installed' ? 'IN' : 'NOT IN';
       return [`e.edition_id ${operator} (${placeholders(installedIds)})`, [...installedIds]];
     }
-    case 'text': {
-      if (!query.text?.trim()) return null;
-      const raw = query.text.trim();
-      const normalized = normalizeArabic(raw);
-      // Deux formes : `title_normalized` répond à la normalisée, `title_ar` et
-      // `bibliography_text` à la brute. Les auteurs sont résolus en amont, en
-      // mémoire, et arrivent par la facette `authors`.
-      const terms = normalized && normalized !== raw ? [normalized, raw] : [raw];
-      const match = terms.map((term) => `"${term.replaceAll('"', '')}"*`).join(' OR ');
-      return [
-        'e.edition_id IN (SELECT edition_id FROM catalog_fts WHERE catalog_fts MATCH ?)',
-        [match],
-      ];
+    case 'ids': {
+      // Résultat de la recherche texte, résolue en amont contre l'index mémoire
+      // des titres et des auteurs. `catalog_fts` n'est pas lisible ici : le
+      // build sql.js embarqué ne contient pas le module FTS5.
+      if (!Array.isArray(values)) return null;
+      if (!values.length) return ['1 = 0', []];
+      return [`e.edition_id IN (${placeholders(values)})`, values];
     }
     default:
       return null;
@@ -104,7 +96,7 @@ function condition(key, query, installedIds) {
 }
 
 const ALL_KEYS = [
-  'text',
+  'ids',
   'categories',
   'types',
   'publishers',

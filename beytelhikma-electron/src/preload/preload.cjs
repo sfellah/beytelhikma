@@ -30,6 +30,11 @@ const METHODS = [
   'getDownloads',
   'clearFailedDownloads',
   'getStorageUsage',
+  'exploreBooks',
+  'getFacets',
+  'suggestValues',
+  'getSelectionWeight',
+  'downloadSelection',
 ];
 
 const repository = {};
