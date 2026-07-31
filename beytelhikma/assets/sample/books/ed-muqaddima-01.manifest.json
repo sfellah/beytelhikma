@@ -1,11 +1,11 @@
 {
   "edition_id": "ed-muqaddima-01",
   "title_ar": "مقدمة ابن خلدون",
-  "schema_version": 1,
+  "schema_version": 2,
   "content_version": 1,
   "page_count": 5,
   "toc_count": 4,
   "content_hash": "0465bc1a26ad1e437dbc30fec1136b8f426b401b67d58da0057271b4255c55ac",
-  "sha256": "f271de2654dc8b8a1fb9bf8d01f33acf03bcd9a1d246935897783e4c66b26fde",
+  "sha256": "055b45e0f50e3d6c1f388bbd3ba888da79815e6f7feb4d10a3d033faeb217e4b",
   "size": 65536
 }

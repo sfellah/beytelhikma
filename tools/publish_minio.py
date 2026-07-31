@@ -2,7 +2,11 @@
 
 Entrée : la sortie de `import_shamela.py --compress` (`dist/shamela/`).
 Sortie : les objets `books/<edition_id>/<content_version>/book.sqlite.zst` et
-leur manifest, puis `download_url` réécrit dans `dist/shamela/catalog.sqlite`.
+leur manifest, puis `object_key` réécrit dans `dist/shamela/catalog.sqlite`.
+
+Le catalogue publié ne porte **aucun hôte** : seulement des clés relatives. Le
+client les colle derrière l'URL de base qu'il a en réglage, ce qui rend le même
+catalogue servable depuis AWS, un MinIO local ou un CDN sans le republier.
 
 Les chemins sont immutables : une nouvelle `content_version` crée un nouvel
 objet, jamais un écrasement. C'est ce qui autorise `Cache-Control: immutable`.
@@ -139,8 +143,8 @@ def _upload(client, bucket, key, body, content_type, metadata, force, report):
     report["uploaded"] += 1
 
 
-def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
-    """Monte les livres puis réécrit `download_url`. Renvoie un compte rendu."""
+def publish(client, *, src, bucket, force=False, dry_run=False):
+    """Monte les livres puis réécrit `object_key`. Renvoie un compte rendu."""
     report = {
         "uploaded": 0,
         "skipped": 0,
@@ -215,11 +219,11 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
             force,
             report,
         )
-        updates.append((f"{public_base.rstrip('/')}/{key}", len(body), release_id))
+        updates.append((key, len(body), release_id))
 
     if updates and not dry_run:
         con.executemany(
-            "UPDATE book_releases SET download_url = ?, compressed_size = ? WHERE release_id = ?",
+            "UPDATE book_releases SET object_key = ?, compressed_size = ? WHERE release_id = ?",
             updates,
         )
         con.commit()
@@ -357,11 +361,6 @@ def build_parser():
     )
     parser.add_argument("--region", default=None, help="région AWS (défaut : AWS_REGION)")
     parser.add_argument("--bucket", default="beytelhikma")
-    parser.add_argument(
-        "--public-base",
-        default=None,
-        help="préfixe des URL publiques ; par défaut déduit de l'endpoint",
-    )
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--set-anonymous-policy", action="store_true")
@@ -406,17 +405,10 @@ def main(argv=None):
         for label in result["skipped"]:
             print(f"  ignoré  : {label}", file=sys.stderr)
 
-    if args.public_base:
-        public_base = args.public_base
-    elif endpoint is None:
-        public_base = f"https://{args.bucket}.s3.{region}.amazonaws.com"
-    else:
-        public_base = f"{endpoint.rstrip('/')}/{args.bucket}"
     report = publish(
         client,
         src=args.src,
         bucket=args.bucket,
-        public_base=public_base,
         force=args.force,
         dry_run=args.dry_run,
     )

@@ -71,10 +71,10 @@ def build_src(root):
     con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
     con.execute(
         "CREATE TABLE book_releases (release_id TEXT PRIMARY KEY, edition_id TEXT,"
-        " content_version INTEGER, download_url TEXT, compressed_size INTEGER, is_active INTEGER)"
+        " content_version INTEGER, object_key TEXT, compressed_size INTEGER, is_active INTEGER)"
     )
     con.execute(
-        "INSERT INTO book_releases VALUES ('rel-a', 'ed-a', 1, 'local://books/ed-a.sqlite', 0, 1)"
+        "INSERT INTO book_releases VALUES ('rel-a', 'ed-a', 1, 'asset://books/ed-a.sqlite', 0, 1)"
     )
     con.commit()
     con.close()
@@ -82,16 +82,13 @@ def build_src(root):
 
 
 class PublishTest(unittest.TestCase):
-    def test_upload_puis_reecriture_de_download_url(self):
+    def test_upload_puis_reecriture_en_cle_relative(self):
+        """Le catalogue publié ne doit contenir aucun hôte : c'est ce qui le
+        rend servable depuis n'importe quel bucket sans le republier."""
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             client = FakeS3()
-            report = publish(
-                client,
-                src=root,
-                bucket="beytelhikma",
-                public_base="http://127.0.0.1:9000/beytelhikma",
-            )
+            report = publish(client, src=root, bucket="beytelhikma")
 
             self.assertEqual(report["uploaded"], 2)  # le livre et son manifest
             self.assertEqual(report["updated"], 1)
@@ -99,20 +96,21 @@ class PublishTest(unittest.TestCase):
             self.assertIn(key, client.objects)
 
             con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
-            url, size = con.execute(
-                "SELECT download_url, compressed_size FROM book_releases WHERE release_id='rel-a'"
+            stored, size = con.execute(
+                "SELECT object_key, compressed_size FROM book_releases WHERE release_id='rel-a'"
             ).fetchone()
             con.close()
-            self.assertEqual(url, f"http://127.0.0.1:9000/beytelhikma/{key}")
+            self.assertEqual(stored, "books/ed-a/1/book.sqlite.zst")
+            self.assertNotIn("://", stored, "aucun hôte ne doit subsister")
             self.assertEqual(size, 16)
 
     def test_second_passage_ne_reenvoie_rien(self):
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             client = FakeS3()
-            publish(client, src=root, bucket="b", public_base="http://x/b")
+            publish(client, src=root, bucket="b")
             client.puts.clear()
-            report = publish(client, src=root, bucket="b", public_base="http://x/b")
+            report = publish(client, src=root, bucket="b")
             self.assertEqual(client.puts, [])
             self.assertEqual(report["uploaded"], 0)
             self.assertEqual(report["skipped"], 2)
@@ -121,19 +119,17 @@ class PublishTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             client = FakeS3()
-            report = publish(
-                client, src=root, bucket="b", public_base="http://x/b", dry_run=True
-            )
+            report = publish(client, src=root, bucket="b", dry_run=True)
             self.assertEqual(client.puts, [])
             self.assertEqual(report["uploaded"], 0)
             # Un essai à blanc doit dire ce qui partirait, pas se taire.
             self.assertEqual(report["planned"], 2)
             con = sqlite3.connect(os.path.join(root, "catalog.sqlite"))
             (url,) = con.execute(
-                "SELECT download_url FROM book_releases WHERE release_id='rel-a'"
+                "SELECT object_key FROM book_releases WHERE release_id='rel-a'"
             ).fetchone()
             con.close()
-            self.assertEqual(url, "local://books/ed-a.sqlite")
+            self.assertEqual(url, "asset://books/ed-a.sqlite")
 
     def test_dry_run_ne_compresse_rien(self):
         """Compresser pendant un essai à blanc écrirait des dizaines de mégaoctets
@@ -145,9 +141,7 @@ class PublishTest(unittest.TestCase):
                 fh.write(b"SQLite format 3\0" * 500)
 
             client = FakeS3()
-            report = publish(
-                client, src=root, bucket="b", public_base="http://x/b", dry_run=True
-            )
+            report = publish(client, src=root, bucket="b", dry_run=True)
 
             self.assertEqual(report["would_compress"], 1)
             self.assertEqual(report["compressed"], 0)
@@ -162,7 +156,7 @@ class PublishTest(unittest.TestCase):
             build_src(root)
             os.remove(os.path.join(root, "books", "ed-a.sqlite.zst"))
             client = FakeS3()
-            report = publish(client, src=root, bucket="b", public_base="http://x/b")
+            report = publish(client, src=root, bucket="b")
             self.assertEqual(report["missing"], ["ed-a"])
             self.assertEqual(client.puts, [])
 
@@ -177,7 +171,7 @@ class PublishTest(unittest.TestCase):
                 fh.write(b"SQLite format 3\0" * 500)
 
             client = FakeS3()
-            report = publish(client, src=root, bucket="b", public_base="http://x/b")
+            report = publish(client, src=root, bucket="b")
 
             self.assertEqual(report["missing"], [])
             self.assertEqual(report["compressed"], 1)
@@ -197,7 +191,7 @@ class PublishTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             build_src(root)
             client = FakeS3()
-            publish(client, src=root, bucket="b", public_base="http://x/b")
+            publish(client, src=root, bucket="b")
             kwargs = client.put_kwargs[object_key("ed-a", 1)]
             self.assertEqual(kwargs["CacheControl"], CACHE_CONTROL)
 

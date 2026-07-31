@@ -611,7 +611,7 @@ def build_catalog(manifests: dict) -> None:
         )
         con.execute(
             """INSERT INTO book_releases (release_id, edition_id, schema_version, content_version,
-                                          source_version, download_url, compressed_size,
+                                          source_version, object_key, compressed_size,
                                           uncompressed_size, sha256, page_count, toc_count,
                                           fts_version, min_app_version, published_at, is_active)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
