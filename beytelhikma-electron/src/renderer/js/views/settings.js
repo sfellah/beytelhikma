@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
+import { currentLocale, LOCALES, setLocale, t } from '../i18n.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
@@ -35,6 +36,7 @@ export function settingsView(host) {
       'section',
       { class: 'settings' },
       h('h1', { class: 'display-lg' }, 'الإعدادات'),
+      languageSection(),
       appearanceSection(),
       readingSection(prefs),
       storageSection(usage, refresh),
@@ -71,6 +73,45 @@ function row(label, control, hint = null) {
       hint && h('p', { class: 'label-sm muted' }, hint),
     ),
     control,
+  );
+}
+
+/**
+ * La langue de l'interface. Elle ne touche pas au contenu : les 8 568 éditions
+ * sont arabes et le restent, l'aperçu de chiffres est là pour le montrer.
+ *
+ * Cet écran passera par `t()` à la refonte ; en attendant, seul ce groupe le
+ * fait — c'est le premier à parler deux langues, et le seul qu'on puisse
+ * relire dans les deux.
+ */
+function languageSection() {
+  const active = currentLocale();
+  const preview = h(
+    'p',
+    { class: 'label-sm muted', dir: 'auto' },
+    t('settings.language.preview', { page: 42, total: 350 }),
+  );
+
+  const boutons = h(
+    'div',
+    { class: 'settings__choices' },
+    LOCALES.map((locale) =>
+      h(
+        'button',
+        {
+          class: `button button--tonal${locale.key === active ? ' is-active' : ''}`,
+          lang: locale.key,
+          onclick: () => setLocale(locale.key),
+        },
+        locale.label,
+      ),
+    ),
+  );
+
+  return group(
+    t('settings.language.title'),
+    t('settings.language.hint'),
+    row(t('settings.language.title'), h('div', { class: 'settings__slider' }, boutons, preview)),
   );
 }
 

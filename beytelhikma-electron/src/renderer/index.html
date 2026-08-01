@@ -19,6 +19,11 @@
          nuit donnerait un éclair blanc. Module et non script inline : le CSP
          ci-dessus est `script-src 'self'`. -->
     <script type="module" src="js/theme.js"></script>
+    <!-- Même raison pour la langue : `dir` et `lang` se posent depuis un miroir
+         avant le premier rendu, sinon une interface anglaise s'ouvrirait en RTL
+         arabe puis basculerait, à chaque lancement. Les attributs ci-dessus sur
+         `<html>` ne sont donc que le défaut, corrigé avant peinture. -->
+    <script type="module" src="js/i18n.js"></script>
   </head>
   <body>
     <div id="app"></div>

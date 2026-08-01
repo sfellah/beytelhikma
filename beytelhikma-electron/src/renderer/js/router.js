@@ -36,6 +36,16 @@ export function currentRoute() {
   return current;
 }
 
+/**
+ * Remonte la vue courante sans toucher à l'historique. Sert au changement de
+ * langue : les vues rendent leurs chaînes au montage, donc seule une remontée
+ * les fait parler la nouvelle langue. Passer par `navigate` ferait le même
+ * travail, mais en dépendant du fait que le fragment est déjà le bon.
+ */
+export function remount() {
+  if (host) resolve();
+}
+
 function match(segments) {
   for (const route of routes) {
     if (route.segments.length !== segments.length) continue;

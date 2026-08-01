@@ -1,3 +1,4 @@
+import { syncLocale } from './i18n.js';
 import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
 import { syncTheme } from './theme.js';
@@ -36,9 +37,10 @@ defineRoutes(
   },
 );
 
-// L'écran est déjà peint depuis le miroir (`js/theme.js`, chargé avant celui-ci).
-// La réconciliation avec `user.sqlite` corrige un miroir absent ou périmé, sans
-// retarder le premier rendu.
+// L'écran est déjà peint depuis les miroirs (`js/theme.js` et `js/i18n.js`,
+// chargés avant celui-ci). La réconciliation avec `user.sqlite` corrige un
+// miroir absent ou périmé, sans retarder le premier rendu.
 syncTheme();
+syncLocale();
 
 start(document.getElementById('app'), { initial: '/home' });
