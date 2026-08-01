@@ -10,10 +10,15 @@
     "shot": "node tools/capture-cli.js",
     "test": "node --test \"test/**/*.test.js\"",
     "seed": "node scripts/fetch-seed.mjs",
-    "release:win": "npm test && npm run seed && electron-builder --win"
+    "release:win": "npm test && npm run seed && electron-builder --win",
+    "release:linux": "npm test && npm run seed && electron-builder --linux"
   },
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "Beyt El Hikma",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sfellah/beytelhikma.git"
+  },
   "dependencies": {
     "sql.js": "^1.13.0"
   },
@@ -71,6 +76,31 @@
     },
     "portable": {
       "artifactName": "${productName} ${version} portable.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Education",
+      "synopsis": "Bibliothèque numérique arabe, hors ligne",
+      "artifactName": "beyt-el-hikma-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sfellah",
+      "repo": "beytelhikma"
     }
   }
 }
