@@ -9,6 +9,25 @@
  * langues.
  */
 export default {
+  'app.name': 'بيت الحكمة',
+
+  'nav.aria': 'التنقل الرئيسي',
+  'nav.home': 'الرئيسية',
+  'nav.library': 'مكتبتي',
+  'nav.downloads': 'التنزيلات',
+  'nav.explore': 'استكشاف',
+  'nav.search': 'بحث في النصوص',
+  'nav.notes': 'ملاحظاتي',
+  'nav.authors': 'المؤلفون',
+  'nav.settings': 'الإعدادات',
+
+  'search.aria': 'البحث في المكتبة',
+  'search.placeholder': 'البحث عن كتاب، مؤلف، طبعة…',
+  'search.inText': 'في النصوص',
+  'search.inTextTitle': 'البحث في نصوص الكتب المنزَّلة (Ctrl + Enter)',
+
+  'shell.backHome': 'العودة للرئيسية',
+
   'settings.language.title': 'اللغة',
   'settings.language.hint': 'تُطبَّق على الواجهة فقط — الكتب تبقى بالعربية',
   'settings.language.preview': 'الصفحة {page} من {total}',

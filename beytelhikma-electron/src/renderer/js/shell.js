@@ -1,5 +1,6 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
+import { n, t } from './i18n.js';
 import { onDownloadsChanged, repository } from './repository.js';
 import { navigate } from './router.js';
 
@@ -9,13 +10,13 @@ import { navigate } from './router.js';
  * accessible dès que la fenêtre s'élargit.
  */
 const NAV = [
-  { key: 'home', path: '/home', label: 'الرئيسية', icon: 'home', primary: true },
-  { key: 'library', path: '/library', label: 'مكتبتي', icon: 'bookOpen', primary: true },
-  { key: 'downloads', path: '/downloads', label: 'التنزيلات', icon: 'download', primary: true },
-  { key: 'explore', path: '/explore', label: 'استكشاف', icon: 'compass', primary: true },
-  { key: 'search', path: '/search', label: 'بحث في النصوص', icon: 'search' },
-  { key: 'notes', path: '/notes', label: 'ملاحظاتي', icon: 'notes', primary: true },
-  { key: 'authors', path: '/authors', label: 'المؤلفون', icon: 'pen' },
+  { key: 'home', path: '/home', label: 'nav.home', icon: 'home', primary: true },
+  { key: 'library', path: '/library', label: 'nav.library', icon: 'bookOpen', primary: true },
+  { key: 'downloads', path: '/downloads', label: 'nav.downloads', icon: 'download', primary: true },
+  { key: 'explore', path: '/explore', label: 'nav.explore', icon: 'compass', primary: true },
+  { key: 'search', path: '/search', label: 'nav.search', icon: 'search' },
+  { key: 'notes', path: '/notes', label: 'nav.notes', icon: 'notes', primary: true },
+  { key: 'authors', path: '/authors', label: 'nav.authors', icon: 'pen' },
 ];
 
 /**
@@ -23,7 +24,7 @@ const NAV = [
  * régler n'est pas une destination de lecture. Au pied de la colonne, c'est
  * aussi la seule entrée qui ne bouge jamais de place.
  */
-const SETTINGS = { key: 'settings', path: '/settings', label: 'الإعدادات', icon: 'sliders' };
+const SETTINGS = { key: 'settings', path: '/settings', label: 'nav.settings', icon: 'sliders' };
 
 /**
  * Nombre de travaux dans la file, tenu à jour pour la pastille de navigation.
@@ -49,7 +50,7 @@ function paintBadges() {
   for (const node of document.querySelectorAll('[data-nav="downloads"]')) {
     node.querySelector('.nav-badge')?.remove();
     if (activeDownloads > 0) {
-      node.append(h('span', { class: 'nav-badge label-sm' }, String(activeDownloads)));
+      node.append(h('span', { class: 'nav-badge label-sm' }, n(activeDownloads)));
     }
   }
 }
@@ -103,32 +104,33 @@ export function brandMark(size = 36) {
 
 function railItem({ key, path, label, icon: name }, active) {
   const current = key === active;
+  const text = t(label);
   return h(
     'a',
     {
       class: `rail__item${current ? ' is-active' : ''}`,
       href: `#${path}`,
-      title: label,
+      title: text,
       dataset: { nav: key },
       'aria-current': current ? 'page' : null,
     },
     h('span', { class: 'rail__item-icon' }, icon(name, { size: 22 })),
-    h('span', {}, label),
+    h('span', {}, text),
   );
 }
 
 function rail(active) {
   return h(
     'nav',
-    { class: 'rail', 'aria-label': 'التنقل الرئيسي' },
+    { class: 'rail', 'aria-label': t('nav.aria') },
     h(
       'div',
       { class: 'rail__brand' },
       h(
         'a',
-        { href: '#/home', title: 'بيت الحكمة' },
+        { href: '#/home', title: t('app.name') },
         brandMark(40),
-        h('span', { class: 'rail__wordmark' }, 'بيت الحكمة'),
+        h('span', { class: 'rail__wordmark' }, t('app.name')),
       ),
     ),
     h(
@@ -159,8 +161,8 @@ function topbar() {
 
   const field = h('input', {
     type: 'search',
-    'aria-label': 'البحث في المكتبة',
-    placeholder: 'البحث عن كتاب، مؤلف، طبعة…',
+    'aria-label': t('search.aria'),
+    placeholder: t('search.placeholder'),
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
       go(event.ctrlKey || event.metaKey ? '/search' : '/explore');
@@ -175,7 +177,7 @@ function topbar() {
       'a',
       { class: 'topbar__brand', href: '#/home' },
       brandMark(34),
-      h('span', {}, 'بيت الحكمة'),
+      h('span', {}, t('app.name')),
     ),
     h(
       'div',
@@ -186,10 +188,10 @@ function topbar() {
         'button',
         {
           class: 'topbar__in-text label-sm',
-          title: 'البحث في نصوص الكتب المنزَّلة (Ctrl + Enter)',
+          title: t('search.inTextTitle'),
           onclick: () => go('/search'),
         },
-        'في النصوص',
+        t('search.inText'),
       ),
       h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
     ),
@@ -201,8 +203,8 @@ function topbar() {
         {
           class: 'topbar__icon-button',
           href: '#/settings',
-          title: 'الإعدادات',
-          'aria-label': 'الإعدادات',
+          title: t('nav.settings'),
+          'aria-label': t('nav.settings'),
         },
         icon('sliders', { size: 22 }),
       ),
@@ -223,7 +225,7 @@ function bottomNav(active) {
           dataset: { nav: item.key },
         },
         h('span', { class: 'bottom-nav__bubble' }, icon(item.icon, { size: 22 })),
-        h('span', {}, item.label),
+        h('span', {}, t(item.label)),
       ),
     ),
   );
@@ -267,7 +269,7 @@ export function placeholderView(title, message, activeKey) {
             style: { marginTop: 'var(--space-xl)' },
             onclick: () => navigate('/home'),
           },
-          'العودة للرئيسية',
+          t('shell.backHome'),
         ),
       ),
     );
