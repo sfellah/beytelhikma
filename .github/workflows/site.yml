@@ -1,0 +1,94 @@
+# La publication du site sur GitHub Pages.
+#
+# Séparée de `release.yml` exprès : une coquille dans une page ne doit pas
+# réclamer une nouvelle version de l'application, et une nouvelle version doit
+# rafraîchir le site sans qu'on y pense. D'où les deux déclencheurs — un push
+# sur le site, et un appel depuis la chaîne de publication.
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'CHANGELOG.*.md'
+      - 'beytelhikma-electron/src/renderer/styles/tokens.css'
+      - 'beytelhikma-electron/src/renderer/assets/**'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Le générateur ne parle jamais au réseau : c'est ici qu'on lui pose les
+      # données sur le disque. Un build déterministe se teste ; un build qui
+      # interroge GitHub rend des pages différentes selon l'heure.
+      - name: relever les versions publiées
+        run: |
+          set -euo pipefail
+          mkdir -p site/data
+          gh api "repos/${{ github.repository }}/releases" --paginate > site/data/releases.api.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Les empreintes SHA-512 vivent dans les manifestes d'electron-updater.
+      # Une version qui n'en a pas reste téléchargeable : la page affiche le
+      # lien sans l'empreinte, et le dit ici plutôt que de passer sous silence.
+      - name: relever les empreintes
+        run: |
+          set -euo pipefail
+          tags=$(node -e "
+            const releases = require('./site/data/releases.api.json');
+            for (const release of releases) if (!release.draft) console.log(release.tag_name);
+          ")
+          for tag in $tags; do
+            mkdir -p "site/data/updater/$tag"
+            if ! gh release download "$tag" --pattern 'latest*.yml' \
+                 --dir "site/data/updater/$tag" --clobber 2>/dev/null; then
+              echo "::notice::$tag ne porte aucun manifeste de mise à jour : pas d'empreinte affichée."
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Le nombre de livres annoncé vient du même fichier que celui qui dit ce
+      # que l'installeur embarque : la page ne peut donc pas promettre un
+      # corpus que l'application n'a pas.
+      - name: relever le catalogue publié
+        run: node scripts/fetch-seed.mjs
+        working-directory: beytelhikma-electron
+
+      - name: rendre le site
+        run: node build.mjs
+        working-directory: site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
