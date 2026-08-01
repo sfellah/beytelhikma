@@ -21,8 +21,11 @@ l'application ne l'écoute que dans le lecteur.
 
 ### 1. `Ctrl+F` ouvre la recherche
 
-`src/renderer/js/shell.js` porte déjà un écouteur global pour `Ctrl+K` qui vise
-le champ de la barre haute. Il accepte désormais `k` **ou** `f`.
+`src/renderer/js/shell.js` portait un écouteur global pour `Ctrl+K` qui visait
+le champ de la barre haute. Le raccourci devient `Ctrl+F`, et l'indice `<kbd>`
+de la barre haute l'annonce : `Ctrl+K` ne répond plus. Un indice qui nomme une
+autre touche que celle qui est écoutée est pire que pas d'indice — il s'apprend,
+et ce qu'il apprend est faux.
 
 Le lecteur garde son `Ctrl+F` : il pose son propre écouteur sur `document` et
 appelle `preventDefault()`. Comme `document` bulle avant `window`, shell n'a

@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 /**
- * `Ctrl+F` est écouté à deux endroits : la coquille, qui vise le champ de la
- * barre haute, et le lecteur, qui ouvre la recherche dans le livre ouvert. Les
- * deux écouteurs vivent sur des cibles différentes — `document` pour le
- * lecteur, `window` pour la coquille — et tous deux reçoivent la frappe.
+ * `Ctrl+F` est le raccourci de recherche, et il est écouté à deux endroits : la
+ * coquille, qui vise le champ de la barre haute, et le lecteur, qui ouvre la
+ * recherche dans le livre ouvert. Les deux écouteurs vivent sur des cibles
+ * différentes — `document` pour le lecteur, `window` pour la coquille — et
+ * tous deux reçoivent la frappe.
  *
  * Ce qui les départage est une convention, pas une liste d'écrans : le premier
  * à répondre appelle `preventDefault()`, le second sort si `defaultPrevented`.
@@ -28,10 +29,12 @@ const globalHandler = () => {
   return shell.slice(start, start + 600);
 };
 
-test('Ctrl+K et Ctrl+F visent le même champ', () => {
+test("Ctrl+F ouvre la recherche, et l'indice affiché le dit", () => {
   const handler = globalHandler();
-  assert.match(handler, /'k'/, 'Ctrl+K doit rester');
-  assert.match(handler, /'f'/, 'Ctrl+F doit ouvrir la recherche');
+  assert.match(handler, /event\.key\.toLowerCase\(\) !== 'f'/, 'Ctrl+F doit être le raccourci');
+  // Un indice qui annonce une autre touche est pire que pas d'indice : il
+  // s'apprend, et ce qu'il apprend est faux.
+  assert.match(shell, /'Ctrl F'/, "la barre haute doit annoncer le raccourci qu'elle écoute");
 });
 
 test('le raccourci global laisse la main à qui a déjà répondu', () => {

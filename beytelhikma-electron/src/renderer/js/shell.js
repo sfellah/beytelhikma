@@ -80,15 +80,14 @@ export function renderShell(host, { active }) {
    global qui vise le champ courant, plutôt qu'un écouteur par vue. */
 let searchField = null;
 
-/* `Ctrl+K` et `Ctrl+F` visent le même champ : le second est le geste qu'on
-   essaie d'abord, le premier celui qu'on apprend. Le lecteur garde le sien —
-   il pose son écouteur sur `document`, qui bulle avant `window`, et appelle
-   `preventDefault()` ; tester `defaultPrevented` lui laisse la main sans qu'il
-   y ait ici une liste d'écrans à tenir à jour. */
+/* `Ctrl+F` vise le champ de la barre haute : c'est le geste que tout le monde
+   essaie d'abord pour chercher, et l'indice affiché le dit. Le lecteur garde
+   le sien — il pose son écouteur sur `document`, qui bulle avant `window`, et
+   appelle `preventDefault()` ; tester `defaultPrevented` lui laisse la main
+   sans qu'il y ait ici une liste d'écrans à tenir à jour. */
 addEventListener('keydown', (event) => {
   if (!(event.ctrlKey || event.metaKey)) return;
-  const key = event.key.toLowerCase();
-  if (key !== 'k' && key !== 'f') return;
+  if (event.key.toLowerCase() !== 'f') return;
   if (event.defaultPrevented) return;
   if (!searchField?.isConnected) return;
   event.preventDefault();
@@ -202,7 +201,7 @@ function topbar() {
         },
         t('search.toFilters'),
       ),
-      h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
+      h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl F'),
     ),
     h(
       'div',
