@@ -1,0 +1,40 @@
+[
+  {
+    "tag_name": "v0.3.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-08-01T10:00:00Z",
+    "assets": [
+      {
+        "name": "Beyt El Hikma Setup 0.3.0.exe",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/Beyt%20El%20Hikma%20Setup%200.3.0.exe",
+        "size": 98566144
+      },
+      {
+        "name": "Beyt El Hikma 0.3.0 portable.exe",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/Beyt%20El%20Hikma%200.3.0%20portable.exe",
+        "size": 97517568
+      },
+      {
+        "name": "beyt-el-hikma-0.3.0.AppImage",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/beyt-el-hikma-0.3.0.AppImage",
+        "size": 104857600
+      },
+      {
+        "name": "beyt-el-hikma_0.3.0_amd64.deb",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/beyt-el-hikma_0.3.0_amd64.deb",
+        "size": 73400320
+      },
+      {
+        "name": "latest.yml",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/latest.yml",
+        "size": 512
+      },
+      {
+        "name": "Beyt El Hikma Setup 0.3.0.exe.blockmap",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/Beyt%20El%20Hikma%20Setup%200.3.0.exe.blockmap",
+        "size": 104000
+      }
+    ]
+  }
+]

@@ -23,6 +23,11 @@ beytelhikma-electron/assets/catalog-seed.json
 # Artefacts d'electron-builder
 beytelhikma-electron/release/
 
+# Site : le rendu et les données relevées depuis l'API GitHub sont des
+# artefacts. Les sources (gabarits, locales, captures curées) sont versionnées.
+site/dist/
+site/data/
+
 # Maquettes jetables du compagnon visuel de brainstorming
 .superpowers/
 

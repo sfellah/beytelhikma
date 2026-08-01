@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>تنزيل قارئ الكتاب الإسلامي</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&amp;family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-fixed-variant": "#0b513d",
+                      "on-background": "#1b1b1e",
+                      "secondary": "#6b5c4c",
+                      "on-secondary-fixed": "#241a0e",
+                      "on-primary-fixed": "#002117",
+                      "secondary-fixed-dim": "#d7c3b0",
+                      "primary-container": "#064e3b",
+                      "surface-variant": "#e4e1e5",
+                      "surface-tint": "#2b6954",
+                      "on-error": "#ffffff",
+                      "surface-dim": "#dcd9dd",
+                      "primary-fixed-dim": "#95d3ba",
+                      "on-secondary-fixed-variant": "#524436",
+                      "inverse-on-surface": "#f3f0f4",
+                      "tertiary-container": "#444542",
+                      "outline-variant": "#bfc9c3",
+                      "tertiary-fixed": "#e3e3de",
+                      "surface-container-low": "#f5f3f6",
+                      "surface": "#fbf8fc",
+                      "background": "#fbf8fc",
+                      "surface-bright": "#fbf8fc",
+                      "on-tertiary-fixed-variant": "#464744",
+                      "surface-container-highest": "#e4e1e5",
+                      "primary": "#003527",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-high": "#eae7eb",
+                      "surface-container": "#f0edf1",
+                      "on-primary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary": "#ffffff",
+                      "secondary-fixed": "#f4dfcb",
+                      "tertiary-fixed-dim": "#c7c7c2",
+                      "on-primary-container": "#80bea6",
+                      "secondary-container": "#f4dfcb",
+                      "on-surface": "#1b1b1e",
+                      "on-tertiary-fixed": "#1b1c19",
+                      "tertiary": "#2d2f2c",
+                      "outline": "#707974",
+                      "error-container": "#ffdad6",
+                      "surface-container-lowest": "#ffffff",
+                      "error": "#ba1a1a",
+                      "primary-fixed": "#b0f0d6",
+                      "inverse-surface": "#303033",
+                      "on-surface-variant": "#404944",
+                      "on-tertiary-container": "#b2b2ae",
+                      "inverse-primary": "#95d3ba",
+                      "on-secondary-container": "#716252"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "lg": "24px",
+                      "xs": "4px",
+                      "sm": "8px",
+                      "md": "16px",
+                      "container-max": "1200px",
+                      "xl": "40px",
+                      "gutter": "20px"
+              },
+              "fontFamily": {
+                      "label-sm": ["IBM Plex Sans Arabic"],
+                      "headline-lg": ["IBM Plex Sans Arabic"],
+                      "headline-lg-mobile": ["IBM Plex Sans Arabic"],
+                      "body-lg": ["Amiri"],
+                      "label-md": ["IBM Plex Sans Arabic"],
+                      "headline-md": ["IBM Plex Sans Arabic"],
+                      "body-md": ["Amiri"]
+              },
+              "fontSize": {
+                      "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                      "headline-lg": ["30px", {"lineHeight": "42px", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "34px", "fontWeight": "600"}],
+                      "body-lg": ["20px", {"lineHeight": "36px", "fontWeight": "400"}],
+                      "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                      "headline-md": ["22px", {"lineHeight": "32px", "fontWeight": "500"}],
+                      "body-md": ["18px", {"lineHeight": "32px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+      </script>
+<style>
+          .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+          }
+          .soft-shadow {
+              box-shadow: 0 20px 20px rgba(43, 105, 84, 0.04);
+          }
+      </style>
+</head>
+<body class="bg-background text-on-background antialiased min-h-screen">
+<!-- TopAppBar from JSON -->
+<header class="bg-surface dark:bg-surface-bright shadow-sm shadow-[0_20px_20px_rgba(43,105,84,0.04)] docked full-width top-0 z-40 sticky">
+<div class="flex flex-row-reverse justify-between items-center w-full px-gutter py-md max-w-container-max mx-auto">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed cursor-pointer hover:bg-secondary-container dark:hover:bg-tertiary-container transition-colors rounded-full p-2 active:scale-95 transition-transform duration-200">settings</span>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed cursor-pointer hover:bg-secondary-container dark:hover:bg-tertiary-container transition-colors rounded-full p-2 active:scale-95 transition-transform duration-200">account_circle</span>
+</div>
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed flex items-center gap-sm cursor-pointer active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+                قارئ الكتاب الإسلامي
+            </div>
+<div class="flex-1 max-w-md mx-xl hidden md:block">
+<!-- Search Bar On Left Logic -->
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-surface-container-highest border border-surface-variant rounded-full py-2 pr-10 pl-4 text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md" placeholder="البحث..." type="text"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Layout Container -->
+<div class="max-w-container-max mx-auto px-gutter py-xl">
+<main>
+<!-- Hero Download Section -->
+<section class="mb-xl text-center">
+<div class="bg-surface-container-lowest soft-shadow rounded-xl p-xl border border-outline-variant flex flex-col items-center justify-center relative overflow-hidden">
+<!-- Decorative background element -->
+<div class="absolute -top-32 -left-32 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-32 -right-32 w-64 h-64 bg-secondary/10 rounded-full blur-3xl pointer-events-none"></div>
+<span class="material-symbols-outlined text-[64px] text-primary mb-md" style="font-variation-settings: 'FILL' 1;">devices</span>
+<h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-sm">تنزيل قارئ الكتاب الإسلامي</h1>
+<p class="font-body-lg text-body-lg text-on-surface max-w-2xl mx-auto mb-lg">
+                        احصل على تجربة القراءة الأمثل للنصوص الإسلامية مع تطبيق سطح المكتب. صمم خصيصاً لطلاب العلم والباحثين ببيئة خالية من المشتتات.
+                    </p>
+<button class="bg-primary text-white font-bold hover:bg-primary-container font-label-md text-label-md py-3 px-8 rounded-full flex items-center gap-sm transition-all shadow-lg hover:shadow-xl ring-2 ring-primary ring-offset-2 active:scale-95 group mb-sm">
+<span class="material-symbols-outlined group-hover:-translate-y-1 transition-transform">download</span>
+                        تنزيل لنظام Windows
+                    </button>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-medium">الإصدار 2.4.1 | 145 ميغابايت | يعمل على Windows 10/11</p>
+</div>
+</section>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg">
+<!-- Main Content: Release Notes -->
+<div class="md:col-span-8 flex flex-col gap-lg">
+<h2 class="font-headline-md text-headline-md text-on-background border-b border-outline-variant pb-sm flex items-center gap-sm font-bold">
+<span class="material-symbols-outlined text-secondary">update</span>
+                        سجل التغييرات (Release Notes)
+                    </h2>
+<!-- Version 2.4.1 -->
+<div class="bg-surface-container-lowest soft-shadow rounded-xl p-md border-2 border-outline-variant relative pl-10">
+<!-- Timeline line element visual -->
+<div class="absolute right-0 top-0 bottom-0 w-1 bg-primary/20 rounded-r-xl"></div>
+<div class="absolute right-[-4px] top-md w-3 h-3 rounded-full bg-primary ring-4 ring-surface-container-lowest"></div>
+<div class="flex justify-between items-start mb-md">
+<div>
+<h3 class="font-headline-md text-[20px] font-bold text-primary flex items-center gap-xs">
+                                    الإصدار 2.4.1
+                                    <span class="bg-secondary/10 text-on-surface-variant px-2 py-0.5 rounded-full font-label-sm text-label-sm ml-sm font-semibold">الأحدث</span>
+</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-semibold">تم الإصدار في: ١٥ رجب ١٤٤٥ هـ (٢٧ يناير ٢٠٢٤)</p>
+</div>
+</div>
+<div class="space-y-sm font-body-md text-body-md text-on-surface font-medium">
+<h4 class="font-label-md text-label-md text-primary-container font-bold">✨ ميزات جديدة:</h4>
+<ul class="list-none space-y-xs pr-sm">
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-primary text-[18px] mt-1">check_circle</span>
+<span>إضافة وضع القراءة الليلية المخصص مع تدرجات لونية مريحة للعين.</span>
+</li>
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-primary text-[18px] mt-1">check_circle</span>
+<span>دعم مزامنة العلامات المرجعية (Bookmarks) عبر الأجهزة.</span>
+</li>
+</ul>
+<h4 class="font-label-md text-label-md text-secondary font-bold mt-md">🚀 تحسينات:</h4>
+<ul class="list-none space-y-xs pr-sm">
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-1">arrow_upward</span>
+<span>تحسين سرعة محرك البحث في النصوص الطويلة بنسبة ٤٠٪.</span>
+</li>
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-1">arrow_upward</span>
+<span>تحديث خط "أميري" للإصدار الأخير لضمان عرض أفضل للحركات والتشكيل.</span>
+</li>
+</ul>
+<h4 class="font-label-md text-label-md text-error font-bold mt-md">🐛 إصلاحات الأخطاء:</h4>
+<ul class="list-none space-y-xs pr-sm">
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-error text-[18px] mt-1">bug_report</span>
+<span>إصلاح مشكلة انهيار التطبيق عند استيراد ملفات PDF كبيرة الحجم.</span>
+</li>
+</ul>
+</div>
+</div>
+<!-- Version 2.3.0 -->
+<div class="bg-surface-container-low soft-shadow rounded-xl p-md border border-outline-variant relative transition-opacity">
+<div class="absolute right-0 top-0 bottom-0 w-1 bg-outline-variant rounded-r-xl"></div>
+<div class="flex justify-between items-start mb-md">
+<div>
+<h3 class="font-headline-md text-[20px] font-bold text-on-surface">الإصدار 2.3.0</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-semibold">تم الإصدار في: ٢ جمادى الأولى ١٤٤٥ هـ (١٦ نوفمبر ٢٠٢٣)</p>
+</div>
+<button class="text-secondary hover:text-primary transition-colors flex items-center font-label-sm text-label-sm font-bold">
+                                تنزيل هذا الإصدار
+                                <span class="material-symbols-outlined text-[16px] ml-xs">download</span>
+</button>
+</div>
+<div class="space-y-sm font-body-md text-body-md text-on-surface font-medium">
+<ul class="list-none space-y-xs pr-sm">
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-outline text-[18px] mt-1">commit</span>
+<span>إضافة واجهة إدارة المكتبة الجديدة (Bento Grid layout).</span>
+</li>
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-outline text-[18px] mt-1">commit</span>
+<span>دعم تصدير الاقتباسات بتنسيق صورة لمشاركتها.</span>
+</li>
+<li class="flex items-start gap-xs">
+<span class="material-symbols-outlined text-outline text-[18px] mt-1">commit</span>
+<span>إصلاحات عامة في الأداء والاستقرار.</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<!-- Sidebar: Tech Specs -->
+<aside class="md:col-span-4 flex flex-col gap-lg">
+<div class="bg-surface-container-low rounded-xl p-md border border-outline-variant soft-shadow">
+<h3 class="font-headline-md text-[20px] text-primary mb-md flex items-center gap-sm font-bold">
+<span class="material-symbols-outlined">memory</span>
+                            المواصفات الفنية
+                        </h3>
+<div class="space-y-md font-body-md text-body-md">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant font-bold mb-xs">نظام التشغيل المدعوم</span>
+<span class="text-on-surface font-medium">Windows 10, Windows 11 (64-bit)</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant font-bold mb-xs">المعالج (CPU)</span>
+<span class="text-on-surface font-medium">معالج ثنائي النواة بسرعة 2.0 GHz أو أحدث</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant font-bold mb-xs">الذاكرة (RAM)</span>
+<span class="text-on-surface font-medium">4 GB كحد أدنى (8 GB موصى به)</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant font-bold mb-xs">مساحة التخزين</span>
+<span class="text-on-surface font-medium">500 MB للتثبيت، ومساحة إضافية للكتب</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-md border border-outline-variant soft-shadow text-center">
+<span class="material-symbols-outlined text-secondary text-[40px] mb-sm font-bold">help_center</span>
+<h4 class="font-headline-md text-[18px] text-on-surface mb-xs font-bold">تحتاج إلى مساعدة؟</h4>
+<p class="font-body-md text-body-md text-on-surface mb-md text-sm font-medium">راجع دليل الاستخدام أو تواصل مع فريق الدعم الفني الخاص بنا.</p>
+<button class="w-full bg-transparent border-2 border-secondary text-secondary hover:bg-secondary/5 font-label-md text-label-md py-2 rounded-full transition-colors font-bold">
+                            مركز المساعدة
+                        </button>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</body></html>
