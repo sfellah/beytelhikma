@@ -2,6 +2,7 @@ import { describeSelection, paintHighlights } from '../annotations.js';
 import { renderBookHtml } from '../content-html.js';
 import { h } from '../dom.js';
 import { n } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
@@ -29,9 +30,9 @@ const TOC_WINDOW = 80;
 // bibliothèque : c'est le défaut. Noto Naskh ouvre les contreformes pour qui
 // trouve Amiri trop fin, IBM Plex reste la voix « écran ».
 const FONTS = [
-  { key: 'serif', label: 'أميري (خط المكتبة)', family: "'Amiri', serif" },
-  { key: 'naskh', label: 'نسخ (أوضح)', family: "'Noto Naskh Arabic', serif" },
-  { key: 'sans', label: 'حديث (شاشة)', family: "'IBM Plex Sans Arabic', sans-serif" },
+  { key: 'serif', label: 'reader.font.serif', family: "'Amiri', serif" },
+  { key: 'naskh', label: 'reader.font.naskh', family: "'Noto Naskh Arabic', serif" },
+  { key: 'sans', label: 'reader.font.sans', family: "'IBM Plex Sans Arabic', sans-serif" },
 ];
 
 /**
@@ -40,8 +41,8 @@ const FONTS = [
  * s'enchaînent et où le pied de page ne fait plus que séparer.
  */
 const MODES = [
-  { key: 'page', label: 'صفحة صفحة', hint: 'كما في المطبوع', icon: 'book' },
-  { key: 'scroll', label: 'تمرير متصل', hint: 'الصفحات تتوالى', icon: 'rows' },
+  { key: 'page', label: 'reader.mode.page', hint: 'reader.mode.pageHint', icon: 'book' },
+  { key: 'scroll', label: 'reader.mode.scroll', hint: 'reader.mode.scrollHint', icon: 'rows' },
 ];
 
 /**
@@ -51,36 +52,36 @@ const MODES = [
  * toucher l'encre — le texte garde son contraste dans les trois ambiances.
  */
 const HIGHLIGHTS = [
-  { color: '#d9b26a', label: 'ذهبي' },
-  { color: '#6a9e88', label: 'زمردي' },
-  { color: '#c58a6b', label: 'طيني' },
-  { color: '#8f9aa6', label: 'حجري' },
+  { color: '#d9b26a', label: 'reader.highlight.gold' },
+  { color: '#6a9e88', label: 'reader.highlight.emerald' },
+  { color: '#c58a6b', label: 'reader.highlight.clay' },
+  { color: '#8f9aa6', label: 'reader.highlight.stone' },
 ];
 
 /** Onglets du panneau « ملاحظاتي » : le même vocabulaire que l'écran global. */
 const ANNOTATION_KINDS = [
-  { value: 'all', label: 'الكل', icon: 'notes' },
-  { value: 'highlight', label: 'تظليل', icon: 'highlight' },
-  { value: 'note', label: 'ملاحظات', icon: 'noteAdd' },
-  { value: 'bookmark', label: 'علامات', icon: 'bookmark' },
+  { value: 'all', label: 'reader.tab.all', icon: 'notes' },
+  { value: 'highlight', label: 'reader.tab.highlight', icon: 'highlight' },
+  { value: 'note', label: 'reader.tab.note', icon: 'noteAdd' },
+  { value: 'bookmark', label: 'reader.tab.bookmark', icon: 'bookmark' },
 ];
 
 const SHORTCUTS = [
-  { keys: ['←'], label: 'الصفحة التالية' },
-  { keys: ['→'], label: 'الصفحة السابقة' },
-  { keys: ['Page ↓', 'Page ↑'], sep: '/', label: 'تنقّل بالصفحات' },
-  { keys: ['Home', 'End'], sep: '/', label: 'أول الكتاب / آخره' },
-  { keys: ['Ctrl', '+'], label: 'تكبير الخط' },
-  { keys: ['Ctrl', '−'], label: 'تصغير الخط' },
-  { keys: ['Ctrl', 'عجلة الفأرة'], label: 'حجم الخط' },
-  { keys: ['Ctrl', 'F'], label: 'بحث في الكتاب' },
-  { keys: ['B'], label: 'إشارة مرجعية على هذه الصفحة' },
-  { keys: ['N'], label: 'لوحة ملاحظاتي' },
-  { keys: ['C'], label: 'فهرس المحتويات' },
-  { keys: ['V'], label: 'تبديل نمط القراءة (صفحة / تمرير)' },
-  { keys: ['F11'], label: 'ملء الشاشة' },
-  { keys: ['؟'], label: 'هذه اللائحة' },
-  { keys: ['Esc'], label: 'إغلاق أو الخروج' },
+  { keys: ['←'], label: 'reader.shortcut.nextPage' },
+  { keys: ['→'], label: 'reader.shortcut.previousPage' },
+  { keys: ['Page ↓', 'Page ↑'], sep: '/', label: 'reader.shortcut.paging' },
+  { keys: ['Home', 'End'], sep: '/', label: 'reader.shortcut.ends' },
+  { keys: ['Ctrl', '+'], label: 'reader.shortcut.bigger' },
+  { keys: ['Ctrl', '−'], label: 'reader.shortcut.smaller' },
+  { keys: ['Ctrl', 'reader.shortcut.wheel'], label: 'reader.shortcut.size' },
+  { keys: ['Ctrl', 'F'], label: 'reader.shortcut.find' },
+  { keys: ['B'], label: 'reader.shortcut.bookmark' },
+  { keys: ['N'], label: 'reader.shortcut.notes' },
+  { keys: ['C'], label: 'reader.shortcut.toc' },
+  { keys: ['V'], label: 'reader.shortcut.mode' },
+  { keys: ['F11'], label: 'reader.shortcut.fullscreen' },
+  { keys: ['؟'], label: 'reader.shortcut.thisList' },
+  { keys: ['Esc'], label: 'reader.shortcut.escape' },
 ];
 
 /**
@@ -89,7 +90,7 @@ const SHORTCUTS = [
  * Disposition et jeu d'icônes calqués sur `ui-examples/reader V2.html`.
  */
 export function readerView(host, params) {
-  host.replaceChildren(loadingView('جارٍ فتح الكتاب…'));
+  host.replaceChildren(loadingView(t('reader.opening')));
   const controller = new Reader(host, params.id, params.query?.page);
   controller.start();
   return { dispose: () => controller.dispose() };
@@ -244,10 +245,10 @@ class Reader {
         icon(name, { size: 20 }),
       );
 
-    const fullscreenButton = tool('fullscreen', 'fullscreen', 'ملء الشاشة', () =>
+    const fullscreenButton = tool('fullscreen', 'fullscreen', t('reader.fullscreen'), () =>
       this.#toggleFullscreen(),
     );
-    const bookmarkButton = tool('bookmark', 'bookmark', 'إشارة مرجعية (B)', () =>
+    const bookmarkButton = tool('bookmark', 'bookmark', t('reader.bookmarkTool'), () =>
       this.#toggleBookmark(),
     );
 
@@ -259,11 +260,11 @@ class Reader {
       {
         class: 'reader__back',
         'data-tool': 'close',
-        title: 'العودة إلى صفحة الكتاب (Esc)',
+        title: t('reader.backTitle'),
         onclick: () => back(),
       },
       icon('chevronRight', { size: 20 }),
-      h('span', { class: 'reader__back-label label-md' }, 'رجوع'),
+      h('span', { class: 'reader__back-label label-md' }, t('reader.back')),
     );
 
     const header = h(
@@ -281,14 +282,14 @@ class Reader {
         h(
           'div',
           { class: 'reader__tools' },
-          tool('help', 'help', 'اختصارات القراءة (؟)', () => this.#showShortcuts()),
-          tool('annotations', 'notes', 'ملاحظاتي في هذا الكتاب (N)', () =>
+          tool('help', 'help', t('reader.helpTool'), () => this.#showShortcuts()),
+          tool('annotations', 'notes', t('reader.notesTool'), () =>
             this.#togglePanel('annotations'),
           ),
           bookmarkButton,
-          tool('toc', 'bookOpen', 'فهرس المحتويات (C)', () => this.#togglePanel('toc')),
-          tool('settings', 'formatSize', 'إعدادات القراءة', () => this.#togglePanel('settings')),
-          tool('search', 'search', 'بحث في الكتاب (Ctrl+F)', () => this.#togglePanel('search')),
+          tool('toc', 'bookOpen', t('reader.tocTool'), () => this.#togglePanel('toc')),
+          tool('settings', 'formatSize', t('reader.settingsTool'), () => this.#togglePanel('settings')),
+          tool('search', 'search', t('reader.searchTool'), () => this.#togglePanel('search')),
           fullscreenButton,
         ),
       ),
@@ -301,12 +302,14 @@ class Reader {
       min: 1,
       max: Math.max(1, this.#pageCount),
       value: this.#index + 1,
-      title: 'موضع القراءة',
+      title: t('reader.position'),
       oninput: (event) => this.#show(Number(event.target.value) - 1),
     });
 
-    const previous = tool('previous', 'chevronRight', 'الصفحة السابقة', () => this.#move(-1));
-    const next = tool('next', 'chevronLeft', 'الصفحة التالية', () => this.#move(1));
+    const previous = tool('previous', 'chevronRight', t('reader.shortcut.previousPage'), () =>
+      this.#move(-1),
+    );
+    const next = tool('next', 'chevronLeft', t('reader.shortcut.nextPage'), () => this.#move(1));
     const pagerLabel = h('span', { class: 'reader__pager-label label-md' });
     const percent = h('span', { class: 'reader__percent label-sm' });
 
@@ -325,7 +328,7 @@ class Reader {
     const hint = h(
       'div',
       { class: 'reader__hint label-sm' },
-      'انقر في وسط الصفحة لإخفاء الأدوات',
+      t('reader.hideTools'),
     );
 
     // Les références des panneaux sont collectées avant d'écraser `#nodes`.
@@ -403,15 +406,15 @@ class Reader {
         'button',
         {
           class: mode.key === this.#prefs.mode ? 'is-active' : '',
-          title: mode.hint,
+          title: t(mode.hint),
           onclick: () => this.#setMode(mode.key),
         },
         icon(mode.icon, { size: 18 }),
         h(
           'span',
           {},
-          h('span', { class: 'label-md' }, mode.label),
-          h('span', { class: 'label-sm muted' }, mode.hint),
+          h('span', { class: 'label-md' }, t(mode.label)),
+          h('span', { class: 'label-sm muted' }, t(mode.hint)),
         ),
       ),
     );
@@ -423,7 +426,7 @@ class Reader {
           class: font.key === this.#prefs.font ? 'is-active' : '',
           onclick: () => this.#setFont(font.key),
         },
-        h('span', { style: { fontFamily: font.family, fontSize: '18px' } }, font.label),
+        h('span', { style: { fontFamily: font.family, fontSize: '18px' } }, t(font.label)),
         font.key === this.#prefs.font ? icon('check', { size: 16 }) : null,
       ),
     );
@@ -436,12 +439,12 @@ class Reader {
       h(
         'div',
         { class: 'reader__panel-head' },
-        h('h2', { class: 'title-md' }, 'إعدادات القراءة'),
+        h('h2', { class: 'title-md' }, t('reader.settingsTitle')),
         h(
           'button',
           {
             class: 'reader__tool',
-            title: 'إغلاق',
+            title: t('action.close'),
             onclick: () => this.#closePanels(),
           },
           icon('close', { size: 20 }),
@@ -453,25 +456,25 @@ class Reader {
         h(
           'div',
           {},
-          h('label', { class: 'label-md' }, 'نمط القراءة'),
+          h('label', { class: 'label-md' }, t('reader.modeLabel')),
           h('div', { class: 'mode-choices' }, modeButtons),
         ),
         h(
           'div',
           {},
-          h('label', { class: 'label-md' }, 'حجم الخط'),
+          h('label', { class: 'label-md' }, t('reader.sizeLabel')),
           h(
             'div',
             { class: 'font-size-control' },
             h(
               'button',
-              { title: 'تصغير الخط', onclick: () => this.#setSize(this.#prefs.size - 2) },
+              { title: t('reader.shortcut.smaller'), onclick: () => this.#setSize(this.#prefs.size - 2) },
               icon('minus', { size: 16 }),
             ),
             sizeSlider,
             h(
               'button',
-              { title: 'تكبير الخط', onclick: () => this.#setSize(this.#prefs.size + 2) },
+              { title: t('reader.shortcut.bigger'), onclick: () => this.#setSize(this.#prefs.size + 2) },
               icon('plus', { size: 20 }),
             ),
             sizeValue,
@@ -480,13 +483,13 @@ class Reader {
         h(
           'div',
           {},
-          h('label', { class: 'label-md' }, 'المظهر'),
+          h('label', { class: 'label-md' }, t('reader.themeLabel')),
           themes.node,
         ),
         h(
           'div',
           {},
-          h('label', { class: 'label-md' }, 'نوع الخط'),
+          h('label', { class: 'label-md' }, t('reader.fontLabel')),
           h('div', { class: 'font-choices' }, fontButtons),
         ),
       ),
@@ -522,7 +525,7 @@ class Reader {
               'span',
               { class: 'label-sm muted' },
               // jamais `pageId` : c'est l'identifiant source, global au corpus
-              `ص ${n(entry.printedPageNum ?? entry.pageSequenceNum ?? '')}`,
+              t('reader.page', { page: entry.printedPageNum ?? entry.pageSequenceNum ?? '' }),
             ),
           ),
         ),
@@ -533,7 +536,7 @@ class Reader {
           ? h(
               'button',
               { class: 'button button--tonal', onclick: grow },
-              h('span', {}, `عرض المزيد (${n(matches.length - shown)})`),
+              h('span', {}, t('reader.showMore', { count: matches.length - shown })),
             )
           : h('span', {}),
       );
@@ -551,7 +554,7 @@ class Reader {
           h(
             'p',
             { class: 'label-md muted' },
-            this.#toc.length ? 'لا عنوان بهذا الاسم.' : 'لا يوجد فهرس لهذا الكتاب.',
+            t(this.#toc.length ? 'reader.tocNoMatch' : 'reader.tocMissing'),
           ),
         );
         more.replaceChildren();
@@ -564,7 +567,7 @@ class Reader {
     const field = h('input', {
       type: 'search',
       class: 'reader__search-field',
-      placeholder: 'ابحث في الفهرس…',
+      placeholder: t('reader.tocSearch'),
       oninput: (event) => {
         clearTimeout(timer);
         const value = event.target.value;
@@ -580,10 +583,10 @@ class Reader {
       h(
         'div',
         { class: 'reader__panel-head' },
-        h('h2', { class: 'title-md' }, 'فهرس المحتويات'),
+        h('h2', { class: 'title-md' }, t('reader.tocTitle')),
         h(
           'button',
-          { class: 'reader__tool', title: 'إغلاق', onclick: () => this.#closePanels() },
+          { class: 'reader__tool', title: t('action.close'), onclick: () => this.#closePanels() },
           icon('close', { size: 20 }),
         ),
       ),
@@ -612,10 +615,10 @@ class Reader {
       h(
         'div',
         { class: 'reader__panel-head' },
-        h('h2', { class: 'title-md' }, 'ملاحظاتي'),
+        h('h2', { class: 'title-md' }, t('reader.notesTitle')),
         h(
           'button',
-          { class: 'reader__tool', title: 'إغلاق', onclick: () => this.#closePanels() },
+          { class: 'reader__tool', title: t('action.close'), onclick: () => this.#closePanels() },
           icon('close', { size: 20 }),
         ),
       ),
@@ -668,8 +671,8 @@ class Reader {
           'p',
           { class: 'label-md muted' },
           entries.length
-            ? 'لا شيء من هذا النوع في هذا الكتاب.'
-            : 'لا ملاحظات بعد. حدِّد نصًّا في الصفحة لتظليله أو للتعليق عليه.',
+            ? t('reader.annotationsNoneOfKind')
+            : t('reader.annotationsEmpty'),
         ),
       );
       return;
@@ -695,7 +698,7 @@ class Reader {
           'button',
           {
             class: `reader__annotation-tab${kind.value === this.#annotationKind ? ' is-active' : ''}`,
-            title: kind.label,
+            title: t(kind.label),
             onclick: () => {
               this.#annotationKind = kind.value;
               this.#drawAnnotations();
@@ -716,11 +719,11 @@ class Reader {
 
     if (entry.kind === 'bookmark') {
       actions.append(
-        this.#annotationAction('trash', 'حذف', async () => {
+        this.#annotationAction('trash', t('action.delete'), async () => {
           try {
             await repository.deleteBookmark(entry.bookmark.bookmarkId);
           } catch (error) {
-            toast(error?.message ?? 'تعذّر حذف الإشارة');
+            toast(error?.message ?? t('reader.bookmarkDeleteFailed'));
             return;
           }
           this.#annotations.bookmarks = this.#annotations.bookmarks.filter(
@@ -731,17 +734,17 @@ class Reader {
       );
     } else if (entry.kind === 'highlight') {
       actions.append(
-        this.#annotationAction('noteAdd', entry.note ? 'تعديل الملاحظة' : 'إضافة ملاحظة', () =>
+        this.#annotationAction('noteAdd', t(entry.note ? 'reader.editNote' : 'reader.addNote'), () =>
           this.#editNote(entry.highlight, entry.note),
         ),
-        this.#annotationAction('trash', 'حذف التظليل', () =>
+        this.#annotationAction('trash', t('reader.deleteHighlight'), () =>
           this.#removeHighlight(entry.highlight),
         ),
       );
     } else {
       actions.append(
-        this.#annotationAction('noteAdd', 'تعديل', () => this.#editNote(null, entry.note)),
-        this.#annotationAction('trash', 'حذف', () => this.#removeNote(entry.note)),
+        this.#annotationAction('noteAdd', t('notes.edit'), () => this.#editNote(null, entry.note)),
+        this.#annotationAction('trash', t('action.delete'), () => this.#removeNote(entry.note)),
       );
     }
 
@@ -756,14 +759,20 @@ class Reader {
       h(
         'span',
         { class: 'label-sm' },
-        entry.kind === 'bookmark' ? 'علامة' : entry.note ? 'ملاحظة' : 'تظليل',
+        t(
+          entry.kind === 'bookmark'
+            ? 'reader.kindBookmark'
+            : entry.note
+              ? 'reader.kindNote'
+              : 'reader.kindHighlight',
+        ),
       ),
       h('span', { class: 'reader__annotation-page label-sm' }, this.#pageLabelFor(entry.pageId)),
     );
 
     const body =
       entry.kind === 'bookmark'
-        ? h('p', { class: 'body-md' }, entry.bookmark.label ?? 'موضع محفوظ')
+        ? h('p', { class: 'body-md' }, entry.bookmark.label ?? t('reader.savedPosition'))
         : h(
             'div',
             { class: 'reader__annotation-text' },
@@ -807,14 +816,14 @@ class Reader {
     this.#tocByPage ??= new Map(this.#toc.map((entry) => [entry.pageId, entry]));
     const entry = this.#tocByPage.get(pageId);
     const printed = entry?.printedPageNum ?? entry?.pageSequenceNum;
-    if (printed != null) return `ص ${n(printed)}`;
+    if (printed != null) return t('reader.page', { page: printed });
 
     if (this.#pagesById?.size !== this.#pages.size) {
       this.#pagesById = new Map([...this.#pages.values()].map((item) => [item.pageId, item]));
     }
     const cached = this.#pagesById.get(pageId);
     const number = cached?.printedPageNum ?? cached?.sequenceNum;
-    return number == null ? '' : `ص ${n(number)}`;
+    return number == null ? '' : t('reader.page', { page: number });
   }
 
   // ----------------------------------------------------------- annotations
@@ -887,7 +896,7 @@ class Reader {
       this.#afterAnnotationChange();
       return saved;
     } catch (error) {
-      toast(error?.message ?? 'تعذّر حفظ التظليل');
+      toast(error?.message ?? t('reader.highlightSaveFailed'));
       return null;
     }
   }
@@ -898,7 +907,7 @@ class Reader {
    */
   async #editNote(highlight, existing) {
     const content = await noteDialog({
-      title: existing ? 'تعديل الملاحظة' : 'إضافة ملاحظة',
+      title: t(existing ? 'reader.editNote' : 'reader.addNote'),
       quote: highlight?.selectedText ?? null,
       value: existing?.content ?? '',
       canDelete: Boolean(existing),
@@ -922,9 +931,9 @@ class Reader {
         saved,
       ];
       this.#afterAnnotationChange();
-      toast('حُفظت الملاحظة');
+      toast(t('reader.noteSaved'));
     } catch (error) {
-      toast(error?.message ?? 'تعذّر حفظ الملاحظة');
+      toast(error?.message ?? t('reader.noteSaveFailed'));
     }
   }
 
@@ -932,7 +941,7 @@ class Reader {
     try {
       await repository.deleteNote(note.noteId);
     } catch (error) {
-      toast(error?.message ?? 'تعذّر حذف الملاحظة');
+      toast(error?.message ?? t('reader.noteDeleteFailed'));
       return;
     }
     this.#annotations.notes = this.#annotations.notes.filter(
@@ -947,16 +956,16 @@ class Reader {
     );
     if (hasNote) {
       const choice = await confirmDialog({
-        title: 'حذف التظليل؟',
-        message: 'الملاحظة المرتبطة به ستُحذف أيضًا.',
-        actions: [{ value: 'go', label: 'حذف', variant: 'danger' }],
+        title: t('reader.deleteHighlightTitle'),
+        message: t('reader.deleteHighlightMessage'),
+        actions: [{ value: 'go', label: t('action.delete'), variant: 'danger' }],
       });
       if (choice !== 'go') return;
     }
     try {
       await repository.deleteHighlight(highlight.highlightId);
     } catch (error) {
-      toast(error?.message ?? 'تعذّر حذف التظليل');
+      toast(error?.message ?? t('reader.highlightDeleteFailed'));
       return;
     }
     this.#annotations.highlights = this.#annotations.highlights.filter(
@@ -975,15 +984,17 @@ class Reader {
       const result = await repository.toggleBookmark({
         editionId: this.#editionId,
         pageId: page.pageId,
-        label: this.#chapterFor(page) ?? `ص ${n(page.printedPageNum ?? page.sequenceNum)}`,
+        label:
+          this.#chapterFor(page) ??
+          t('reader.page', { page: page.printedPageNum ?? page.sequenceNum }),
       });
       this.#annotations.bookmarks = result.added
         ? [...this.#annotations.bookmarks, result.bookmark]
         : this.#annotations.bookmarks.filter((item) => item.pageId !== page.pageId);
       this.#afterAnnotationChange();
-      toast(result.added ? 'أُضيفت إشارة مرجعية' : 'أُزيلت الإشارة المرجعية');
+      toast(t(result.added ? 'reader.bookmarkAdded' : 'reader.bookmarkRemoved'));
     } catch (error) {
-      toast(error?.message ?? 'تعذّر حفظ الإشارة');
+      toast(error?.message ?? t('reader.bookmarkSaveFailed'));
     }
   }
 
@@ -1006,7 +1017,7 @@ class Reader {
     const marked = this.#isBookmarked(this.#page.pageId);
     button.classList.toggle('is-active', marked);
     button.replaceChildren(icon('bookmark', { size: 20, fill: marked }));
-    button.title = marked ? 'إزالة الإشارة المرجعية (B)' : 'إشارة مرجعية (B)';
+    button.title = t(marked ? 'reader.bookmarkRemove' : 'reader.bookmarkTool');
   }
 
   /**
@@ -1016,13 +1027,13 @@ class Reader {
    */
   #searchPanel(refs) {
     const results = h('div', { class: 'reader__panel-body reader__search-results' });
-    const summary = h('p', { class: 'label-sm muted' }, 'اكتب كلمتين على الأقل.');
+    const summary = h('p', { class: 'label-sm muted' }, t('reader.searchTooShort'));
     let timer = null;
 
     const field = h('input', {
       type: 'search',
       class: 'reader__search-field',
-      placeholder: 'ابحث في هذا الكتاب…',
+      placeholder: t('reader.searchField'),
       oninput: () => {
         clearTimeout(timer);
         timer = setTimeout(() => this.#runSearch(field.value, { results, summary }), 250);
@@ -1037,10 +1048,10 @@ class Reader {
       h(
         'div',
         { class: 'reader__panel-head' },
-        h('h2', { class: 'title-md' }, 'بحث في الكتاب'),
+        h('h2', { class: 'title-md' }, t('reader.searchTitle')),
         h(
           'button',
-          { class: 'reader__tool', title: 'إغلاق', onclick: () => this.#closePanels() },
+          { class: 'reader__tool', title: t('action.close'), onclick: () => this.#closePanels() },
           icon('close', { size: 20 }),
         ),
       ),
@@ -1053,25 +1064,25 @@ class Reader {
     const trimmed = term.trim();
     if (trimmed.length < 2) {
       this.#highlight = null;
-      summary.textContent = 'اكتب كلمتين على الأقل.';
+      summary.textContent = t('reader.searchTooShort');
       results.replaceChildren();
       return;
     }
 
-    summary.textContent = 'جارٍ البحث…';
+    summary.textContent = t('reader.searching');
     let found;
     try {
       found = await repository.searchInBook(this.#editionId, trimmed, { limit: 60 });
     } catch {
-      summary.textContent = 'تعذّر البحث في هذا الكتاب.';
+      summary.textContent = t('reader.searchFailed');
       return;
     }
 
     this.#highlight = arabicSearchPattern(trimmed);
     const total = found.chapters.length + found.pages.length;
     summary.textContent = total
-      ? `${n(total)} نتيجة`
-      : 'لا نتائج في هذا الكتاب.';
+      ? t('pagination.results', { total })
+      : t('reader.searchNone');
 
     // Les chapitres d'abord : trouver un titre vaut mieux qu'une occurrence
     // perdue au milieu d'une page.
@@ -1084,7 +1095,7 @@ class Reader {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${n(entry.printedPageNum ?? entry.sequenceNum)}`,
+            t('reader.page', { page: entry.printedPageNum ?? entry.sequenceNum }),
           ),
         ),
       ),
@@ -1102,7 +1113,7 @@ class Reader {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${n(entry.printedPageNum ?? entry.sequenceNum)}`,
+            t('reader.page', { page: entry.printedPageNum ?? entry.sequenceNum }),
           ),
         ),
       ),
@@ -1160,23 +1171,23 @@ class Reader {
       { class: 'reader__selection' },
       // Une note sans surlignage flotterait sans ancre : on pose d'abord le
       // passage, puis on écrit dessus.
-      item('noteAdd', 'إضافة ملاحظة', async () => {
+      item('noteAdd', t('reader.addNote'), async () => {
         const highlight = await this.#addHighlight(HIGHLIGHTS[0].color);
         if (highlight) this.#editNote(highlight, null);
       }),
-      item('copy', 'نسخ', () => this.#copySelection()),
-      item('translate', 'ترجمة', () => {
-        toast('الترجمة قيد الإنجاز');
+      item('copy', t('reader.copy'), () => this.#copySelection()),
+      item('translate', t('reader.translate'), () => {
+        toast(t('reader.translateSoon'));
         this.#hideSelection();
       }),
-      item('search', 'بحث في الكتاب', () => this.#searchSelection()),
+      item('search', t('reader.searchTitle'), () => this.#searchSelection()),
       h(
         'div',
         { class: 'reader__highlights' },
         HIGHLIGHTS.map((entry) =>
           h('button', {
-            title: `تظليل ${entry.label}`,
-            'aria-label': `تظليل ${entry.label}`,
+            title: t('reader.highlightWith', { color: t(entry.label) }),
+            'aria-label': t('reader.highlightWith', { color: t(entry.label) }),
             style: { background: entry.color },
             onclick: () => this.#addHighlight(entry.color),
           }),
@@ -1221,7 +1232,7 @@ class Reader {
     const foot = h('div', { class: 'reader__page-foot label-sm' });
     const ribbon = h(
       'span',
-      { class: 'reader__block-mark', title: 'صفحة معلَّمة', 'aria-hidden': 'true' },
+      { class: 'reader__block-mark', title: t('reader.markedPage'), 'aria-hidden': 'true' },
       icon('bookmark', { size: 16, fill: true }),
     );
 
@@ -1257,8 +1268,8 @@ class Reader {
     // les mélange donc jamais dans un même « N sur M ».
     const printed = page.printedPageNum ?? page.sequenceNum;
     foot.textContent =
-      `صفحة ${n(index + 1)} من ${n(this.#pageCount)}` +
-      ` · المطبوعة ${n(printed)}`;
+      t('reader.pageOf', { index: index + 1, total: this.#pageCount }) +
+      t('reader.printedPage', { printed });
 
     root.classList.toggle('is-bookmarked', this.#isBookmarked(page.pageId));
     this.#paintBlock(block);
@@ -1431,7 +1442,7 @@ class Reader {
     this.#nodes.pagerLabel.textContent =
       `${n(index + 1)} / ${n(this.#pageCount)}`;
     const done = Math.round(this.#percent() * 100);
-    this.#nodes.percent.textContent = `${n(done)}٪`;
+    this.#nodes.percent.textContent = t('format.percent', { value: done });
     // Le rail n'a pas de remplissage natif une fois `appearance: none` posé :
     // c'est un dégradé, mis à jour ici, qui joue ce rôle.
     this.#nodes.root.style.setProperty('--reader-fill', `${done}%`);
@@ -1457,7 +1468,7 @@ class Reader {
     this.#closePanels();
     const page = await repository.getPageById(this.#editionId, pageId).catch(() => null);
     if (page) this.#show(page.sequenceNum - 1);
-    else toast('تعذّر فتح هذه الصفحة');
+    else toast(t('reader.openPageFailed'));
   }
 
   #chapterFor(page) {
@@ -1488,7 +1499,7 @@ class Reader {
         percent: this.#percent(),
         updatedAt: new Date().toISOString(),
       })
-      .catch(() => toast('تعذّر حفظ موضع القراءة'));
+      .catch(() => toast(t('reader.progressSaveFailed')));
   }
 
   // ------------------------------------------------------------- réglages
@@ -1579,8 +1590,15 @@ class Reader {
   #showShortcuts() {
     this.#closeShortcuts?.();
     this.#closeShortcuts = shortcutsDialog({
-      title: 'اختصارات القراءة',
-      shortcuts: SHORTCUTS,
+      title: t('reader.shortcutsTitle'),
+      // Les touches passent aussi par `t()` : « ← » n'a pas de clé et ressort
+      // tel quel, tandis que « عجلة الفأرة » en a une et se traduit. Une seule
+      // règle, plutôt qu'une liste d'exceptions à tenir.
+      shortcuts: SHORTCUTS.map((entry) => ({
+        ...entry,
+        keys: entry.keys.map((key) => t(key)),
+        label: t(entry.label),
+      })),
     });
   }
 
@@ -1594,7 +1612,7 @@ class Reader {
     const button = this.#nodes.fullscreenButton;
     if (!button) return;
     button.replaceChildren(icon(on ? 'fullscreenExit' : 'fullscreen', { size: 20 }));
-    button.title = on ? 'إنهاء ملء الشاشة' : 'ملء الشاشة';
+    button.title = t(on ? 'reader.fullscreenExit' : 'reader.fullscreen');
   }
 
   // ------------------------------------------------------------ sélection
@@ -1649,9 +1667,9 @@ class Reader {
     if (!text.trim()) return;
     try {
       await navigator.clipboard.writeText(text);
-      toast('تم نسخ النص');
+      toast(t('reader.copied'));
     } catch {
-      toast('تعذّر النسخ');
+      toast(t('reader.copyFailed'));
     }
   }
 

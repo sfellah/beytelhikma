@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { initial, n } from '../format.js';
 import { t } from '../i18n.js';
-import { icon } from '../icons.js';
+import { arrowBackward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
@@ -115,7 +115,7 @@ function breadcrumb(book) {
     h(
       'button',
       { onclick: () => navigate('/library') },
-      icon('arrowRight', { size: 18 }),
+      arrowBackward({ size: 18 }),
       t('detail.backToLibrary'),
     ),
     book.categoryLabel &&

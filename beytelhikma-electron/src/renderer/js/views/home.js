@@ -2,7 +2,7 @@ import { COVER_FAMILIES, coverFamily } from '../../../shared/book-cover.js';
 import { h } from '../dom.js';
 import { excerpt, initial, n, ordinal, percent } from '../format.js';
 import { t } from '../i18n.js';
-import { categoryIcon, icon } from '../icons.js';
+import { arrowBackward, arrowForward, categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
@@ -117,7 +117,7 @@ function heroSection({ resume, quote, recent, shelf }) {
             h('span', { class: 'label-md quick-card__title' }, t('home.allLibrary')),
             h('span', { class: 'label-sm muted' }, t('home.allLibraryHint')),
           ),
-          h('span', { class: 'quick-card__go' }, icon('arrowLeft', { size: 20 })),
+          h('span', { class: 'quick-card__go' }, arrowForward({ size: 20 })),
         ),
       ),
     ),
@@ -289,7 +289,7 @@ function shelfRow({ book, percent: value, progress }) {
         'span',
         { class: 'label-md shelf-row__action' },
         h('span', {}, t(progress?.pageId ? 'home.resume' : 'home.open')),
-        icon('arrowLeft', { size: 16 }),
+        arrowForward({ size: 16 }),
       ),
     ),
   );
@@ -319,12 +319,12 @@ function recentSection(recent) {
   const previous = h(
     'button',
     { class: 'button--icon', type: 'button', title: t('home.previous'), 'aria-label': t('home.previous') },
-    icon('arrowRight', { size: 20 }),
+    arrowBackward({ size: 20 }),
   );
   const next = h(
     'button',
     { class: 'button--icon', type: 'button', title: t('home.next'), 'aria-label': t('home.next') },
-    icon('arrowLeft', { size: 20 }),
+    arrowForward({ size: 20 }),
   );
 
   const step = () => Math.max(240, scroller.clientWidth * 0.8);
@@ -393,7 +393,7 @@ function disciplinesSection({ rows, total }) {
         'a',
         { class: 'link-action label-md disciplines__more', href: '#/explore' },
         h('span', {}, t('home.browseFields', { total })),
-        icon('arrowLeft', { size: 18 }),
+        arrowForward({ size: 18 }),
       ),
   );
 }
@@ -573,7 +573,7 @@ function authorCard(author, books) {
             { class: 'author-work', href: `#/book/${book.editionId}` },
             h('span', { class: 'author-work__tile' }, icon('book', { size: 16 })),
             h('span', { class: 'label-md truncate' }, book.title),
-            h('span', { class: 'author-work__chevron' }, icon('arrowLeft', { size: 16 })),
+            h('span', { class: 'author-work__chevron' }, arrowForward({ size: 16 })),
           ),
         ),
       ),

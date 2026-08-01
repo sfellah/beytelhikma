@@ -101,6 +101,9 @@ function languageSection() {
         {
           class: `button button--tonal${locale.key === active ? ' is-active' : ''}`,
           lang: locale.key,
+          // Contrat de la campagne de captures, comme `data-tool` l'est pour la
+          // barre du lecteur : le libellé change avec la langue, pas l'attribut.
+          dataset: { localeChoice: locale.key },
           onclick: () => setLocale(locale.key),
         },
         locale.label,

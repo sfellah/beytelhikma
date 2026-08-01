@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { initial, n, ordinal } from '../format.js';
 import { t } from '../i18n.js';
-import { icon } from '../icons.js';
+import { arrowForward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { renderShell } from '../shell.js';
 import { cover } from '../components/cover.js';
@@ -144,7 +144,7 @@ function leadSection(lead, books) {
         'a',
         { class: 'button button--filled lead-card__cta', href: `#/author/${lead.authorId}` },
         h('span', {}, t('authors.allBooksOf', { name })),
-        icon('arrowLeft', { size: 18 }),
+        arrowForward({ size: 18 }),
       ),
     ),
   );
@@ -404,7 +404,7 @@ function authorTile(author) {
             : t('authors.books', { count: author.bookCount }),
         ),
       ),
-      h('span', { class: 'author-tile__chevron' }, icon('arrowLeft', { size: 16 })),
+      h('span', { class: 'author-tile__chevron' }, arrowForward({ size: 16 })),
     ),
   );
 }

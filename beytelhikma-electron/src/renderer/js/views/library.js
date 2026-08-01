@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { n, ordinal } from '../format.js';
 import { t } from '../i18n.js';
-import { icon } from '../icons.js';
+import { arrowBackward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
@@ -258,7 +258,7 @@ class ScopeScreen {
           h(
             'button',
             { onclick: () => navigate('/home') },
-            icon('arrowRight', { size: 18 }),
+            arrowBackward({ size: 18 }),
             t('shell.backHome'),
           ),
           h('span', { class: 'muted' }, '/'),

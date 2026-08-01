@@ -316,6 +316,47 @@ async function shootNightTheme(window, editionId, outDir, problems) {
   }
 }
 
+/**
+ * Passe anglaise. Une langue qu'aucune image ne montre est une langue qui
+ * dérive : la bascule change la direction de l'interface entière, et c'est
+ * précisément ce qu'un développement mené en arabe ne voit jamais.
+ *
+ * Le choix passe par les vrais boutons de l'écran des réglages, comme la
+ * campagne de nuit passe par les vraies pastilles — capturer un état posé à la
+ * main vérifierait la capture, pas l'application.
+ */
+async function shootEnglish(window, editionId, outDir, problems) {
+  const contents = window.webContents;
+  await contents.executeJavaScript(`location.hash = '#/settings'`);
+  if (!(await waitForSelector(contents, '[data-locale-choice]'))) {
+    problems.push('langue : les boutons de langue ne sont jamais montés');
+    return;
+  }
+
+  const pick = (key) =>
+    contents.executeJavaScript(`document.querySelector('[data-locale-choice="${key}"]').click()`);
+
+  try {
+    await pick('en');
+    await wait(400);
+    for (const [name, route, selector] of [
+      ['settings-en', '/settings', '.settings'],
+      ['home-en', '/home', '.featured'],
+      ['library-en', '/library', '.shell'],
+      ['downloads-en', '/downloads', '.shell'],
+      ['reader-en', `/reader/${editionId}`, '.reader__page'],
+    ]) {
+      await shoot(window, name, route, selector, outDir, problems);
+    }
+  } finally {
+    // Sans ce retour à l'arabe, toute la fin de la campagne partirait en LTR et
+    // le réglage survivrait à la capture.
+    await contents.executeJavaScript(`location.hash = '#/settings'`);
+    if (await waitForSelector(contents, '[data-locale-choice]')) await pick('ar');
+    await wait(300);
+  }
+}
+
 export async function captureRoutes(window, { outDir, width = 1360, height = 900 }) {
   fs.mkdirSync(outDir, { recursive: true });
   const problems = [];
@@ -387,6 +428,7 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   console.log(`écrit : ${path.join(outDir, 'authors-index.png')}`);
 
   await shootNightTheme(window, editionId, outDir, problems);
+  await shootEnglish(window, editionId, outDir, problems);
 
   // Fenêtre haute : l'accueil entier, jusqu'aux disciplines, aux siècles et à
   // l'auteur. Trop courte, elle tranche la frise sans que rien ne le signale —

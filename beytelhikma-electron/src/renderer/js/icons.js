@@ -1,3 +1,5 @@
+import { currentLocale } from './i18n.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
@@ -304,4 +306,24 @@ export function categoryIcon(label) {
     السيرة: 'clock',
   };
   return table[label] ?? 'book';
+}
+
+/**
+ * Flèches de sens de lecture.
+ *
+ * `arrowLeft` et `arrowRight` désignent une direction à l'écran, pas une
+ * intention : en arabe « avancer » pointe à gauche, en anglais à droite. Une
+ * flèche figée désignerait donc l'inverse de ce qu'elle fait dès que
+ * l'interface bascule — c'est le défaut qu'on a vu sur la carte « كل المكتبة »
+ * de l'accueil.
+ *
+ * `forward` = entrer, ouvrir, page suivante. `backward` = revenir, page
+ * précédente.
+ */
+export function arrowForward(options) {
+  return icon(currentLocale() === 'ar' ? 'arrowLeft' : 'arrowRight', options);
+}
+
+export function arrowBackward(options) {
+  return icon(currentLocale() === 'ar' ? 'arrowRight' : 'arrowLeft', options);
 }
