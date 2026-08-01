@@ -248,19 +248,24 @@ export function toast(message) {
   }, 2600);
 }
 
-/** Vue des sections encore hors périmètre (استكشاف، المؤلفون، الإعدادات). */
-export function placeholderView(title, message, activeKey) {
+/**
+ * Vue des sections encore hors périmètre. Reçoit des **clés**, pas des textes :
+ * elle est construite à l'import de `app.js`, donc un texte traduit à cet
+ * endroit resterait dans la langue du démarrage. La traduction se fait au
+ * montage, à chaque montage.
+ */
+export function placeholderView(titleKey, messageKey, activeKey) {
   return (host) => {
     const content = renderShell(host, { active: activeKey });
     content.append(
       h(
         'section',
         {},
-        h('h1', { class: 'display-lg', style: { color: 'var(--deep-emerald)' } }, title),
+        h('h1', { class: 'display-lg', style: { color: 'var(--deep-emerald)' } }, t(titleKey)),
         h(
           'p',
           { class: 'body-lg muted', style: { marginTop: 'var(--space-md)' } },
-          message,
+          t(messageKey),
         ),
         h(
           'button',

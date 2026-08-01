@@ -1,19 +1,20 @@
 import { h } from '../dom.js';
+import { n, t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 
 /** Facettes à liste de cases, dans l'ordre d'affichage. */
 const LISTS = [
-  ['categories', 'التخصص'],
-  ['types', 'النوع'],
-  ['centuries', 'القرن'],
-  ['status', 'الحالة'],
+  ['categories', 'facet.category'],
+  ['types', 'facet.type'],
+  ['centuries', 'facet.century'],
+  ['status', 'facet.status'],
 ];
 
 /** Facettes à autocomplétion : trop de valeurs pour une liste. */
 const SUGGESTED = [
-  ['authors', 'المؤلف', 'ابحث عن مؤلف…'],
-  ['publishers', 'الناشر', 'ابحث عن ناشر…'],
+  ['authors', 'facet.author', 'facet.authorSearch'],
+  ['publishers', 'facet.publisher', 'facet.publisherSearch'],
 ];
 
 /**
@@ -48,7 +49,7 @@ function listFacet(key, label, entries, query, onChange) {
   return h(
     'section',
     { class: 'facet' },
-    h('h3', { class: 'facet__title label-md' }, label),
+    h('h3', { class: 'facet__title label-md' }, t(label)),
     h(
       'div',
       { class: 'facet__list' },
@@ -66,7 +67,7 @@ function listFacet(key, label, entries, query, onChange) {
             onchange: () => onChange(toggle(key, entry.value, query)),
           }),
           h('span', { class: 'facet__label' }, entry.label),
-          h('span', { class: 'facet__count label-sm muted' }, String(entry.count)),
+          h('span', { class: 'facet__count label-sm muted' }, n(entry.count)),
         ),
       ),
     ),
@@ -86,7 +87,7 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
   const field = h('input', {
     type: 'search',
     class: 'facet__search',
-    placeholder,
+    placeholder: t(placeholder),
     oninput: () => {
       clearTimeout(timer);
       // Antirebond : sans lui, chaque frappe déclenche un aller-retour IPC.
@@ -108,7 +109,7 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
                   },
                 },
                 h('span', { class: 'facet__label' }, entry.label),
-                h('span', { class: 'label-sm muted' }, String(entry.count)),
+                h('span', { class: 'label-sm muted' }, n(entry.count)),
               ),
             ),
         );
@@ -119,7 +120,7 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
   return h(
     'section',
     { class: 'facet' },
-    h('h3', { class: 'facet__title label-md' }, label),
+    h('h3', { class: 'facet__title label-md' }, t(label)),
     chosen.length > 0 &&
       h(
         'div',
@@ -165,7 +166,12 @@ function yearFacet(query, onChange) {
   return h(
     'section',
     { class: 'facet' },
-    h('h3', { class: 'facet__title label-md' }, 'سنة النشر'),
-    h('div', { class: 'facet__range' }, box(from, 'from', 'من'), box(to, 'to', 'إلى')),
+    h('h3', { class: 'facet__title label-md' }, t('facet.year')),
+    h(
+      'div',
+      { class: 'facet__range' },
+      box(from, 'from', t('facet.from')),
+      box(to, 'to', t('facet.to')),
+    ),
   );
 }

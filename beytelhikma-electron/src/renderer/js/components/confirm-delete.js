@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 import { confirmDialog } from './modal.js';
 
 /**
@@ -7,15 +8,15 @@ import { confirmDialog } from './modal.js';
  */
 export function confirmDelete({ title, hasProgress }) {
   return confirmDialog({
-    title: `حذف «${title}»؟`,
+    title: t('confirmDelete.title', { title }),
     message: hasProgress
-      ? 'يمكنك حذف الملف مع الاحتفاظ بموضع قراءتك، أو حذف كل شيء نهائيًا.'
-      : 'سيُحذف ملف الكتاب من جهازك.',
+      ? t('confirmDelete.withProgress')
+      : t('confirmDelete.withoutProgress'),
     actions: hasProgress
       ? [
-          { value: 'keep', label: 'حذف مع الاحتفاظ بموضع القراءة', variant: 'filled' },
-          { value: 'purge', label: 'حذف نهائي', variant: 'danger' },
+          { value: 'keep', label: t('confirmDelete.keep'), variant: 'filled' },
+          { value: 'purge', label: t('confirmDelete.purge'), variant: 'danger' },
         ]
-      : [{ value: 'keep', label: 'حذف', variant: 'filled' }],
+      : [{ value: 'keep', label: t('action.delete'), variant: 'filled' }],
   });
 }

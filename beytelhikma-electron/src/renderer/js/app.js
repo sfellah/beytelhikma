@@ -33,7 +33,9 @@ defineRoutes(
     '/settings': settingsView,
   },
   {
-    fallback: placeholderView('الصفحة غير موجودة', 'تعذّر العثور على هذه الصفحة.', 'home'),
+    // Des clés, pas des chaînes : `defineRoutes` s'exécute à l'import, donc un
+    // texte traduit ici serait figé dans la langue du démarrage.
+    fallback: placeholderView('route.notFound.title', 'route.notFound.message', 'home'),
   },
 );
 

@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { navigate } from '../router.js';
 import { cover } from './cover.js';
@@ -53,7 +54,7 @@ export function bookCard(
           class: 'book-card__check',
           checked: selected,
           disabled: installed,
-          title: installed ? 'مُنزَّل بالفعل' : null,
+          title: installed ? t('book.installedAlready') : null,
           onclick: (event) => {
             event.stopPropagation();
             onToggle?.(book.editionId, event.target.checked);
@@ -80,19 +81,19 @@ export function bookCard(
       ),
     progress != null &&
       percent > 0 &&
-      h('span', { class: 'label-sm muted' }, `${percent}٪`),
+      h('span', { class: 'label-sm muted' }, t('format.percent', { value: percent })),
   );
 }
 
 /** Pastille discrète d'état : installé ou en cours. Rien d'autre. */
 function statusBadge(status) {
   if (status === 'installed') {
-    return h('span', { class: 'book-card__status', title: 'مُنزَّل' }, icon('check', { size: 14 }));
+    return h('span', { class: 'book-card__status', title: t('book.installed') }, icon('check', { size: 14 }));
   }
   if (status === 'downloading' || status === 'queued' || status === 'verifying') {
     return h(
       'span',
-      { class: 'book-card__status book-card__status--busy', title: 'قيد التنزيل' },
+      { class: 'book-card__status book-card__status--busy', title: t('book.downloading') },
       icon('download', { size: 14 }),
     );
   }
