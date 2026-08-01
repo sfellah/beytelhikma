@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
-import { currentLocale, LOCALES, setLocale, t } from '../i18n.js';
+import { currentLocale, LOCALES, n, setLocale, t } from '../i18n.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
@@ -11,8 +11,8 @@ import { asyncView } from '../components/states.js';
 import { themeChoices } from '../components/theme-choices.js';
 
 const FONTS = [
-  ['serif', 'نسخي'],
-  ['sans', 'حديث'],
+  ['serif', 'settings.font.serif'],
+  ['sans', 'settings.font.sans'],
 ];
 
 const MIN_FONT = 16;
@@ -35,7 +35,7 @@ export function settingsView(host) {
     return h(
       'section',
       { class: 'settings' },
-      h('h1', { class: 'display-lg' }, 'الإعدادات'),
+      h('h1', { class: 'display-lg' }, t('settings.title')),
       languageSection(),
       appearanceSection(),
       readingSection(prefs),
@@ -122,9 +122,9 @@ function languageSection() {
  */
 function appearanceSection() {
   return group(
-    'المظهر',
-    'يُطبَّق فورًا على كل الشاشات.',
-    row('السمة', themeChoices().node, 'الفهرس والمكتبة والقارئ معًا'),
+    t('settings.appearance'),
+    t('settings.appearanceHint'),
+    row(t('settings.theme'), themeChoices().node, t('settings.themeHint')),
   );
 }
 
@@ -135,14 +135,14 @@ function appearanceSection() {
  */
 function readingSection(prefs) {
   const size = Number(prefs['reader.fontSize'] ?? 22);
-  const value = h('span', { class: 'label-md' }, String(size));
+  const value = h('span', { class: 'label-md' }, n(size));
   const slider = h('input', {
     type: 'range',
     min: MIN_FONT,
     max: MAX_FONT,
     value: String(size),
     oninput: (event) => {
-      value.textContent = event.target.value;
+      value.textContent = n(event.target.value);
     },
     onchange: (event) => setSetting('reader.fontSize', event.target.value),
   });
@@ -151,7 +151,7 @@ function readingSection(prefs) {
     h(
       'div',
       { class: 'settings__choices' },
-      options.map(([id, label]) => {
+      options.map(([id, labelKey]) => {
         const button = h(
           'button',
           {
@@ -163,46 +163,49 @@ function readingSection(prefs) {
               }
             },
           },
-          label,
+          t(labelKey),
         );
         return button;
       }),
     );
 
   return group(
-    'القراءة',
-    'تُطبَّق عند فتح كتاب جديد.',
-    row('حجم الخط', h('div', { class: 'settings__slider' }, slider, value)),
-    row('نوع الخط', choices('reader.font', FONTS, prefs['reader.font'] ?? 'serif')),
+    t('settings.reading'),
+    t('settings.readingHint'),
+    row(t('settings.fontSize'), h('div', { class: 'settings__slider' }, slider, value)),
+    row(t('settings.fontFamily'), choices('reader.font', FONTS, prefs['reader.font'] ?? 'serif')),
   );
 }
 
 function storageSection(usage, refresh) {
   return group(
-    'التخزين',
-    `${usage.bookCount} كتابًا على هذا الجهاز • ${formatBytes(usage.bytes) || '0 ك.ب'}`,
+    t('settings.storage'),
+    t('settings.storageHint', {
+      count: usage.bookCount,
+      size: formatBytes(usage.bytes) || t('format.zeroBytes'),
+    }),
     row(
-      'قائمة التنزيل',
+      t('settings.downloadsRow'),
       h(
         'button',
         { class: 'button button--tonal', onclick: () => navigate('/downloads') },
         icon('download', { size: 18 }),
-        h('span', {}, 'فتح'),
+        h('span', {}, t('settings.open')),
       ),
-      'التنزيلات الجارية وجدول كل الكتب',
+      t('settings.downloadsHint'),
     ),
     row(
-      'ملاحظاتي',
+      t('notes.title'),
       h(
         'button',
         { class: 'button button--tonal', onclick: () => navigate('/notes') },
         icon('notes', { size: 18 }),
-        h('span', {}, 'فتح'),
+        h('span', {}, t('settings.open')),
       ),
-      'الملاحظات والتظليلات والعلامات المرجعية',
+      t('settings.notesHint'),
     ),
     row(
-      'حذف كل الكتب',
+      t('settings.deleteAll'),
       h(
         'button',
         {
@@ -210,19 +213,19 @@ function storageSection(usage, refresh) {
           disabled: usage.bookCount === 0,
           onclick: async () => {
             const choice = await confirmDialog({
-              title: 'حذف كل الكتب؟',
-              message: `سيُحرَّر ${formatBytes(usage.bytes)}. مواضع القراءة والمجموعات تبقى كما هي.`,
-              actions: [{ value: 'go', label: 'حذف الكل', variant: 'danger' }],
+              title: t('settings.deleteAllTitle'),
+              message: t('settings.deleteAllMessage', { size: formatBytes(usage.bytes) }),
+              actions: [{ value: 'go', label: t('settings.deleteAllAction'), variant: 'danger' }],
             });
             if (choice !== 'go') return;
             const removed = await repository.deleteAllBooks();
-            toast(`حُذف ${removed} كتابًا`);
+            toast(t('settings.deleted', { count: removed }));
             refresh();
           },
         },
-        'حذف',
+        t('action.delete'),
       ),
-      'تُحفظ مواضع القراءة، ويمكن إعادة التنزيل لاحقًا',
+      t('settings.deleteAllHint'),
     ),
   );
 }
@@ -242,13 +245,13 @@ function serverSection(prefs, refresh) {
     placeholder: 'https://beytelhima-library.s3.eu-west-1.amazonaws.com',
   });
 
-  const état = h('span', { class: 'label-sm muted' }, 'لم يُتحقَّق بعد');
+  const état = h('span', { class: 'label-sm muted' }, t('settings.catalogUnchecked'));
 
   return group(
-    'مصدر التنزيل',
-    'اتركه فارغًا لاستخدام المصدر الافتراضي.',
+    t('settings.source'),
+    t('settings.sourceHint'),
     row(
-      'عنوان المصدر',
+      t('settings.sourceUrl'),
       h(
         'div',
         { class: 'settings__inline' },
@@ -259,17 +262,17 @@ function serverSection(prefs, refresh) {
             class: 'button button--filled',
             onclick: async () => {
               await repository.setDownloadBaseUrl(field.value);
-              toast('حُفظ عنوان المصدر');
+              toast(t('settings.sourceSaved'));
               refresh();
             },
           },
-          'حفظ',
+          t('action.save'),
         ),
       ),
-      'يُطبَّق فورًا على التنزيلات التالية',
+      t('settings.sourceApplied'),
     ),
     row(
-      'الفهرس',
+      t('settings.catalog'),
       h(
         'div',
         { class: 'settings__inline' },
@@ -281,26 +284,26 @@ function serverSection(prefs, refresh) {
             onclick: async (event) => {
               const bouton = event.currentTarget;
               bouton.disabled = true;
-              état.textContent = 'جارٍ التحقّق…';
+              état.textContent = t('settings.catalogChecking');
               try {
                 const verdict = await repository.checkCatalogUpdate();
                 if (verdict.action !== 'offer') {
-                  état.textContent = 'الفهرس محدَّث';
+                  état.textContent = t('settings.catalogUpToDate');
                   return;
                 }
-                état.textContent = 'جارٍ التنزيل…';
+                état.textContent = t('settings.catalogDownloading');
                 const { catalogVersion } = await repository.installCatalogUpdate();
-                toast(`حُدِّث الفهرس إلى الإصدار ${catalogVersion}`);
+                toast(t('settings.catalogUpdated', { version: catalogVersion }));
                 refresh();
               } finally {
                 bouton.disabled = false;
               }
             },
           },
-          'التحقّق من التحديثات',
+          t('settings.checkUpdates'),
         ),
       ),
-      'يُنزَّل الفهرس كاملًا ويُستبدل دفعة واحدة',
+      t('settings.catalogHint'),
     ),
   );
 }
@@ -312,18 +315,20 @@ function serverSection(prefs, refresh) {
  */
 function aboutSection(about, usage) {
   const paths = [
-    ['مصدر المكتبة', about.librarySource],
-    ['مجلد البيانات', about.storageRoot],
+    [t('settings.librarySource'), about.librarySource],
+    [t('settings.dataFolder'), about.storageRoot],
   ];
   const facts = [
-    ['عدد الطبعات في الفهرس', String(about.editionCount)],
-    ['عدد التخصصات', String(about.categoryCount)],
-    ['إصدار قاعدة المستخدم', String(about.schemaVersion)],
-    ['المساحة المستخدمة', formatBytes(usage.bytes) || '0 ك.ب'],
+    [t('settings.editionCount'), n(about.editionCount)],
+    [t('settings.categoryCount'), n(about.categoryCount)],
+    // Le numéro de schéma se rapporte : il reste en chiffres latins, comme les
+    // chemins et les URL de la grille au-dessus.
+    [t('settings.schemaVersion'), String(about.schemaVersion)],
+    [t('settings.usedSpace'), formatBytes(usage.bytes) || t('format.zeroBytes')],
   ];
 
   return group(
-    'عن التطبيق',
+    t('settings.about'),
     null,
     h(
       'dl',
