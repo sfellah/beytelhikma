@@ -1,3 +1,5 @@
+import { DEFAULT_READER_FONT, fontsForScript, resolveFont } from '../../../shared/fonts.js';
+import { currentAppFont, interfaceScript, setAppFont } from '../app-font.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { currentLocale, LOCALES, n, setLocale, t } from '../i18n.js';
@@ -7,18 +9,20 @@ import { renderShell, toast } from '../shell.js';
 import { copyField } from '../components/copy-field.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
+import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
 import { themeChoices } from '../components/theme-choices.js';
-
-const FONTS = [
-  ['serif', 'settings.font.serif'],
-  ['sans', 'settings.font.sans'],
-];
 
 const MIN_FONT = 16;
 const MAX_FONT = 34;
 
-/** Réglages : lecture, stockage, serveur, informations. */
+/**
+ * Réglages.
+ *
+ * Six blocs, dans cet ordre : ce qu'on règle souvent d'abord, ce qui détruit
+ * en dernier. « حذف كل الكتب » vivait au milieu de l'écran, entre deux boutons
+ * « فتح » anodins — on pouvait l'atteindre en passant.
+ */
 export function settingsView(host) {
   const content = renderShell(host, { active: 'settings' });
 
@@ -37,30 +41,48 @@ export function settingsView(host) {
       { class: 'settings' },
       h('h1', { class: 'display-lg' }, t('settings.title')),
       languageSection(),
-      appearanceSection(),
-      readingSection(prefs),
-      storageSection(usage, refresh),
+      fontsSection(prefs),
+      librarySection(usage),
       serverSection(prefs, refresh),
       aboutSection(about, usage),
+      dangerSection(usage, refresh),
     );
   }
 
   return null;
 }
 
-function group(title, description, ...rows) {
+/**
+ * Un bloc. L'icône en tête n'est pas décorative : les six titres se
+ * ressemblaient tous, et rien ne distinguait « المظهر » de « منطقة الخطر ».
+ */
+function group(name, title, description, ...rows) {
   return h(
     'section',
-    { class: 'settings__group' },
+    { class: `settings__group settings__group--${name}` },
     h(
       'div',
-      {},
-      h('h2', { class: 'headline-lg' }, title),
-      description && h('p', { class: 'body-md muted' }, description),
+      { class: 'settings__head' },
+      h('span', { class: 'settings__badge' }, icon(SECTION_ICONS[name], { size: 20 })),
+      h(
+        'div',
+        {},
+        h('h2', { class: 'headline-lg' }, title),
+        description && h('p', { class: 'body-md muted' }, description),
+      ),
     ),
     ...rows,
   );
 }
+
+const SECTION_ICONS = {
+  language: 'translate',
+  fonts: 'type',
+  library: 'bank',
+  server: 'globe',
+  about: 'help',
+  danger: 'trash',
+};
 
 function row(label, control, hint = null) {
   return h(
@@ -76,67 +98,80 @@ function row(label, control, hint = null) {
   );
 }
 
-/**
- * La langue de l'interface. Elle ne touche pas au contenu : les 8 568 éditions
- * sont arabes et le restent, l'aperçu de chiffres est là pour le montrer.
- *
- * Cet écran passera par `t()` à la refonte ; en attendant, seul ce groupe le
- * fait — c'est le premier à parler deux langues, et le seul qu'on puisse
- * relire dans les deux.
- */
-function languageSection() {
-  const active = currentLocale();
-  const preview = h(
-    'p',
-    { class: 'label-sm muted', dir: 'auto' },
-    t('settings.language.preview', { page: 42, total: 350 }),
-  );
-
-  const boutons = h(
-    'div',
-    { class: 'settings__choices' },
-    LOCALES.map((locale) =>
-      h(
-        'button',
-        {
-          class: `button button--tonal${locale.key === active ? ' is-active' : ''}`,
-          lang: locale.key,
-          // Contrat de la campagne de captures, comme `data-tool` l'est pour la
-          // barre du lecteur : le libellé change avec la langue, pas l'attribut.
-          dataset: { localeChoice: locale.key },
-          onclick: () => setLocale(locale.key),
-        },
-        locale.label,
-      ),
-    ),
-  );
-
-  return group(
-    t('settings.language.title'),
-    t('settings.language.hint'),
-    row(t('settings.language.title'), h('div', { class: 'settings__slider' }, boutons, preview)),
+/** Action visible : icône **et** libellé, jamais un mot seul comme « حفظ ». */
+function action(iconName, label, onclick, variant = 'tonal') {
+  return h(
+    'button',
+    { class: `button button--${variant}`, onclick },
+    icon(iconName, { size: 18 }),
+    h('span', {}, label),
   );
 }
 
 /**
- * Le thème n'a pas de valeur à recevoir en argument : `themeChoices` lit celui
- * qui est posé sur `<html>`, et c'est la seule vérité affichable — les
- * réglages peuvent avoir été chargés avant que `syncTheme` n'ait répondu.
+ * Langue et apparence.
+ *
+ * L'aperçu de chiffres est le seul endroit où se voit que la forme des
+ * chiffres suit la langue — il n'y a pas de réglage de chiffres, et il ne doit
+ * pas y en avoir : `٤٢` est une propriété de l'arabe, pas un goût.
+ *
+ * Le thème n'a pas de valeur à recevoir : `themeChoices` lit celui qui est posé
+ * sur `<html>`, seule vérité affichable — les réglages peuvent avoir été
+ * chargés avant que `syncTheme` n'ait répondu.
  */
-function appearanceSection() {
+function languageSection() {
+  const preview = h(
+    'p',
+    { class: 'settings__preview label-sm muted' },
+    t('settings.language.preview', { page: 42, total: 350 }),
+  );
+
+  const choices = segmented({
+    ariaLabel: t('settings.language.title'),
+    value: currentLocale(),
+    options: LOCALES.map((locale) => ({ value: locale.key, label: locale.label })),
+    onPick: (key) => setLocale(key),
+  });
+
+  // Contrat de la campagne de captures, comme `data-tool` l'est pour la barre
+  // du lecteur : le libellé change avec la langue, pas l'attribut.
+  for (const [index, button] of [...choices.children].entries()) {
+    button.dataset.localeChoice = LOCALES[index].key;
+  }
+
   return group(
-    t('settings.appearance'),
-    t('settings.appearanceHint'),
+    'language',
+    t('settings.language.title'),
+    t('settings.language.hint'),
+    row(t('settings.language.title'), h('div', { class: 'settings__stack' }, choices, preview)),
     row(t('settings.theme'), themeChoices().node, t('settings.themeHint')),
   );
 }
 
 /**
- * Les deux clés sont celles qu'écrit déjà le lecteur : les régler ici change
- * le point de départ des prochaines ouvertures, pas plus. Le thème, lui, est
- * passé au groupe المظهر ci-dessus — il ne se fait pas attendre.
+ * Deux polices, deux domaines.
+ *
+ * Celle de l'interface suit la locale : les faces latines n'apparaissent qu'en
+ * anglais, les arabes qu'en arabe. Proposer EB Garamond à une interface arabe
+ * serait un choix sans effet visible.
+ *
+ * Chaque aperçu est rendu **dans sa propre face** — c'est la seule façon
+ * honnête de choisir une police, et la seule qui vaudra encore pour celles
+ * qu'on ajoutera depuis Google Fonts, dont on ne connaît que le nom.
  */
-function readingSection(prefs) {
+function fontsSection(prefs) {
+  const script = interfaceScript();
+
+  const sample = (stack, text) =>
+    h('span', { class: 'settings__sample', style: { fontFamily: stack } }, text);
+
+  const options = (list, sampleText) =>
+    list.map((font) => ({
+      value: font.key,
+      label: t(font.label),
+      preview: sample(font.stack, sampleText),
+    }));
+
   const size = Number(prefs['reader.fontSize'] ?? 22);
   const value = h('span', { class: 'label-md' }, n(size));
   const slider = h('input', {
@@ -150,38 +185,39 @@ function readingSection(prefs) {
     onchange: (event) => setSetting('reader.fontSize', event.target.value),
   });
 
-  const choices = (key, options, current) =>
-    h(
-      'div',
-      { class: 'settings__choices' },
-      options.map(([id, labelKey]) => {
-        const button = h(
-          'button',
-          {
-            class: `button button--tonal${current === id ? ' is-active' : ''}`,
-            onclick: () => {
-              setSetting(key, id);
-              for (const sibling of button.parentElement.children) {
-                sibling.classList.toggle('is-active', sibling === button);
-              }
-            },
-          },
-          t(labelKey),
-        );
-        return button;
-      }),
-    );
-
   return group(
-    t('settings.reading'),
-    t('settings.readingHint'),
+    'fonts',
+    t('settings.fonts'),
+    t('settings.fontsHint'),
+    row(
+      t('settings.interfaceFont'),
+      segmented({
+        ariaLabel: t('settings.interfaceFont'),
+        value: currentAppFont(script),
+        options: options(fontsForScript(script), t('settings.language.preview', { page: 42, total: 350 })),
+        onPick: (key) => setAppFont(key, script),
+      }),
+      t('settings.interfaceFontHint'),
+    ),
+    row(
+      t('settings.readerFont'),
+      segmented({
+        ariaLabel: t('settings.readerFont'),
+        // Le livre est arabe : seules les faces arabes sont proposées, quelle
+        // que soit la langue de l'interface.
+        value: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
+        options: options(fontsForScript('arab'), t('settings.readerSample')),
+        onPick: (key) => setSetting('reader.font', key),
+      }),
+      t('settings.readerFontHint'),
+    ),
     row(t('settings.fontSize'), h('div', { class: 'settings__slider' }, slider, value)),
-    row(t('settings.fontFamily'), choices('reader.font', FONTS, prefs['reader.font'] ?? 'serif')),
   );
 }
 
-function storageSection(usage, refresh) {
+function librarySection(usage) {
   return group(
+    'library',
     t('settings.storage'),
     t('settings.storageHint', {
       count: usage.bookCount,
@@ -189,46 +225,13 @@ function storageSection(usage, refresh) {
     }),
     row(
       t('settings.downloadsRow'),
-      h(
-        'button',
-        { class: 'button button--tonal', onclick: () => navigate('/downloads') },
-        icon('download', { size: 18 }),
-        h('span', {}, t('settings.open')),
-      ),
+      action('download', t('settings.open'), () => navigate('/downloads')),
       t('settings.downloadsHint'),
     ),
     row(
       t('notes.title'),
-      h(
-        'button',
-        { class: 'button button--tonal', onclick: () => navigate('/notes') },
-        icon('notes', { size: 18 }),
-        h('span', {}, t('settings.open')),
-      ),
+      action('notes', t('settings.open'), () => navigate('/notes')),
       t('settings.notesHint'),
-    ),
-    row(
-      t('settings.deleteAll'),
-      h(
-        'button',
-        {
-          class: 'button button--danger',
-          disabled: usage.bookCount === 0,
-          onclick: async () => {
-            const choice = await confirmDialog({
-              title: t('settings.deleteAllTitle'),
-              message: t('settings.deleteAllMessage', { size: formatBytes(usage.bytes) }),
-              actions: [{ value: 'go', label: t('settings.deleteAllAction'), variant: 'danger' }],
-            });
-            if (choice !== 'go') return;
-            const removed = await repository.deleteAllBooks();
-            toast(t('settings.deleted', { count: removed }));
-            refresh();
-          },
-        },
-        t('action.delete'),
-      ),
-      t('settings.deleteAllHint'),
     ),
   );
 }
@@ -244,6 +247,7 @@ function serverSection(prefs, refresh) {
   const field = h('input', {
     type: 'url',
     class: 'settings__field',
+    dir: 'ltr',
     value: prefs['distribution.base_url'] ?? '',
     placeholder: 'https://beytelhima-library.s3.eu-west-1.amazonaws.com',
   });
@@ -251,6 +255,7 @@ function serverSection(prefs, refresh) {
   const état = h('span', { class: 'label-sm muted' }, t('settings.catalogUnchecked'));
 
   return group(
+    'server',
     t('settings.source'),
     t('settings.sourceHint'),
     row(
@@ -259,17 +264,15 @@ function serverSection(prefs, refresh) {
         'div',
         { class: 'settings__inline' },
         field,
-        h(
-          'button',
-          {
-            class: 'button button--filled',
-            onclick: async () => {
-              await repository.setDownloadBaseUrl(field.value);
-              toast(t('settings.sourceSaved'));
-              refresh();
-            },
-          },
+        action(
+          'check',
           t('action.save'),
+          async () => {
+            await repository.setDownloadBaseUrl(field.value);
+            toast(t('settings.sourceSaved'));
+            refresh();
+          },
+          'filled',
         ),
       ),
       t('settings.sourceApplied'),
@@ -280,31 +283,24 @@ function serverSection(prefs, refresh) {
         'div',
         { class: 'settings__inline' },
         état,
-        h(
-          'button',
-          {
-            class: 'button',
-            onclick: async (event) => {
-              const bouton = event.currentTarget;
-              bouton.disabled = true;
-              état.textContent = t('settings.catalogChecking');
-              try {
-                const verdict = await repository.checkCatalogUpdate();
-                if (verdict.action !== 'offer') {
-                  état.textContent = t('settings.catalogUpToDate');
-                  return;
-                }
-                état.textContent = t('settings.catalogDownloading');
-                const { catalogVersion } = await repository.installCatalogUpdate();
-                toast(t('settings.catalogUpdated', { version: catalogVersion }));
-                refresh();
-              } finally {
-                bouton.disabled = false;
-              }
-            },
-          },
-          t('settings.checkUpdates'),
-        ),
+        action('download', t('settings.checkUpdates'), async (event) => {
+          const bouton = event.currentTarget;
+          bouton.disabled = true;
+          état.textContent = t('settings.catalogChecking');
+          try {
+            const verdict = await repository.checkCatalogUpdate();
+            if (verdict.action !== 'offer') {
+              état.textContent = t('settings.catalogUpToDate');
+              return;
+            }
+            état.textContent = t('settings.catalogDownloading');
+            const { catalogVersion } = await repository.installCatalogUpdate();
+            toast(t('settings.catalogUpdated', { version: catalogVersion }));
+            refresh();
+          } finally {
+            bouton.disabled = false;
+          }
+        }),
       ),
       t('settings.catalogHint'),
     ),
@@ -331,6 +327,7 @@ function aboutSection(about, usage) {
   ];
 
   return group(
+    'about',
     t('settings.about'),
     null,
     h(
@@ -344,6 +341,43 @@ function aboutSection(about, usage) {
       'dl',
       { class: 'meta-grid' },
       facts.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))),
+    ),
+  );
+}
+
+/**
+ * Zone de danger, en fin d'écran et dans son propre cadre.
+ *
+ * Ce qui est irréversible ne doit pas se croiser en chemin vers autre chose.
+ */
+function dangerSection(usage, refresh) {
+  return group(
+    'danger',
+    t('settings.dangerZone'),
+    t('settings.dangerHint'),
+    row(
+      t('settings.deleteAll'),
+      h(
+        'button',
+        {
+          class: 'button button--danger',
+          disabled: usage.bookCount === 0,
+          onclick: async () => {
+            const choice = await confirmDialog({
+              title: t('settings.deleteAllTitle'),
+              message: t('settings.deleteAllMessage', { size: formatBytes(usage.bytes) }),
+              actions: [{ value: 'go', label: t('settings.deleteAllAction'), variant: 'danger' }],
+            });
+            if (choice !== 'go') return;
+            const removed = await repository.deleteAllBooks();
+            toast(t('settings.deleted', { count: removed }));
+            refresh();
+          },
+        },
+        icon('trash', { size: 18 }),
+        h('span', {}, t('action.delete')),
+      ),
+      t('settings.deleteAllHint'),
     ),
   );
 }

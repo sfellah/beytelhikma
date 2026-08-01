@@ -32,6 +32,10 @@ const ALLOWED = {
   'locales/ar.js': null, // fichier entier
   'icons.js': null, // table de catégories, clés de données
   'views/reader.js': new Set(['؟']),
+  // L'échantillon qui montre la face de lecture est arabe **dans les deux
+  // langues** : c'est un spécimen d'une police arabe, et le corpus est arabe.
+  // Le rendre en latin ne montrerait pas ce qu'on choisit.
+  'locales/en.js': new Set(['بسم الله الرحمن الرحيم']),
 };
 
 const ARABIC = /[؀-ۿ]/;

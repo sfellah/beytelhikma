@@ -1415,7 +1415,7 @@ html:not([dir='rtl']) .scroller--at-start {
 
 /* Trois grains de lecture : Amiri (naskh de bibliothèque), Noto Naskh (plus
    ouvert donc plus lisible en petit corps), IBM Plex Sans Arabic (écran). */
-.reader--font-serif {
+.reader--font-amiri {
   --reader-font: var(--font-body);
 }
 
@@ -1423,7 +1423,7 @@ html:not([dir='rtl']) .scroller--at-start {
   --reader-font: var(--font-naskh);
 }
 
-.reader--font-sans {
+.reader--font-plex {
   --reader-font: var(--font-label);
 }
 
@@ -2494,16 +2494,109 @@ html:not([dir='rtl']) .scroller--at-start {
   flex: 1 1 14rem;
 }
 
-.settings__choices {
+/* En-tête de bloc : l'icône dans sa pastille est le repère qui manquait —
+   les six titres se ressemblaient tous, et rien ne distinguait les réglages
+   d'apparence de la zone de danger. */
+.settings__head {
   display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-md);
 }
 
-.settings__choices .button.is-active {
+.settings__badge {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-lg);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.settings__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+}
+
+.settings__preview {
+  margin: 0;
+}
+
+/* L'échantillon se rend dans sa propre face : c'est la seule façon de choisir
+   une police, et la seule qui vaudra pour celles qu'on ajoutera. */
+.settings__sample {
+  display: block;
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+/* Zone de danger : son propre cadre, en fin d'écran. Ce qui est irréversible
+   ne doit pas se croiser en chemin vers autre chose. */
+.settings__group--danger {
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 5%, var(--surface-container-lowest));
+}
+
+.settings__group--danger .settings__badge {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+/* Contrôle segmenté : un cadre, N choix, un seul actif. Trois boutons
+   flottants ne se lisaient pas comme un ensemble, et rien ne disait qu'un
+   seul pouvait valoir à la fois. */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface-container);
+}
+
+.segmented__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 3px);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.segmented__item:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.segmented__item.is-active {
   background: var(--primary);
   color: var(--on-primary);
-  border-color: transparent;
+}
+
+.segmented__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: start;
+}
+
+.segmented__check {
+  display: none;
+}
+
+.segmented__item.is-active .segmented__check {
+  display: inline-flex;
 }
 
 .settings__slider {

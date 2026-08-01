@@ -1,3 +1,4 @@
+import { DEFAULT_READER_FONT, fontsForScript, resolveFont } from '../../../shared/fonts.js';
 import { describeSelection, paintHighlights } from '../annotations.js';
 import { renderBookHtml } from '../content-html.js';
 import { h } from '../dom.js';
@@ -26,14 +27,11 @@ const NEAR_END = 900;
 /** Entrées de sommaire montées d'un coup ; au-delà, on déplie à la demande. */
 const TOC_WINDOW = 80;
 
-// Trois familles embarquées (voir `styles/fonts.css`). Amiri est le naskh de
-// bibliothèque : c'est le défaut. Noto Naskh ouvre les contreformes pour qui
-// trouve Amiri trop fin, IBM Plex reste la voix « écran ».
-const FONTS = [
-  { key: 'serif', label: 'reader.font.serif', family: "'Amiri', serif" },
-  { key: 'naskh', label: 'reader.font.naskh', family: "'Noto Naskh Arabic', serif" },
-  { key: 'sans', label: 'reader.font.sans', family: "'IBM Plex Sans Arabic', sans-serif" },
-];
+// Les familles de lecture viennent de `shared/fonts.js`, seul propriétaire de
+// la liste : c'est d'une copie locale ici et d'une autre dans les réglages
+// qu'était née la police orpheline. Le livre est arabe, donc seules les faces
+// arabes sont proposées.
+const FONTS = fontsForScript('arab');
 
 /**
  * Deux façons de parcourir un livre : la page imprimée, une par écran — c'est
@@ -106,7 +104,7 @@ class Reader {
   #toc = [];
   #title = '';
   /** Le thème n'est plus une préférence de lecture : il est global (`theme.js`). */
-  #prefs = { size: 22, font: 'serif', mode: 'page' };
+  #prefs = { size: 22, font: DEFAULT_READER_FONT, mode: 'page' };
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
@@ -178,7 +176,7 @@ class Reader {
       this.#toc = toc;
       this.#prefs = {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
-        font: prefs['reader.font'] ?? 'serif',
+        font: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
         mode: MODES.some((mode) => mode.key === prefs['reader.mode'])
           ? prefs['reader.mode']
           : 'page',
@@ -426,7 +424,7 @@ class Reader {
           class: font.key === this.#prefs.font ? 'is-active' : '',
           onclick: () => this.#setFont(font.key),
         },
-        h('span', { style: { fontFamily: font.family, fontSize: '18px' } }, t(font.label)),
+        h('span', { style: { fontFamily: font.stack, fontSize: '18px' } }, t(font.label)),
         font.key === this.#prefs.font ? icon('check', { size: 16 }) : null,
       ),
     );

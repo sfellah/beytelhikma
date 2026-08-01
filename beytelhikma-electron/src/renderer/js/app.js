@@ -1,3 +1,4 @@
+import { syncAppFont } from './app-font.js';
 import { syncLocale } from './i18n.js';
 import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
@@ -44,5 +45,6 @@ defineRoutes(
 // miroir absent ou périmé, sans retarder le premier rendu.
 syncTheme();
 syncLocale();
+syncAppFont();
 
 start(document.getElementById('app'), { initial: '/home' });

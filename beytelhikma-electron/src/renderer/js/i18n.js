@@ -1,6 +1,7 @@
 import { DEFAULT_LOCALE, localeDir, LOCALES, resolveLocale } from '../../shared/locale.js';
 import { formatNumber } from '../../shared/digits.js';
 import { translate } from '../../shared/translate.js';
+import { applyAppFont, interfaceScript } from './app-font.js';
 import ar from './locales/ar.js';
 import en from './locales/en.js';
 import { setSetting, settings } from './repository.js';
@@ -78,8 +79,18 @@ export function n(value) {
 export function setLocale(stored) {
   const key = applyLocale(stored);
   setSetting(SETTING_KEY, key);
+  // La face d'interface est rangée par écriture : changer de langue change
+  // d'écriture, donc de face. Sans ce rappel, l'anglais s'ouvrirait dans une
+  // face arabe qui ne rend pas l'alphabet latin de la même main.
+  syncAppFont(interfaceScript(key));
   remount();
   return key;
+}
+
+/** Repose la face d'interface depuis `user.sqlite` pour l'écriture donnée. */
+async function syncAppFont(script) {
+  const prefs = await settings().catch(() => ({}));
+  applyAppFont(prefs[`app.font.${script}`], script);
 }
 
 /** Réconcilie le miroir avec `user.sqlite` une fois les réglages arrivés. */
