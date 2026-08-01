@@ -74,9 +74,13 @@ La résolution vit dans `src/shared/distribution.js`, et nulle part ailleurs. Le
 
 Les objets partent en `Cache-Control: public, max-age=31536000, immutable` : la version étant dans le chemin, aucune clé ne change jamais de contenu. **Sauf le pointeur, qui part en `no-cache`** — c'est le seul objet du bucket qui change sous une clé fixe, et le mettre en cache un an tuerait la mise à jour en silence : tout marcherait le premier jour, plus rien ensuite. `test_le_pointeur_n_est_jamais_mis_en_cache` existe pour ça. Un réglage que le serveur n'implémente pas (MinIO ne couvre pas toute l'API S3) est signalé et sauté, sans empêcher la politique de lecture publique d'être posée.
 
-**La mise à jour du catalogue se propose, ne s'impose pas.** Au démarrage, `src/main/catalog-updater.js` lit le pointeur et compare. Cinq branches de décision sur six sont **silencieuses** : hors ligne, pointeur illisible, `schema_version` trop récent, déjà à jour, version refusée. Une application hors ligne a déjà tout ce qu'il lui faut pour explorer — lui afficher une alerte serait du bruit. `fetchPointer` ne lève donc jamais : il rend `null`, et `decideUpdate` en tire une décision. Toute branche silencieuse rend `pointer: null`, pour qu'aucun appelant ne puisse installer ce qu'on vient de refuser. Un refus est retenu **par version** (`distribution.declined_catalog_version`) : refuser la 2 ne fait pas taire la 3.
+**La mise à jour du catalogue se propose, ne s'impose pas.** `src/main/catalog-updater.js` lit le pointeur et compare. Cinq branches de décision sur six sont **silencieuses** : hors ligne, pointeur illisible, `schema_version` trop récent, déjà à jour, version refusée. Une application hors ligne a déjà tout ce qu'il lui faut pour explorer — lui afficher une alerte serait du bruit. `fetchPointer` ne lève donc jamais : il rend `null`, et `decideUpdate` en tire une décision. Toute branche silencieuse rend `pointer: null`, pour qu'aucun appelant ne puisse installer ce qu'on vient de refuser. Un refus est retenu **par version** (`distribution.declined_catalog_version`) : refuser la 2 ne fait pas taire la 3.
 
 L'installation vérifie le SHA-256 **avant** le `rename`, qui est le dernier geste : une coupure à n'importe quel point laisse l'ancien catalogue intact et lisible.
+
+L'empreinte est **exigée**, pas seulement comparée quand elle est là. `if (pointer.sha256 && …)` laissait installer sans contrôle tout pointeur qui n'en portait pas — or c'est le catalogue qui devient ensuite la source de vérité. Le refus est prononcé deux fois : `decideUpdate` ne propose même pas, et `installCatalog` s'arrête **avant** la requête, pour ne pas tirer quarante mégaoctets qu'on refusera.
+
+Reste à câbler : rien n'appelle `checkCatalogUpdate` au démarrage. Le seul déclencheur est le bouton de `/settings`, et `declineCatalogUpdate` — le refus par version, testé — n'a donc aucun appelant.
 
 **La publication se fait par tranches, et le manifeste est ce qui survit.** `release_library.py --batch-size N` (100 par défaut) importe une tranche, la monte, efface ses `.sqlite` et `.sqlite.zst`, puis recommence : le corpus complet pèse ~55 Go convertis, le pic disque tombe à ~1,3 Go. Trois règles le rendent possible :
 
@@ -99,6 +103,16 @@ Voir `docs/superpowers/specs/2026-07-31-source-distribution-configurable-design.
 **Le DDL vit dans `tools/_common.py`** (`BOOK_SCHEMA`, `CATALOG_SCHEMA`), importé à la fois par `gen_sample_data.py` et par l'importeur Shamela : une seule source de vérité, donc aucune dérive possible entre les données d'exemple et les données réelles. `tools/shamela/tests/test_pipeline.py::SchemaParityTest` échoue si ce n'est plus le cas.
 
 `tools/import_shamela.py` transforme le corpus Shamela 4 (`C:\shamela-data`, 8 589 livres) vers `dist/shamela/` (non versionné), au même schéma. L'app le consomme via `new AppDatabase({ librarySource: '.../dist/shamela' })`. Voir `tools/notebooks/01_un_livre_vers_sqlite.ipynb` pour la transformation d'un livre commentée étape par étape.
+
+**Ce qui vient du rendu ne touche pas le disque sans être validé.** Trois règles, chacune dans un module unique et testée :
+
+- **`edition_id`** (`src/main/edition-id.js`) — il arrive du rendu, donc d'un fragment d'URL, et il désigne un **nom de fichier**. `assertEditionId` est appelée à chaque frontière avec le disque : `AppDatabase.book()`, `deleteBook` (trois `rmSync … force: true` à la suite), `getStorageUsage`, `DownloadQueue.enqueue`. Le point est exclu du motif, parce que l'admettre laisserait passer `..`.
+- **`distribution.base_url`** (`assertBaseUrl` de `src/shared/distribution.js`) — ce réglage décide d'où viennent le catalogue **et** tous les livres. `https` exigé, sauf vers la boucle locale, qui est le MinIO de développement. Le champ des réglages n'est pas dans un `<form>` : son `type="url"` ne valide rien.
+- **La fenêtre ne quitte jamais sa page** (`src/main/navigation.js`) — le preload s'attache à *toute* navigation du `webContents` : une page distante hériterait du pont vers les trois bases. `will-navigate` compare le document (fragment et requête ignorés, c'est par eux que le routeur travaille), `will-attach-webview` refuse tout, et le lien externe compare le **protocole** — `startsWith('http')` acceptait aussi `httpfoo://`, que `openExternal` aurait passé au gestionnaire de protocole du système.
+
+La CSP porte `font-src 'self' userfont:`. Sans ce mot, `font-installer.js` écrivait des règles que le navigateur refusait en silence : toute la fonctionnalité était morte sans qu'aucun test ne le dise. `test/navigation.test.js` la relit et vérifie que `userfont:` n'apparaît dans aucune autre directive.
+
+`user.sqlite` s'écrit **de côté puis se renomme**, comme le catalogue : c'est la seule base qu'on ne puisse pas retélécharger, et un téléchargement en cours la réécrit toutes les 500 ms.
 
 **Séparation stricte** : l'UI (renderer) ne touche jamais une base — toute donnée passe par le pont IPC vers `BookRepository`, et les erreurs remontent typées (`RepositoryError`, `BookNotInstalledError`, `DownloadError`). Chaque vue gère explicitement 4 états : `loading / success / empty / error`.
 

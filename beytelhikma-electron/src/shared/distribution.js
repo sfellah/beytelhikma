@@ -30,6 +30,42 @@ export function isAbsoluteKey(objectKey) {
 }
 
 /**
+ * Valide une URL de base proposée par l'utilisateur. Rend la chaîne à stocker —
+ * vide pour « revenir au défaut » — ou lève.
+ *
+ * C'est le réglage qui décide d'où viennent le catalogue **et** tous les
+ * livres : il mérite plus qu'un `trim()`. En clair, un intermédiaire choisit
+ * ce que l'application installe ; et le champ des réglages n'est pas dans un
+ * `<form>`, donc son `type="url"` ne valide rien.
+ *
+ * `http` reste admis vers la **boucle locale**, et là seulement : c'est le
+ * MinIO de développement, qui n'a pas de certificat et ne traverse aucun
+ * réseau. L'interdire tout à fait ne fermerait rien de plus et couperait la
+ * chaîne de publication locale.
+ *
+ * Le SHA-256 du catalogue reste la vraie défense — celle-ci ferme la porte
+ * avant, pour que la vérification n'ait jamais à servir.
+ */
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+export function assertBaseUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return ''; // vide : le défaut reprend la main
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`adresse illisible : ${raw}`);
+  }
+  const local = url.protocol === 'http:' && LOOPBACK.has(url.hostname);
+  if (url.protocol !== 'https:' && !local) {
+    throw new Error(`https exigé hors boucle locale : ${raw}`);
+  }
+  return url.toString().replace(/\/+$/, '');
+}
+
+/**
  * Renvoie la cible d'une clé.
  *
  *   { kind: 'http',    url }  -> à télécharger

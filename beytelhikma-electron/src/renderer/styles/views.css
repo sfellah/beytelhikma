@@ -2882,6 +2882,38 @@ html:not([dir='rtl']) .scroller--at-start {
   gap: var(--space-sm);
 }
 
+/* Les polices ajoutées : une ligne par famille, son nom rendu dans sa propre
+   face — le même échantillon que dans le choix, pour qu'on retire bien celle
+   qu'on croit retirer. Les six familles embarquées n'y figurent pas. */
+.settings__fonts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.settings__font {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 4px 4px 4px var(--space-md);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rule);
+  background: var(--surface-container-lowest);
+}
+
+/* Le nom vient d'un tiers et peut être long : il se tronque plutôt que de
+   pousser le bouton hors du cadre. */
+.settings__font .settings__specimen {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings__inline {
   display: flex;
   gap: var(--space-sm);

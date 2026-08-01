@@ -10,6 +10,7 @@ import {
   fontsForScript,
   resolveFont,
 } from '../src/shared/fonts.js';
+import { slugify } from '../src/main/font-installer.js';
 
 const read = (relative) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
@@ -119,6 +120,36 @@ test('les fichiers annoncés par fonts.css existent', () => {
  * est une vue de la liste partagée, pas une seconde liste, et ne peut pas
  * diverger.
  */
+/**
+ * Seules les polices **ajoutées** se suppriment ; les six embarquées restent.
+ *
+ * La garantie n'est pas un filtre dans la vue — la liste de suppression est
+ * bâtie sur `user_fonts`, et les deux espaces de clés sont disjoints par
+ * construction : `slugify` préfixe tout par `user-`, qu'aucune famille
+ * embarquée ne porte. Une interface sans police de repli n'aurait plus de quoi
+ * s'afficher.
+ */
+test('aucune police embarquée ne peut porter la clé d’une police ajoutée', () => {
+  const embarquées = new Set(FONTS.map((font) => font.key));
+  for (const font of FONTS) {
+    assert.equal(font.key.startsWith('user-'), false, `${font.key} empiète sur les ajoutées`);
+    const ajoutée = slugify(font.family);
+    assert.ok(ajoutée.startsWith('user-'));
+    assert.equal(embarquées.has(ajoutée), false, `collision de clés sur ${font.family}`);
+  }
+});
+
+test('l’écran des réglages ne propose à la suppression que les polices ajoutées', () => {
+  const source = read('../src/renderer/js/views/settings.js');
+  const bloc = source.match(/function addedFontsRow\([\s\S]*?\n\}/)?.[0];
+  assert.ok(bloc, 'addedFontsRow doit exister');
+  // La liste vient de `userFonts()` — celle de `user.sqlite` — et de nulle part
+  // ailleurs : `FONTS` ou `fontsForScript` ici mettrait les six embarquées à
+  // portée d'un bouton de suppression qui ne peut pas aboutir.
+  assert.ok(bloc.includes('userFonts()'), 'la liste doit venir de user.sqlite');
+  assert.equal(/\bFONTS\b|fontsForScript|familiesFor/.test(bloc), false);
+});
+
 test('aucune vue ne redéclare la liste des polices', () => {
   for (const view of ['../src/renderer/js/views/reader.js', '../src/renderer/js/views/settings.js']) {
     const source = read(view);

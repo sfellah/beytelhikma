@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DEFAULT_BASE_URL, isAbsoluteKey, resolveObject } from '../src/shared/distribution.js';
+import {
+  DEFAULT_BASE_URL,
+  assertBaseUrl,
+  isAbsoluteKey,
+  resolveObject,
+} from '../src/shared/distribution.js';
 
 const AWS = 'https://beytelhima-library.s3.eu-west-1.amazonaws.com';
 const MINIO = 'http://127.0.0.1:9000/beytelhikma';
@@ -53,6 +58,27 @@ test('une base vide retombe sur le défaut compilé', () => {
   assert.equal(resolveObject(null, 'books/x.zst').url, `${DEFAULT_BASE_URL}/books/x.zst`);
   assert.equal(resolveObject('', 'books/x.zst').url, `${DEFAULT_BASE_URL}/books/x.zst`);
   assert.equal(resolveObject('   ', 'books/x.zst').url, `${DEFAULT_BASE_URL}/books/x.zst`);
+});
+
+/**
+ * Ce réglage décide d'où viennent le catalogue **et** tous les livres. En
+ * clair, un intermédiaire choisit ce que l'application installe.
+ */
+test('assertBaseUrl exige https hors de la boucle locale', () => {
+  assert.equal(assertBaseUrl(AWS), AWS);
+  assert.equal(assertBaseUrl(`  ${AWS}/  `), AWS);
+  // La boucle locale reste ouverte : c'est le MinIO de développement, sans
+  // certificat et sans réseau traversé.
+  assert.equal(assertBaseUrl(MINIO), MINIO);
+  assert.equal(assertBaseUrl('http://localhost:9000/b'), 'http://localhost:9000/b');
+
+  for (const refusée of ['http://exemple.test/', 'ftp://x/y', 'file:///C:/x', 'pas une url']) {
+    assert.throws(() => assertBaseUrl(refusée), /https exigé|illisible/, refusée);
+  }
+});
+
+test('une adresse vide revient au défaut, sans lever', () => {
+  for (const vide of ['', '   ', null, undefined]) assert.equal(assertBaseUrl(vide), '');
 });
 
 test('isAbsoluteKey ne se laisse pas prendre par un chemin qui contient deux points', () => {

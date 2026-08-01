@@ -93,6 +93,24 @@ test('un pointeur incomplet ne propose rien', () => {
   }
 });
 
+/**
+ * Sans empreinte il n'y a rien à vérifier à l'installation, et le catalogue
+ * devient ensuite la source de vérité de toute l'application. On ne le propose
+ * donc même pas.
+ */
+test('un pointeur sans empreinte utilisable ne propose rien', () => {
+  for (const sha of [undefined, null, '', 'court', 'z'.repeat(64), 'a'.repeat(63), 42]) {
+    const verdict = decideUpdate({
+      pointer: pointeur({ sha256: sha }),
+      localVersion: 1,
+      declinedVersion: null,
+    });
+    assert.equal(verdict.action, 'none', `proposé à tort : ${String(sha)}`);
+    assert.equal(verdict.reason, 'malformed');
+    assert.equal(verdict.pointer, null);
+  }
+});
+
 test('un serveur injoignable rend null, sans lever', async () => {
   assert.equal(await fetchPointer('http://127.0.0.1:1/', { timeoutMs: 200 }), null);
 });
@@ -203,6 +221,33 @@ test('une coupure en cours de route laisse le catalogue précédent valide', asy
 
   assert.deepEqual(fs.readFileSync(ancien), Buffer.from('ancien catalogue'));
   assert.equal(fs.existsSync(`${ancien}.new`), false);
+});
+
+/**
+ * La même exigence à l'autre bout de la chaîne : `installCatalog` est
+ * appelable directement, et refusait autrefois de vérifier ce qu'aucun
+ * `sha256` ne décrivait — `if (pointer.sha256 && …)` laissait passer.
+ */
+test('un pointeur sans empreinte n’installe rien, et ne télécharge même pas', async (t) => {
+  const root = racineJetable(t);
+  let demandé = false;
+  handler = (request, response) => {
+    demandé = true;
+    response.writeHead(200, { 'content-length': COMPRESSÉ.length });
+    response.end(COMPRESSÉ);
+  };
+
+  await assert.rejects(
+    installCatalog({
+      pointer: pointeur({ sha256: undefined }),
+      baseUrl: origin,
+      storageRoot: root,
+    }),
+    /sans empreinte/,
+  );
+
+  assert.equal(demandé, false, 'refus prononcé avant la requête');
+  assert.equal(fs.existsSync(path.join(root, 'catalog.sqlite')), false);
 });
 
 test('un 404 sur le catalogue ne touche à rien', async (t) => {

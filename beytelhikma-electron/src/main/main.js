@@ -6,6 +6,7 @@ import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron';
 import { AppDatabase, resolveLibrarySource } from './app-database.js';
 import { BookRepository, REPOSITORY_METHODS } from './book-repository.js';
 import { resolveUserFontPath } from './font-installer.js';
+import { estLienExterne, navigationPermise } from './navigation.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(here, '..', '..');
@@ -124,12 +125,33 @@ function createWindow({ capture = false } = {}) {
     },
   });
 
-  window.loadFile(path.join(projectRoot, 'src', 'renderer', 'index.html'));
+  const page = path.join(projectRoot, 'src', 'renderer', 'index.html');
+  window.loadFile(page);
+  const pageUrl = pathToFileURL(page).href;
+
+  // La fenêtre ne quitte jamais sa propre page.
+  //
+  // Le preload s'attache à **toute** navigation de ce `webContents` : une page
+  // distante atteinte par un `location = …` hériterait de
+  // `window.beytelhikma.repository` en entier — donc de la lecture et de
+  // l'écriture des trois bases. Le routeur ne travaillant que par fragment,
+  // aucune navigation légitime ne passe par ici.
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!navigationPermise(url, pageUrl)) {
+      event.preventDefault();
+      console.warn(`[beytelhikma] navigation refusée : ${url}`);
+    }
+  });
+  // Une `<webview>` rouvrirait la même porte, par un autre couloir.
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
 
   // L'application est hors ligne : rien ne doit s'ouvrir dans une fenêtre
-  // Electron, les liens externes partent vers le navigateur du système.
+  // Electron, les liens externes partent vers le navigateur du système. Le
+  // protocole est comparé, jamais préfixé : `startsWith('http')` acceptait
+  // aussi `httpfoo://`, que `openExternal` aurait passé au gestionnaire de
+  // protocole du système.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http')) shell.openExternal(url);
+    if (estLienExterne(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   return window;

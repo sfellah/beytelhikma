@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
 
 import { resolveObject } from '../shared/distribution.js';
+import { assertEditionId } from './edition-id.js';
 
 /** Messages destinés à l'utilisateur, en arabe. */
 export const DOWNLOAD_MESSAGES = {
@@ -251,6 +252,9 @@ export class DownloadQueue extends EventEmitter {
   }
 
   enqueue(editionId) {
+    // La file fabrique trois chemins depuis cet identifiant (`.part`, `.tmp`,
+    // fichier installé) : il est validé à l'entrée, pas à chaque usage.
+    assertEditionId(editionId);
     const existing = this.#jobs.get(editionId);
     if (existing && existing.status !== 'failed') return { ...existing };
     this.#jobs.set(editionId, {
@@ -345,7 +349,13 @@ export class DownloadQueue extends EventEmitter {
           const now = Date.now();
           if (now - lastWrite >= 500) {
             lastWrite = now;
-            this.#persist(editionId, { status: 'downloading', receivedBytes: received });
+            // Sans `catch`, une écriture qui échoue devient un rejet non
+            // traité : le téléchargement continuerait pendant que le processus
+            // principal signale une promesse morte. Perdre un jalon de
+            // progression n'est pas grave — la reprise repart du `.part`.
+            Promise.resolve(
+              this.#persist(editionId, { status: 'downloading', receivedBytes: received }),
+            ).catch((error) => console.warn('[beytelhikma] progression non écrite :', error));
             this.#emit();
           }
         },

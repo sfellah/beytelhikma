@@ -31,6 +31,11 @@ site/data/
 # Maquettes jetables du compagnon visuel de brainstorming
 .superpowers/
 
+# Réglages locaux de l'agent, et surtout `.claude/worktrees/` : des copies
+# complètes du dépôt. Un `git add -A` distrait les ferait entrer dans
+# l'historique.
+.claude/
+
 # Identifiants du bucket de distribution. Jamais dans le dépôt.
 .env
 .env.*

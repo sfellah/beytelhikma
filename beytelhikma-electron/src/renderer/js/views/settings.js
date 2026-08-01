@@ -231,6 +231,86 @@ function fontsSection(prefs, refresh) {
     ),
     row(t('settings.fontSize'), h('div', { class: 'settings__slider' }, slider, value)),
     addFontRow(refresh),
+    addedFontsRow(prefs, refresh),
+  );
+}
+
+/**
+ * Retirer une police **ajoutée**, et elle seule.
+ *
+ * Les six familles embarquées ne sont pas listées ici : elles vivent dans
+ * `src/shared/fonts.js`, sont livrées avec l'application et n'ont pas de
+ * fichiers dans `userData/fonts/`. Les proposer à la suppression offrirait un
+ * geste qui ne peut pas aboutir — et une interface sans police de repli n'a
+ * plus de quoi s'afficher.
+ *
+ * Pas de confirmation : une police ajoutée se réinstalle en recollant son
+ * adresse, et le bouton porte le nom de la famille qu'il retire. La
+ * confirmation est réservée à ce qui ne se refait pas — les livres, les notes.
+ */
+function addedFontsRow(prefs, refresh) {
+  // Toutes écritures confondues : la liste dit ce qui est **installé**, pas ce
+  // qui est proposé pour la langue du moment. Une police arabe resterait
+  // invisible — donc indéboulonnable — sous une interface anglaise.
+  const fonts = userFonts();
+  if (!fonts.length) return null;
+
+  const items = fonts.map((font) =>
+    h(
+      'li',
+      { class: 'settings__font' },
+      h(
+        'span',
+        {
+          class: 'settings__specimen',
+          style: { fontFamily: `'${font.family.replace(/'/g, '')}', serif` },
+        },
+        font.family,
+      ),
+      h(
+        'button',
+        {
+          class: 'button button--icon',
+          title: t('settings.removeFont', { family: font.family }),
+          'aria-label': t('settings.removeFont', { family: font.family }),
+          onclick: (event) => remove(font, event.currentTarget),
+        },
+        icon('trash', { size: 18 }),
+      ),
+    ),
+  );
+
+  async function remove(font, button) {
+    button.disabled = true;
+    const script = interfaceScript();
+    // La question se pose **avant** le retrait : une fois la police sortie de
+    // la liste chargée, `currentAppFont` répond déjà le repli, et l'interface
+    // resterait peinte dans une famille que plus aucune règle ne déclare.
+    const enService = currentAppFont(script) === font.key;
+
+    try {
+      await repository.removeFont(font.key);
+      await syncUserFonts();
+
+      if (enService) setAppFont(null, script);
+      // Sans cette ligne le réglage garderait une clé morte : elle se replierait
+      // à chaque rendu, mais l'écran continuerait d'annoncer un choix disparu.
+      if (prefs['reader.font'] === font.key) {
+        setSetting('reader.font', resolveFont(null, 'arab', DEFAULT_READER_FONT));
+      }
+
+      toast(t('settings.fontRemoved', { family: font.family }));
+      refresh();
+    } catch (error) {
+      toast(error?.message ?? t('settings.fontRemoveFailed'));
+      button.disabled = false;
+    }
+  }
+
+  return row(
+    t('settings.addedFonts'),
+    h('ul', { class: 'settings__fonts' }, items),
+    t('settings.addedFontsHint'),
   );
 }
 
@@ -333,7 +413,15 @@ function serverSection(prefs, refresh) {
           'check',
           t('action.save'),
           async () => {
-            await repository.setDownloadBaseUrl(field.value);
+            // L'adresse est validée côté principal (https, ou boucle locale) :
+            // un refus doit se dire, sinon le champ garde une valeur que rien
+            // n'a enregistrée.
+            try {
+              await repository.setDownloadBaseUrl(field.value);
+            } catch (error) {
+              toast(error?.message ?? t('settings.sourceRefused'));
+              return;
+            }
             toast(t('settings.sourceSaved'));
             refresh();
           },
@@ -362,6 +450,12 @@ function serverSection(prefs, refresh) {
             const { catalogVersion } = await repository.installCatalogUpdate();
             toast(t('settings.catalogUpdated', { version: catalogVersion }));
             refresh();
+          } catch (error) {
+            // Sans cette branche, un échec laissait le libellé sur
+            // « التنزيل… » indéfiniment : l'écran annonçait un téléchargement
+            // qui n'aurait jamais lieu, et l'erreur ne se lisait qu'en console.
+            état.textContent = t('settings.catalogFailed');
+            toast(error?.message ?? t('settings.catalogFailed'));
           } finally {
             bouton.disabled = false;
           }
