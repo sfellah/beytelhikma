@@ -27,8 +27,10 @@ cd tools && python -m unittest discover -s shamela/tests -t .   # tests de l'imp
 
 # chaîne bibliothèque : importe, publie, vérifie, nettoie (depuis la racine)
 python tools/release_library.py --dry-run     # dit ce qui serait publié
-python tools/release_library.py               # tout, dans l'ordre
+python tools/release_library.py               # 10 livres/catégorie, par tranches de 100
+python tools/release_library.py --all         # les 8 589 livres, ~40 min
 python tools/release_library.py --skip-import # republier sans réimporter
+python tools/release_library.py --all --batch-size 0   # d'un seul tenant : ~55 Go de disque
 
 # publication des livres vers S3 — MinIO ou AWS (depuis la racine)
 export MINIO_ACCESS_KEY=… MINIO_SECRET_KEY=…          # ou AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
@@ -75,6 +77,18 @@ Les objets partent en `Cache-Control: public, max-age=31536000, immutable` : la 
 **La mise à jour du catalogue se propose, ne s'impose pas.** Au démarrage, `src/main/catalog-updater.js` lit le pointeur et compare. Cinq branches de décision sur six sont **silencieuses** : hors ligne, pointeur illisible, `schema_version` trop récent, déjà à jour, version refusée. Une application hors ligne a déjà tout ce qu'il lui faut pour explorer — lui afficher une alerte serait du bruit. `fetchPointer` ne lève donc jamais : il rend `null`, et `decideUpdate` en tire une décision. Toute branche silencieuse rend `pointer: null`, pour qu'aucun appelant ne puisse installer ce qu'on vient de refuser. Un refus est retenu **par version** (`distribution.declined_catalog_version`) : refuser la 2 ne fait pas taire la 3.
 
 L'installation vérifie le SHA-256 **avant** le `rename`, qui est le dernier geste : une coupure à n'importe quel point laisse l'ancien catalogue intact et lisible.
+
+**La publication se fait par tranches, et le manifeste est ce qui survit.** `release_library.py --batch-size N` (100 par défaut) importe une tranche, la monte, efface ses `.sqlite` et `.sqlite.zst`, puis recommence : le corpus complet pèse ~55 Go convertis, le pic disque tombe à ~1,3 Go. Trois règles le rendent possible :
+
+- `publish_minio` écrit `object_key` **dans le manifeste avant de l'envoyer**. Le compléter après ferait diverger la copie locale de celle du bucket, et le passage suivant renverrait les 8 589 manifestes pour cette seule différence — `test_second_passage_ne_reenvoie_rien` le tient.
+- La reprise de l'importeur n'exige plus le `.sqlite`, seulement le manifeste. `build_catalog` réécrit le catalogue à partir des seuls livres retrouvés : exiger le fichier faisait qu'effacer une tranche publiée la dépubliait au tour suivant. Un livre dont le fichier a disparu mais dont le manifeste porte la clé est compté `already`, jamais `missing`, et sa clé repart au catalogue.
+- Les tranches sont distribuées **en escalier** (`[i::n]` après tri décroissant), pas découpées dans la liste triée : en tronçons, la première aurait avalé les cent plus gros livres, 4,5 Go de source d'un coup. Le pic doit être la moyenne.
+
+Le catalogue et le pointeur ne partent **pas** d'une tranche — `build_catalog` ne connaît que la tranche courante, et publier ce catalogue-là annoncerait cent livres. Ils partent à la fin, une fois le catalogue complet reconstruit depuis les manifestes.
+
+L'importeur rend **1 dès qu'un livre est sauté** et 2 pour une erreur bloquante ; `lance()` tolère le 1. Sur le corpus réel, quelques sources sont défectueuses — un sommaire qui pointe une page absente — et les écarter est le contrat de l'importeur, pas un échec. Les tranches concernées sont listées en fin de course.
+
+Le nettoyage attrape aussi `-journal`, `-wal`, `-shm`, `.part` et `.tmp` : ces restes d'imports interrompus commencent par un identifiant d'édition valide et échappaient donc à la règle « fichier hors catalogue ».
 
 **Une mise à jour de catalogue ne supprime jamais un fichier de livre.** `#syncInstalledLibrary` purgeait `books/` dès que la source changeait ; avec un catalogue qui se met à jour seul, ce serait tout retélécharger. La réconciliation se fait par édition, à la lecture : `downloaded_books.release_id` comparé au `release_id` actif donne `hasNewerRelease`. Une édition disparue du catalogue n'est pas dessinable (ni titre ni auteur) mais son fichier reste ; `getLibrary` en rend le compte dans `orphans` plutôt que de la faire disparaître en silence. Les ancres de surlignage sont posées sur le texte rendu : une réédition peut les déplacer, ce doit donc rester un choix de l'utilisateur.
 
