@@ -8,8 +8,8 @@ import { icon } from '../icons.js';
  * Rien ne disait qu'ils formaient un ensemble ni qu'un seul pouvait valoir à la
  * fois — le cadre commun le dit, et la coche le confirme.
  *
- * [options] : `{ value, label, preview? }`. `preview` est un nœud rendu sous le
- * libellé — c'est ce qui permet à une police de se montrer dans sa propre
+ * [options] : `{ value, label }`. Le libellé accepte un nœud, pas seulement du
+ * texte : c'est ce qui permet à une police de porter son nom dans sa propre
  * face, seule façon honnête de la choisir.
  */
 export function segmented({ options, value, onPick, ariaLabel = null }) {
@@ -30,12 +30,7 @@ export function segmented({ options, value, onPick, ariaLabel = null }) {
           onPick(option.value);
         },
       },
-      h(
-        'span',
-        { class: 'segmented__text' },
-        h('span', { class: 'segmented__label' }, option.label),
-        option.preview ?? null,
-      ),
+      h('span', { class: 'segmented__label' }, option.label),
       h('span', { class: 'segmented__check' }, icon('check', { size: 16 })),
     ),
   );

@@ -156,7 +156,7 @@ Les tables vivent dans `src/shared/book-cover.js`, seul (le miroir Dart a dispar
 
 La recherche transversale (`BookRepository.searchLibrary`) balaie les livres installés un par un et referme ceux qu'elle a ouverts : sql.js charge chaque livre entièrement en mémoire, un balayage qui laisserait tout ouvert ferait enfler le processus. Le balayage est borné par `maxBooks` et l'écran annonce ce qu'il n'a pas parcouru.
 
-**Le jeu publié actuellement** : 397 éditions (10 livres par catégorie), 182 805 pages, sur `beytelhima-library` en `eu-west-1`. Le catalogue est en `catalog_version` 1, `schema_version` 2.
+**Le jeu publié actuellement** : 8 568 éditions sur `beytelhima-library` en `eu-west-1`, `catalog_version` **2**, `schema_version` 2 — valeurs relues depuis `catalog/latest.json`, que `assets/catalog-seed.json` reflète.
 
 ## Deux chaînes de build
 
@@ -182,10 +182,39 @@ Reste à faire : le catalogue embarqué dans le build (`assets/catalog.sqlite.zs
 
 ## i18n / RTL (critique)
 
-- Locales : `ar`, `fr`, `en`.
-- Direction de **l'interface** = locale de l'app ; direction du **contenu** = langue du livre. Un livre arabe se lit en RTL même si l'UI est en français — poser `dir` explicitement sur le contenu du lecteur et les titres.
-- Ne jamais coder en dur des alignements gauche/droite : propriétés CSS logiques (`margin-inline-start`, `text-align: start`, `inset-inline-end`…).
-- Polices arabes dédiées (Amiri / Noto Naskh) séparées des polices latines.
+Deux locales : **`ar` et `en`**. Le français est écarté ; rien dans le code ne le prépare, et l'ajouter ne coûtera qu'un fichier de chaînes de plus.
+
+La locale décide de **trois choses et de rien d'autre** : les mots, la direction de *l'interface*, et la forme des chiffres. Elle ne décide pas de la direction du **contenu** : le corpus est arabe, une page de livre reste RTL sous une interface anglaise, et porte donc son `dir` explicitement — une direction implicite casse à la première bascule, et la coïncidence en mode `ar` masquerait le défaut jusque-là.
+
+**Il n'y a pas de réglage de chiffres.** Les chiffres arabes-indiens sont une propriété de la langue arabe, pas un goût séparé : un réglage distinct aurait produit quatre combinaisons dont deux n'ont aucun sens. `shared/digits.js` porte une table de dix caractères — pas `Intl.NumberFormat`, dont l'`ar` ajoute un séparateur de milliers (`٬`) et un signe décimal (`٫`) que rien n'attend, et dont le résultat suit la version d'ICU embarquée dans Electron.
+
+Ce qui est converti : tout ce qui se lit. Ce qui ne l'est **jamais** : ce qui se rapporte ou se copie — chemins, URL, sha256, `schema_version`. Ces valeurs partent dans un rapport de bug ; les écrire en `٢` les rendrait inutilisables.
+
+`t()` est synchrone et le catalogue importé statiquement : la CSP est `default-src 'none'` et les vues se montent sans `await`. `translate` convertit lui-même les nombres qu'on lui passe — c'est ce qui empêche une vue d'oublier la conversion.
+
+Comme le thème, la locale et la police d'interface se posent depuis un **miroir `localStorage` lu en synchrone** avant le premier rendu : `user.sqlite` arrive par IPC après, et sans miroir une interface anglaise s'ouvrirait en RTL arabe puis basculerait à chaque lancement.
+
+`test/no-hardcoded-strings.test.js` interdit tout nouveau littéral arabe dans le rendu. Trois exceptions, justifiées dans le test : `locales/ar.js` est le catalogue, la table de `icons.js` est indexée par libellé de catégorie du catalogue (clés de données), et le `؟` du lecteur est une touche du clavier. Sans ce test, la prochaine vue en réintroduirait et le défaut ne se verrait qu'en changeant de langue — c'est-à-dire jamais pendant le développement.
+
+Ne jamais coder en dur des alignements gauche/droite : propriétés CSS logiques (`margin-inline-start`, `text-align: start`, `inset-inline-end`…). Les **flèches de sens de lecture** passent par `arrowForward` / `arrowBackward` de `icons.js` : figées, elles désignent l'inverse de ce qu'elles font dès que l'interface bascule.
+
+## Polices
+
+Six familles, dans `src/shared/fonts.js` et **nulle part ailleurs**. Trois arabes — Amiri (naskh de bibliothèque), Noto Naskh Arabic, IBM Plex Sans Arabic — et trois latines : Literata, EB Garamond, Source Serif 4. Toutes embarquées par `tools/fetch_fonts.py`, jamais servies depuis le réseau.
+
+C'est d'une liste recopiée qu'était née la panne précédente : `views/reader.js` en déclarait trois, `views/settings.js` deux, et Noto Naskh Arabic était accessible depuis le lecteur et invisible depuis les réglages — la panne du thème `sepia`, rejouée. `test/fonts.test.js` vérifie la parité table ↔ `views.css` dans les deux sens.
+
+**Deux réglages, deux domaines.** `app.font.<script>` peint l'interface, `reader.font` le texte du livre. La liste d'interface suit la locale ; celle de lecture ne propose que des faces arabes, le corpus l'est. Le défaut d'interface **n'est pas** celui du lecteur : Amiri est une face de livre, posée sur les menus elle change l'aspect de toute l'application. Le repli est passé par l'appelant, `resolveFont` n'en choisit pas à sa place.
+
+Le `specimen` d'une famille est son nom **dans son écriture**, et ne se traduit pas : une face arabe présentée par son nom latin ne montre rien, les trois se ressemblant dans leur sous-ensemble latin.
+
+**Ajouter une police Google, c'est l'installer, pas la lier.** `src/main/font-installer.js` lit la feuille une fois, dépose les `woff2` dans `userData/fonts/` et n'y revient jamais. Ouvrir `style-src`/`font-src` vers Google ferait appeler un tiers à chaque démarrage et ferait perdre ses polices à un lecteur hors ligne, alors que tout le reste fonctionne sans réseau.
+
+Les bornes, chacune avec son test : hôtes en liste close (`fonts.googleapis.com` pour la feuille, `fonts.gstatic.com` pour les fichiers), `https` seul, aucune redirection suivie vers un autre hôte, tailles plafonnées, `woff2` seul écrit, nom de fichier **construit** et jamais repris de l'URL distante. Le nom de famille vient d'un tiers : il est réduit aux lettres, chiffres, espaces et traits d'union avant d'être cité.
+
+Les fichiers sont servis par le schéma `userfont:`, qui ne sort jamais de `userData/fonts/`. La CSP ne gagne qu'un mot — `font-src 'self' userfont:` — `script-src` et `style-src` ne bougent pas, donc une police ajoutée ne peut rien exécuter. Les règles sont posées dans une `CSSStyleSheet` **construite** : une balise `<style>` injectée est du style en ligne, que `style-src 'self'` refuse.
+
+`user.sqlite` est en version de schéma **3** depuis la table `user_fonts` (migration additive).
 
 ## Conventions
 

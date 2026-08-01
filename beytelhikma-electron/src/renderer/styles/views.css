@@ -2487,6 +2487,13 @@ html:not([dir='rtl']) .scroller--at-start {
   justify-content: space-between;
   gap: var(--space-lg);
   flex-wrap: wrap;
+  padding-block: var(--space-sm);
+  border-top: 1px solid var(--rule);
+}
+
+/* La première ligne suit l'en-tête : elle n'a pas de filet à porter. */
+.settings__head + .settings__row {
+  border-top: 0;
 }
 
 .settings__row-text {
@@ -2499,8 +2506,16 @@ html:not([dir='rtl']) .scroller--at-start {
    d'apparence de la zone de danger. */
 .settings__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-md);
+  padding-bottom: var(--space-xs);
+}
+
+/* Six blocs de même rang : leur titre ne concurrence pas celui de l'écran.
+   C'est la pastille qui les distingue, pas la taille du texte. */
+.settings__head .headline-lg {
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
 }
 
 .settings__badge {
@@ -2525,13 +2540,23 @@ html:not([dir='rtl']) .scroller--at-start {
   margin: 0;
 }
 
-/* L'échantillon se rend dans sa propre face : c'est la seule façon de choisir
-   une police, et la seule qui vaudra pour celles qu'on ajoutera. */
-.settings__sample {
-  display: block;
-  font-size: 15px;
-  line-height: 1.5;
-  opacity: 0.75;
+/* Le nom de la police *est* l'échantillon : il se rend dans sa propre face, à
+   la taille où l'on peut la juger. À 13 px et 75 % d'opacité, on ne distinguait
+   pas un naskh d'un autre — c'est-à-dire qu'on ne choisissait rien. */
+.settings__specimen {
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+/* Les pastilles de thème partagent le cadre du contrôle segmenté : c'est le
+   même geste — un choix parmi trois — et deux grammaires côte à côte dans le
+   même bloc se lisaient comme deux mécaniques différentes. */
+.settings .theme-choices {
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface-container);
 }
 
 /* Zone de danger : son propre cadre, en fin d'écran. Ce qui est irréversible

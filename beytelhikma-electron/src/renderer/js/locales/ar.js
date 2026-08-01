@@ -488,7 +488,6 @@ export default {
   'settings.interfaceFontHint': 'القوائم والأزرار وهذه الشاشة',
   'settings.readerFont': 'خط القراءة',
   'settings.readerFontHint': 'نصّ الكتاب — الكتب عربية دائمًا',
-  'settings.readerSample': 'بسم الله الرحمن الرحيم',
   'settings.dangerZone': 'منطقة الخطر',
   'settings.dangerHint': 'أفعال لا رجعة فيها.',
 

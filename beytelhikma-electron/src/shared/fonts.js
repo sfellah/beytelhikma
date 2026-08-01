@@ -12,15 +12,29 @@
  * corpus est arabe, l'interface parle deux langues — proposer EB Garamond pour
  * le texte d'un livre serait un choix sans effet, et proposer Amiri à une
  * interface anglaise le serait tout autant.
+ *
+ * `specimen` est le nom **dans l'écriture de la face**, et ne se traduit pas :
+ * c'est lui qu'on affiche pour choisir. Une face arabe présentée par son nom
+ * latin ne montre rien — les trois se ressemblent dans leur sous-ensemble
+ * latin, et c'est justement le tracé arabe qu'on veut comparer. `label` reste
+ * la clé de catalogue, pour ce qu'un lecteur d'écran doit annoncer.
  */
 export const FONTS = [
   // Arabes — le livre.
-  { key: 'amiri', family: 'Amiri', script: 'arab', label: 'fonts.amiri', stack: "'Amiri', serif" },
+  {
+    key: 'amiri',
+    family: 'Amiri',
+    script: 'arab',
+    label: 'fonts.amiri',
+    specimen: 'أميري',
+    stack: "'Amiri', serif",
+  },
   {
     key: 'naskh',
     family: 'Noto Naskh Arabic',
     script: 'arab',
     label: 'fonts.naskh',
+    specimen: 'نسخ عربي',
     stack: "'Noto Naskh Arabic', serif",
   },
   {
@@ -28,6 +42,7 @@ export const FONTS = [
     family: 'IBM Plex Sans Arabic',
     script: 'arab',
     label: 'fonts.plex',
+    specimen: 'بلكس عربي',
     stack: "'IBM Plex Sans Arabic', sans-serif",
   },
 
@@ -40,6 +55,7 @@ export const FONTS = [
     family: 'Literata',
     script: 'latn',
     label: 'fonts.literata',
+    specimen: 'Literata',
     stack: "'Literata', Georgia, serif",
   },
   {
@@ -47,6 +63,7 @@ export const FONTS = [
     family: 'EB Garamond',
     script: 'latn',
     label: 'fonts.garamond',
+    specimen: 'EB Garamond',
     stack: "'EB Garamond', Georgia, serif",
   },
   {
@@ -54,6 +71,7 @@ export const FONTS = [
     family: 'Source Serif 4',
     script: 'latn',
     label: 'fonts.sourceserif',
+    specimen: 'Source Serif',
     stack: "'Source Serif 4', Georgia, serif",
   },
 ];

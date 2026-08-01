@@ -443,7 +443,10 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   // Fenêtre étroite : le rail cède la place aux barres haute et basse.
   window.setContentSize(430, 900);
   await wait(500);
-  const narrow = new Set(['home', 'library', 'authors', 'reader']);
+  // Les réglages en font partie depuis qu'ils portent des groupes segmentés :
+  // c'est la largeur où ils débordent, et un écran qu'aucune image ne montre
+  // est un écran qui dérive.
+  const narrow = new Set(['home', 'library', 'authors', 'reader', 'settings']);
   for (const [name, route, selector] of routes.filter(([key]) => narrow.has(key))) {
     await shoot(window, `${name}-narrow`, route, selector, outDir, problems);
   }

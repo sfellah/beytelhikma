@@ -121,11 +121,6 @@ function action(iconName, label, onclick, variant = 'tonal') {
  * chargés avant que `syncTheme` n'ait répondu.
  */
 function languageSection() {
-  const preview = h(
-    'p',
-    { class: 'settings__preview label-sm muted' },
-    t('settings.language.preview', { page: 42, total: 350 }),
-  );
 
   const choices = segmented({
     ariaLabel: t('settings.language.title'),
@@ -144,7 +139,13 @@ function languageSection() {
     'language',
     t('settings.language.title'),
     t('settings.language.hint'),
-    row(t('settings.language.title'), h('div', { class: 'settings__stack' }, choices, preview)),
+    // L'aperçu de chiffres est l'indice de la ligne, pas une note flottante
+    // sous le contrôle : c'est ce que ce réglage change, dit à sa place.
+    row(
+      t('settings.language.title'),
+      choices,
+      t('settings.language.preview', { page: 42, total: 350 }),
+    ),
     row(t('settings.theme'), themeChoices().node, t('settings.themeHint')),
   );
 }
@@ -163,16 +164,30 @@ function languageSection() {
 function fontsSection(prefs, refresh) {
   const script = interfaceScript();
 
-  const sample = (stack, text) =>
-    h('span', { class: 'settings__sample', style: { fontFamily: stack } }, text);
-
-  // Une police ajoutée porte son propre nom : il vient de la feuille de Google
-  // et n'a pas de clé de catalogue.
-  const options = (list, sampleText) =>
+  /**
+   * Le nom de la police **est** son échantillon : « أميري » composé en Amiri
+   * montre exactement ce qu'on choisit. Une phrase de démonstration répétée
+   * sous chaque option n'apprenait rien de plus — c'est la forme de la lettre
+   * qui distingue, pas le texte — et allongeait les segments jusqu'à les
+   * rendre illisibles à 13 px.
+   *
+   * Une police ajoutée porte son propre nom : il vient de la feuille de Google
+   * et n'a pas de clé de catalogue.
+   */
+  const options = (list) =>
     list.map((font) => ({
       value: font.key,
-      label: font.user ? font.family : t(font.label),
-      preview: sample(font.stack, sampleText),
+      label: h(
+        'span',
+        {
+          class: 'settings__specimen',
+          style: { fontFamily: font.stack },
+          // Le tracé est le nom, mais il n'est pas *dit* : ce que la synthèse
+          // vocale annonce reste le libellé traduit.
+          'aria-label': font.user ? font.family : t(font.label),
+        },
+        font.specimen ?? font.family,
+      ),
     }));
 
   const size = Number(prefs['reader.fontSize'] ?? 22);
@@ -197,10 +212,7 @@ function fontsSection(prefs, refresh) {
       segmented({
         ariaLabel: t('settings.interfaceFont'),
         value: currentAppFont(script),
-        options: options(
-          familiesFor(script, fontsForScript(script)),
-          t('settings.language.preview', { page: 42, total: 350 }),
-        ),
+        options: options(familiesFor(script, fontsForScript(script))),
         onPick: (key) => setAppFont(key, script),
       }),
       t('settings.interfaceFontHint'),
@@ -212,10 +224,7 @@ function fontsSection(prefs, refresh) {
         // Le livre est arabe : seules les faces arabes sont proposées, quelle
         // que soit la langue de l'interface.
         value: resolveAnyFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
-        options: options(
-          familiesFor('arab', fontsForScript('arab')),
-          t('settings.readerSample'),
-        ),
+        options: options(familiesFor('arab', fontsForScript('arab'))),
         onPick: (key) => setSetting('reader.font', key),
       }),
       t('settings.readerFontHint'),

@@ -462,7 +462,6 @@ export default {
   'settings.interfaceFontHint': 'Menus, buttons and this screen',
   'settings.readerFont': 'Reading face',
   'settings.readerFontHint': 'The book text — books are always in Arabic',
-  'settings.readerSample': 'بسم الله الرحمن الرحيم',
   'settings.dangerZone': 'Danger zone',
   'settings.dangerHint': 'Actions that cannot be undone.',
 
