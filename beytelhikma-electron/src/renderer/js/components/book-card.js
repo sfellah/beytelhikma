@@ -12,6 +12,9 @@ const OVERLAY_ICON = { read: 'play', open: 'bookOpen', download: 'download' };
  * [progress] affiche la barre sous la carte, [badge] la pastille « جديد ».
  * [selectable] fait entrer la carte en mode sélection : elle porte une case et
  * un clic coche au lieu d'ouvrir la fiche.
+ * [caption] remplace le nom de l'auteur sous le titre : une liste d'autres
+ * éditions d'un même livre porte partout le même auteur et le même titre, et
+ * ne se distingue que par le tirage.
  */
 export function bookCard(
   book,
@@ -23,6 +26,7 @@ export function bookCard(
     selectable = false,
     selected = false,
     onToggle = null,
+    caption = null,
   } = {},
 ) {
   const percent = progress == null ? null : Math.round(progress * 100);
@@ -70,8 +74,8 @@ export function bookCard(
       'div',
       { class: 'book-card__text' },
       h('h4', { class: 'book-card__title clamp-1' }, book.title),
-      book.authorName &&
-        h('p', { class: 'book-card__author truncate' }, book.authorName),
+      (caption || book.authorName) &&
+        h('p', { class: 'book-card__author truncate' }, caption || book.authorName),
     ),
     progress != null &&
       h(

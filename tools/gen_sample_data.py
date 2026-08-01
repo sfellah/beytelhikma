@@ -652,10 +652,18 @@ def build_catalog(manifests: dict) -> None:
             ),
         )
 
-    # quelques relations d'exemple
-    con.execute(
+    # Relations d'exemple. Les couples sont arbitraires — cinq œuvres distinctes
+    # ne donnent ni deux éditions d'un même livre ni un recueil —, mais les deux
+    # types que l'importeur produit doivent être parcourus par les tests, et
+    # `part_of` doit l'être dans ses deux sens : la table ne stocke que
+    # partie -> recueil, la fiche du recueil lit la relation à l'envers.
+    con.executemany(
         "INSERT INTO edition_relations VALUES (?,?,?)",
-        ("ed-bukhari-01", "ed-muwatta-01", "related_to"),
+        [
+            ("ed-bukhari-01", "ed-muwatta-01", "same_group"),
+            ("ed-muwatta-01", "ed-bukhari-01", "same_group"),
+            ("ed-mutanabbi-01", "ed-ihya-01", "part_of"),
+        ],
     )
     con.commit()
     con.close()

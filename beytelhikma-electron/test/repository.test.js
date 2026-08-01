@@ -74,6 +74,78 @@ test('une édition inconnue remonte une RepositoryError', async () => {
   await assert.rejects(() => repository.getBookDetail('inconnu'), RepositoryError);
 });
 
+test('les livres en relation vont de la relation certaine au simple voisinage', async () => {
+  const related = await repository.getRelatedBooks('ed-bukhari-01');
+
+  // `same_group` : la relation est stockée dans les deux sens par l'importeur.
+  assert.deepEqual(
+    related.editions.rows.map((book) => book.editionId),
+    ['ed-muwatta-01'],
+  );
+  assert.equal(related.editions.total, 1);
+
+  // Le livre courant ne se recommande jamais lui-même, et un livre déjà montré
+  // par une bande certaine ne revient pas dans le repli par discipline.
+  const seen = [
+    ...related.editions.rows,
+    ...related.partOf.rows,
+    ...related.contains.rows,
+    ...related.sameAuthor.rows,
+    ...related.sameCategory.rows,
+  ].map((book) => book.editionId);
+  assert.equal(seen.length, new Set(seen).size);
+  assert.ok(!seen.includes('ed-bukhari-01'));
+
+  // Le repli annonce la discipline entière — c'est là que mène son lien —, pas
+  // la taille de la tranche affichée.
+  const categories = await repository.getCategories();
+  const own = categories.find((item) => item.categoryId === related.sameCategory.categoryId);
+  assert.ok(own);
+  assert.equal(related.sameCategory.total, own.bookCount);
+
+  // Le statut d'installation est joint : les cinq livres d'exemple le sont.
+  assert.ok(related.editions.rows.every((book) => book.downloadStatus === 'installed'));
+});
+
+test('`part_of` se lit dans les deux sens sans être stockée deux fois', async () => {
+  const partie = await repository.getRelatedBooks('ed-mutanabbi-01');
+  assert.deepEqual(
+    partie.partOf.rows.map((book) => book.editionId),
+    ['ed-ihya-01'],
+  );
+  assert.equal(partie.contains.rows.length, 0);
+
+  const recueil = await repository.getRelatedBooks('ed-ihya-01');
+  assert.deepEqual(
+    recueil.contains.rows.map((book) => book.editionId),
+    ['ed-mutanabbi-01'],
+  );
+  assert.equal(recueil.partOf.rows.length, 0);
+});
+
+test('les livres en relation refusent une édition inconnue', async () => {
+  await assert.rejects(() => repository.getRelatedBooks('inconnu'), RepositoryError);
+});
+
+test('un cursus dont aucune étape n’est au catalogue ne s’affiche pas', async () => {
+  // Les cursus pointent le corpus Shamela (`sh-*`) ; le jeu d'exemple porte
+  // des `ed-*`. Aucune étape ne répond, et c'est le cas nominal d'une
+  // bibliothèque partielle : la liste est vide, rien ne lève.
+  const curricula = await repository.getCurricula();
+  assert.deepEqual(curricula, []);
+
+  const one = await repository.getCurriculum('aqida');
+  assert.deepEqual(one.steps, []);
+  assert.equal(one.resolved, 0);
+  assert.equal(one.percent, 0);
+  // Ce qui manque est compté sur le cursus déclaré, pas sur ce qui reste.
+  assert.equal(one.missing, one.declared);
+});
+
+test('un cursus inconnu remonte une RepositoryError', async () => {
+  await assert.rejects(() => repository.getCurriculum('inexistant'), RepositoryError);
+});
+
 test('le sommaire est hiérarchique et pointe des pages réelles', async () => {
   const toc = await repository.getToc('ed-muqaddima-01');
   assert.ok(toc.length >= 3);

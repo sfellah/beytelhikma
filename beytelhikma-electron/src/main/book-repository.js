@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
+import { CURRICULA } from '../shared/curricula.js';
 import { assertBaseUrl } from '../shared/distribution.js';
 import { all, first } from './app-database.js';
 import { cssFor, installFont } from './font-installer.js';
@@ -1021,6 +1022,162 @@ export class BookRepository {
     });
   }
 
+  /**
+   * Les livres à montrer au bas d'une fiche, en bandes de certitude
+   * décroissante. Mesuré sur le corpus publié (8 568 éditions) :
+   *
+   *     même auteur          6 526   76,2 %
+   *     autres éditions        609    7,1 %   `same_group`
+   *     fait partie de          85    1,0 %   `part_of`
+   *     rien que la discipline 2 023   23,6 %
+   *
+   * D'où la forme : une section qui ne lirait que `edition_relations` serait
+   * vide pour 92 % des livres. Les bandes certaines passent devant, l'auteur
+   * porte la couverture, la discipline n'est qu'un repli.
+   *
+   * Chaque bande rend `{ rows, total }` : `total` vient de SQL, jamais de
+   * `rows.length`, sans quoi le lien « les N autres » annoncerait la taille de
+   * la tranche affichée.
+   */
+  getRelatedBooks(editionId, { perBand = 6 } = {}) {
+    return this.#guard('lecture des livres en relation', async () => {
+      const catalog = await this.#db.catalog();
+      const self = first(
+        catalog,
+        'SELECT category_id FROM editions WHERE edition_id = ?',
+        [editionId],
+      );
+      if (!self) throw new Error(`édition introuvable : ${editionId}`);
+      const categoryId = self.category_id ?? null;
+
+      // `orderParams` est séparé de `params` : le `ORDER BY` porte parfois un
+      // paramètre à lui (la discipline courante) qui n'a rien à faire dans le
+      // décompte, lequel ne trie pas.
+      const band = (where, params, order, orderParams = []) => ({
+        rows: all(
+          catalog,
+          `${SUMMARY_SELECT} AND ${where} GROUP BY e.edition_id ${order} LIMIT ?`,
+          [...params, ...orderParams, perBand],
+        ).map(bookSummary),
+        total:
+          first(
+            catalog,
+            `SELECT COUNT(*) AS n FROM editions e WHERE e.is_hidden = 0 AND ${where}`,
+            params,
+          )?.n ?? 0,
+      });
+
+      const linked = (column, other) =>
+        `e.edition_id IN (SELECT ${column} FROM edition_relations
+                           WHERE ${other} = ? AND relation_type = ?)`;
+
+      // Une autre édition se choisit sur ce qui la distingue — tirage, éditeur,
+      // nombre de pages —, jamais sur son titre : il est le même.
+      const editions = band(
+        linked('to_edition_id', 'from_edition_id', 'same_group'),
+        [editionId, 'same_group'],
+        'ORDER BY r.page_count DESC, e.title_ar',
+      );
+
+      const partOf = band(
+        linked('to_edition_id', 'from_edition_id', 'part_of'),
+        [editionId, 'part_of'],
+        'ORDER BY e.title_ar',
+      );
+
+      // Le sens inverse n'est pas stocké : `part_of` ne va que de la partie vers
+      // le recueil. Le recueil doit pourtant annoncer ce qu'il contient.
+      const contains = band(
+        linked('from_edition_id', 'to_edition_id', 'part_of'),
+        [editionId, 'part_of'],
+        'ORDER BY e.title_ar',
+      );
+
+      const authorIds = all(
+        catalog,
+        "SELECT author_id FROM edition_authors WHERE edition_id = ? AND role = 'author'",
+        [editionId],
+      ).map((row) => row.author_id);
+
+      // Ce que les bandes certaines montrent déjà. Sans cette exclusion, un
+      // recueil de quinze volumes du même auteur remplissait « autres éditions »
+      // puis le répétait mot pour mot sous « du même auteur ».
+      const certain = [
+        editionId,
+        ...editions.rows.map((book) => book.editionId),
+        ...partOf.rows.map((book) => book.editionId),
+        ...contains.rows.map((book) => book.editionId),
+      ];
+      const notShown = (ids) => `e.edition_id NOT IN (${ids.map(() => '?').join(',')})`;
+
+      const sameAuthor = authorIds.length
+        ? band(
+            `${notShown(certain)} AND e.edition_id IN (
+               SELECT edition_id FROM edition_authors
+                WHERE author_id IN (${authorIds.map(() => '?').join(',')}))`,
+            [...certain, ...authorIds],
+            // La discipline du livre courant passe devant : un lecteur venu du
+            // fiqh d'un auteur veut son fiqh, pas ses lettres.
+            'ORDER BY (e.category_id = ?) DESC, r.page_count DESC, e.title_ar',
+            [categoryId],
+          )
+        : { rows: [], total: 0 };
+      if (authorIds.length) {
+        // Comme pour la discipline : le lien mène à la page de l'auteur, il en
+        // annonce donc l'œuvre entière et non ce qui reste après exclusion.
+        sameAuthor.total =
+          first(
+            catalog,
+            `SELECT COUNT(DISTINCT e.edition_id) AS n
+               FROM editions e
+               JOIN edition_authors ea ON ea.edition_id = e.edition_id
+              WHERE e.is_hidden = 0 AND e.edition_id <> ?
+                AND ea.author_id IN (${authorIds.map(() => '?').join(',')})`,
+            [editionId, ...authorIds],
+          )?.n ?? 0;
+      }
+
+      const excluded = [...certain, ...sameAuthor.rows.map((book) => book.editionId)];
+
+      const sameCategory =
+        categoryId == null
+          ? { rows: [], total: 0 }
+          : band(
+              `e.category_id = ? AND ${notShown(excluded)}`,
+              [categoryId, ...excluded],
+              'ORDER BY r.page_count DESC, e.title_ar',
+            );
+      if (categoryId != null) {
+        // Le lien mène à la discipline entière : il doit en annoncer la taille,
+        // pas celle du vivier qui reste une fois les bandes du dessus retirées.
+        sameCategory.total =
+          first(
+            catalog,
+            'SELECT COUNT(*) AS n FROM editions WHERE is_hidden = 0 AND category_id = ?',
+            [categoryId],
+          )?.n ?? 0;
+      }
+
+      // Un seul aller-retour vers `user.sqlite` pour toutes les bandes : les
+      // résumés sont les mêmes objets, le statut se pose en place.
+      await this.#withDownloadStatus([
+        ...editions.rows,
+        ...partOf.rows,
+        ...contains.rows,
+        ...sameAuthor.rows,
+        ...sameCategory.rows,
+      ]);
+
+      return {
+        editions,
+        partOf,
+        contains,
+        sameAuthor: { ...sameAuthor, authorIds },
+        sameCategory: { ...sameCategory, categoryId },
+      };
+    });
+  }
+
   getFeaturedAuthor() {
     return this.#guard("lecture de l'auteur en vedette", async () => {
       const db = await this.#db.catalog();
@@ -1651,6 +1808,107 @@ export class BookRepository {
     });
   }
 
+  // ----------------------------------------------------------------- cursus
+
+  /**
+   * Les livres de tous les cursus, résolus contre le catalogue installé, avec
+   * leur progression. Une seule passe : les sept cursus tiennent en moins de
+   * cinquante identifiants, les interroger un par un ferait sept fois le tour
+   * des deux bases pour rien.
+   */
+  async #curriculumIndex() {
+    const wanted = [...new Set(CURRICULA.flatMap((curriculum) => curriculum.steps))];
+    const catalog = await this.#db.catalog();
+    const placeholders = wanted.map(() => '?').join(',');
+    const books = new Map(
+      all(
+        catalog,
+        `${SUMMARY_SELECT} AND e.edition_id IN (${placeholders}) GROUP BY e.edition_id`,
+        wanted,
+      )
+        .map(bookSummary)
+        .map((book) => [book.editionId, book]),
+    );
+
+    const user = await this.#db.user();
+    const progress = new Map(
+      all(
+        user,
+        `SELECT edition_id, download_status, progress_percent
+           FROM downloaded_books WHERE edition_id IN (${placeholders})`,
+        wanted,
+      ).map((row) => [
+        row.edition_id,
+        { status: row.download_status ?? null, percent: row.progress_percent ?? 0 },
+      ]),
+    );
+    const live = new Map(
+      (this.#downloads?.snapshot() ?? []).map((job) => [job.editionId, job.status]),
+    );
+    for (const [editionId, book] of books) {
+      book.downloadStatus = live.get(editionId) ?? progress.get(editionId)?.status ?? null;
+    }
+    return { books, progress };
+  }
+
+  /**
+   * Une étape terminée est un livre lu jusqu'au bout. `saveProgress` écrit
+   * `progress_percent` sur la même ligne que le téléchargement : il n'y a rien
+   * de plus à tenir, et rien qui puisse diverger.
+   */
+  #curriculumState(curriculum, { books, progress }) {
+    const steps = curriculum.steps
+      .filter((editionId) => books.has(editionId))
+      .map((editionId, index) => ({
+        position: index + 1,
+        book: books.get(editionId),
+        percent: progress.get(editionId)?.percent ?? 0,
+      }));
+    const done = steps.filter((step) => step.percent >= 1).length;
+    const started = steps.filter((step) => step.percent > 0 && step.percent < 1).length;
+    return {
+      id: curriculum.id,
+      category: curriculum.category,
+      steps,
+      // `resolved` survit au retrait de `steps` dans la liste : sans lui, la
+      // carte d'un cursus n'aurait aucun dénominateur à afficher.
+      resolved: steps.length,
+      // Le compte déclaré, pas celui des étapes retenues : un cursus amputé par
+      // un import partiel doit le dire au lieu de se donner pour complet.
+      declared: curriculum.steps.length,
+      missing: curriculum.steps.length - steps.length,
+      installed: steps.filter((step) => step.book.downloadStatus === 'installed').length,
+      done,
+      started,
+      percent: steps.length ? done / steps.length : 0,
+    };
+  }
+
+  /**
+   * Les cursus **avec toutes leurs étapes** : la carte les dessine en rayon,
+   * une tranche par livre. Quarante-neuf résumés pour les sept cursus — en
+   * renvoyer trois obligerait la vue à mentir sur l'épaisseur du rayon.
+   */
+  getCurricula() {
+    return this.#guard('lecture des cursus', async () => {
+      const index = await this.#curriculumIndex();
+      return (
+        CURRICULA.map((curriculum) => this.#curriculumState(curriculum, index))
+          // Un cursus dont aucune étape n'est au catalogue n'est pas montrable :
+          // sur le jeu d'exemple, aucun identifiant `sh-*` ne répond.
+          .filter((state) => state.steps.length > 0)
+      );
+    });
+  }
+
+  getCurriculum(curriculumId) {
+    return this.#guard("lecture d'un cursus", async () => {
+      const curriculum = CURRICULA.find((entry) => entry.id === curriculumId);
+      if (!curriculum) throw new Error(`cursus inconnu : ${curriculumId}`);
+      return this.#curriculumState(curriculum, await this.#curriculumIndex());
+    });
+  }
+
   // ------------------------------------------------------------ annotations
 
   /**
@@ -2209,6 +2467,7 @@ export const REPOSITORY_METHODS = [
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',
+  'getRelatedBooks',
   'getFeaturedAuthor',
   'getAuthors',
   'getAuthorStats',
@@ -2235,6 +2494,8 @@ export const REPOSITORY_METHODS = [
   'addToCollection',
   'removeFromCollection',
   'getCollectionBooks',
+  'getCurricula',
+  'getCurriculum',
   'deleteAllBooks',
   'setDownloadBaseUrl',
   'checkCatalogUpdate',
