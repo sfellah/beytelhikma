@@ -466,6 +466,15 @@ export default {
   'settings.dangerZone': 'Danger zone',
   'settings.dangerHint': 'Actions that cannot be undone.',
 
+  'settings.addFont': 'Add a typeface',
+  'settings.addFontHint': 'Paste a Google Fonts URL — downloaded once, then kept on your device',
+  'settings.fontAdded': '{family} added',
+  'settings.fontFailed': 'The typeface could not be added',
+  'settings.removeFonts': 'Added typefaces',
+  'settings.removeFontsHint': 'Their files are removed from your device',
+  'settings.removeFontTitle': 'Delete {family}?',
+  'settings.removeFontMessage': 'Anything using it falls back to the default face.',
+
   'nav.aria': 'Main navigation',
   'nav.home': 'Home',
   'nav.library': 'My library',

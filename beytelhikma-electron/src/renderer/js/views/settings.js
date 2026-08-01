@@ -11,6 +11,7 @@ import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
+import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
 
 const MIN_FONT = 16;
@@ -41,7 +42,7 @@ export function settingsView(host) {
       { class: 'settings' },
       h('h1', { class: 'display-lg' }, t('settings.title')),
       languageSection(),
-      fontsSection(prefs),
+      fontsSection(prefs, refresh),
       librarySection(usage),
       serverSection(prefs, refresh),
       aboutSection(about, usage),
@@ -159,16 +160,18 @@ function languageSection() {
  * honnête de choisir une police, et la seule qui vaudra encore pour celles
  * qu'on ajoutera depuis Google Fonts, dont on ne connaît que le nom.
  */
-function fontsSection(prefs) {
+function fontsSection(prefs, refresh) {
   const script = interfaceScript();
 
   const sample = (stack, text) =>
     h('span', { class: 'settings__sample', style: { fontFamily: stack } }, text);
 
+  // Une police ajoutée porte son propre nom : il vient de la feuille de Google
+  // et n'a pas de clé de catalogue.
   const options = (list, sampleText) =>
     list.map((font) => ({
       value: font.key,
-      label: t(font.label),
+      label: font.user ? font.family : t(font.label),
       preview: sample(font.stack, sampleText),
     }));
 
@@ -194,7 +197,10 @@ function fontsSection(prefs) {
       segmented({
         ariaLabel: t('settings.interfaceFont'),
         value: currentAppFont(script),
-        options: options(fontsForScript(script), t('settings.language.preview', { page: 42, total: 350 })),
+        options: options(
+          familiesFor(script, fontsForScript(script)),
+          t('settings.language.preview', { page: 42, total: 350 }),
+        ),
         onPick: (key) => setAppFont(key, script),
       }),
       t('settings.interfaceFontHint'),
@@ -205,13 +211,63 @@ function fontsSection(prefs) {
         ariaLabel: t('settings.readerFont'),
         // Le livre est arabe : seules les faces arabes sont proposées, quelle
         // que soit la langue de l'interface.
-        value: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
-        options: options(fontsForScript('arab'), t('settings.readerSample')),
+        value: resolveAnyFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
+        options: options(
+          familiesFor('arab', fontsForScript('arab')),
+          t('settings.readerSample'),
+        ),
         onPick: (key) => setSetting('reader.font', key),
       }),
       t('settings.readerFontHint'),
     ),
     row(t('settings.fontSize'), h('div', { class: 'settings__slider' }, slider, value)),
+    addFontRow(refresh),
+  );
+}
+
+/**
+ * Ajouter une police, c'est **l'installer**, pas la lier.
+ *
+ * Le processus principal lit la feuille une fois, dépose les `woff2` dans
+ * `userData/fonts/` et n'y revient jamais. Ouvrir la CSP vers Google ferait
+ * perdre ses polices à un lecteur hors ligne et émettrait une requête vers un
+ * tiers à chaque lancement.
+ */
+function addFontRow(refresh) {
+  const field = h('input', {
+    type: 'url',
+    class: 'settings__field',
+    dir: 'ltr',
+    placeholder: 'https://fonts.googleapis.com/css2?family=Vibes&display=swap',
+  });
+
+  const bouton = action(
+    'plusSquare',
+    t('settings.addFont'),
+    async (event) => {
+      const url = field.value.trim();
+      if (!url) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const font = await repository.installFont(url);
+        await syncUserFonts();
+        field.value = '';
+        toast(t('settings.fontAdded', { family: font.family }));
+        refresh();
+      } catch (error) {
+        toast(error?.message ?? t('settings.fontFailed'));
+      } finally {
+        button.disabled = false;
+      }
+    },
+    'filled',
+  );
+
+  return row(
+    t('settings.addFont'),
+    h('div', { class: 'settings__inline' }, field, bouton),
+    t('settings.addFontHint'),
   );
 }
 
@@ -379,5 +435,37 @@ function dangerSection(usage, refresh) {
       ),
       t('settings.deleteAllHint'),
     ),
+    // Les polices ajoutées vivent dans `userData/fonts/` : aucune
+    // réinstallation ne les nettoie, il faut un moyen de les reprendre.
+    userFonts().length > 0 &&
+      row(
+        t('settings.removeFonts'),
+        h(
+          'div',
+          { class: 'settings__choices' },
+          userFonts().map((font) =>
+            h(
+              'button',
+              {
+                class: 'button button--danger',
+                onclick: async () => {
+                  const choice = await confirmDialog({
+                    title: t('settings.removeFontTitle', { family: font.family }),
+                    message: t('settings.removeFontMessage'),
+                    actions: [{ value: 'go', label: t('action.delete'), variant: 'danger' }],
+                  });
+                  if (choice !== 'go') return;
+                  await repository.removeFont(font.key);
+                  await syncUserFonts();
+                  refresh();
+                },
+              },
+              icon('trash', { size: 16 }),
+              h('span', {}, font.family),
+            ),
+          ),
+        ),
+        t('settings.removeFontsHint'),
+      ),
   );
 }

@@ -3,6 +3,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const METHODS = [
+  'installFont',
+  'listFonts',
+  'removeFont',
   'getCategories',
   'getTopCategories',
   'getRecentBooks',

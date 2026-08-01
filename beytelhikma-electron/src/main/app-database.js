@@ -15,7 +15,7 @@ function engine() {
   return enginePromise;
 }
 
-export const USER_DB_SCHEMA_VERSION = 2;
+export const USER_DB_SCHEMA_VERSION = 3;
 
 /**
  * Au-delà de cette taille, `new SQL.Database(buffer)` charge le livre entier en
@@ -75,8 +75,28 @@ const ANNOTATION_SCHEMA = [
  * Une base fraîche part de `USER_SCHEMA` et saute directement à la version
  * courante ; une base existante rejoue les paliers manquants.
  */
+/**
+ * Polices ajoutées par l'utilisateur depuis Google Fonts. Les fichiers vivent
+ * dans `userData/fonts/<key>/` ; la table ne porte que de quoi les redéclarer.
+ *
+ * `faces` est du JSON — poids, sous-ensemble, fichier, `unicode-range` — parce
+ * qu'une police a autant de faces qu'elle a de poids et de sous-ensembles, et
+ * qu'aucune requête ne les interroge séparément.
+ */
+const USER_FONTS_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS user_fonts (
+     key          TEXT PRIMARY KEY,
+     family       TEXT NOT NULL,
+     scripts      TEXT NOT NULL,
+     source_url   TEXT NOT NULL,
+     installed_at TEXT NOT NULL,
+     faces        TEXT NOT NULL
+   )`,
+];
+
 const USER_MIGRATIONS = {
   2: ANNOTATION_SCHEMA,
+  3: USER_FONTS_SCHEMA,
 };
 
 const USER_SCHEMA = [
@@ -113,6 +133,7 @@ const USER_SCHEMA = [
      value TEXT NOT NULL
    )`,
   ...ANNOTATION_SCHEMA,
+  ...USER_FONTS_SCHEMA,
   `CREATE TABLE user_info (schema_version INTEGER NOT NULL)`,
   `INSERT INTO user_info (schema_version) VALUES (${USER_DB_SCHEMA_VERSION})`,
   // `user_version` reste posé : c'est le contrat qu'un autre client (l'ex-port

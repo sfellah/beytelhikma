@@ -492,6 +492,15 @@ export default {
   'settings.dangerZone': 'منطقة الخطر',
   'settings.dangerHint': 'أفعال لا رجعة فيها.',
 
+  'settings.addFont': 'إضافة خط',
+  'settings.addFontHint': 'الصق عنوان خط من Google Fonts — يُنزَّل مرة واحدة ويبقى على جهازك',
+  'settings.fontAdded': 'أُضيف خط {family}',
+  'settings.fontFailed': 'تعذّرت إضافة الخط',
+  'settings.removeFonts': 'الخطوط المضافة',
+  'settings.removeFontsHint': 'تُحذف ملفاتها من جهازك',
+  'settings.removeFontTitle': 'حذف خط {family}؟',
+  'settings.removeFontMessage': 'يعود ما كان يستعمله إلى الخط الافتراضي.',
+
   'nav.aria': 'التنقل الرئيسي',
   'nav.home': 'الرئيسية',
   'nav.library': 'مكتبتي',

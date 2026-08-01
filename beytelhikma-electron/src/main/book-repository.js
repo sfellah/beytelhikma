@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+
 import path from 'node:path';
 
 import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
 import { all, first } from './app-database.js';
+import { cssFor, installFont } from './font-installer.js';
 import { decideUpdate, fetchPointer, installCatalog } from './catalog-updater.js';
 import { buildCount, buildFacetQuery, buildList } from './catalog-query.js';
 import { DownloadQueue } from './download-manager.js';
@@ -480,6 +482,75 @@ export class BookRepository {
     return this.#guard('nettoyage des téléchargements échoués', async () => {
       this.#downloads?.clearFailed();
     });
+  }
+
+  /**
+   * Installe une police depuis Google Fonts.
+   *
+   * L'URL vient de l'utilisateur, donc le processus principal émet une requête
+   * sortante sur sa demande. Les bornes sont dans `font-installer.js` : hôtes
+   * en liste close, `https` seul, tailles plafonnées, `woff2` seul écrit.
+   *
+   * L'inscription en base vient **après** l'écriture des fichiers : une police
+   * annoncée sans fichier laisserait l'interface demander une ressource
+   * absente à chaque rendu.
+   */
+  installFont(url) {
+    return this.#guard("installation d'une police", async () => {
+      const font = await installFont({ url, fontsRoot: this.#fontsRoot() });
+      await this.#db.writeUser((db) => {
+        db.run(
+          `INSERT OR REPLACE INTO user_fonts
+             (key, family, scripts, source_url, installed_at, faces)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            font.key,
+            font.family,
+            font.scripts.join(','),
+            font.sourceUrl,
+            new Date().toISOString(),
+            JSON.stringify(font.faces),
+          ],
+        );
+      });
+      return { ...font, css: cssFor(font) };
+    });
+  }
+
+  /** Les polices ajoutées, avec les règles `@font-face` que le rendu posera. */
+  listFonts() {
+    return this.#guard('lecture des polices ajoutées', async () => {
+      const db = await this.#db.user();
+      return all(db, 'SELECT * FROM user_fonts ORDER BY installed_at').map((row) => {
+        const font = {
+          key: row.key,
+          family: row.family,
+          scripts: String(row.scripts).split(',').filter(Boolean),
+          faces: JSON.parse(row.faces),
+        };
+        return { ...font, css: cssFor(font) };
+      });
+    });
+  }
+
+  /**
+   * Retire une police : la ligne d'abord, les fichiers ensuite. Dans l'autre
+   * sens, une coupure laisserait une police au catalogue sans ses fichiers.
+   */
+  removeFont(key) {
+    return this.#guard("retrait d'une police", async () => {
+      await this.#db.writeUser((db) => db.run('DELETE FROM user_fonts WHERE key = ?', [key]));
+      // La clé est construite par `slugify` : `user-` puis de l'ASCII sûr. On
+      // la vérifie quand même — elle traverse le pont IPC, donc le rendu.
+      if (/^user-[a-z0-9-]+$/.test(String(key))) {
+        fs.rmSync(path.join(this.#fontsRoot(), String(key)), { recursive: true, force: true });
+      }
+      return { removed: key };
+    });
+  }
+
+  #fontsRoot() {
+    return path.join(this.#db.root, 'fonts');
   }
 
   getStorageUsage() {
@@ -2098,6 +2169,9 @@ export class BookRepository {
 /** Méthodes exposées au rendu par IPC (aucune autre n'est appelable). */
 export const REPOSITORY_METHODS = [
   'reconcileLibrary',
+  'installFont',
+  'listFonts',
+  'removeFont',
   'downloadBook',
   'cancelDownload',
   'retryDownload',

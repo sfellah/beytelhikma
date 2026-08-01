@@ -1,4 +1,5 @@
-import { DEFAULT_INTERFACE_FONT, fontStack, resolveFont } from '../../shared/fonts.js';
+import { DEFAULT_INTERFACE_FONT } from '../../shared/fonts.js';
+import { resolveAnyFont, stackForAny } from './user-fonts.js';
 import { localeDigits } from '../../shared/locale.js';
 import { setSetting, settings } from './repository.js';
 
@@ -44,8 +45,8 @@ function readMirror(script) {
  * `--font-body` et `--font-naskh` ne bougent pas : elles servent le lecteur.
  */
 export function applyAppFont(stored, script = interfaceScript()) {
-  const key = resolveFont(stored, script, DEFAULT_INTERFACE_FONT[script]);
-  const stack = fontStack(key, script, DEFAULT_INTERFACE_FONT[script]);
+  const key = resolveAnyFont(stored, script, DEFAULT_INTERFACE_FONT[script]);
+  const stack = stackForAny(key, script, DEFAULT_INTERFACE_FONT[script]);
   const root = document.documentElement;
   root.style.setProperty('--font-display', stack);
   root.style.setProperty('--font-label', stack);
@@ -59,7 +60,7 @@ export function applyAppFont(stored, script = interfaceScript()) {
 }
 
 export function currentAppFont(script = interfaceScript()) {
-  return resolveFont(document.documentElement.dataset.appFont, script, DEFAULT_INTERFACE_FONT[script]);
+  return resolveAnyFont(document.documentElement.dataset.appFont, script, DEFAULT_INTERFACE_FONT[script]);
 }
 
 export function setAppFont(stored, script = interfaceScript()) {
