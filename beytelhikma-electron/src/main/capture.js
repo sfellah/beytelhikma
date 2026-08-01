@@ -466,16 +466,24 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   await shootScrollMode(window, editionId, outDir, problems);
   await shootAnnotationState(window, editionId, outDir, problems);
 
-  // La recherche transversale n'a d'écran que quand elle a cherché : sans
-  // terme, la capture ne montre qu'un champ vide.
+  // La recherche générale n'a d'écran que quand elle a cherché : sans terme,
+  // la capture ne montre qu'un champ vide. Le terme doit toucher les deux
+  // vagues — le catalogue *et* le texte des livres installés — sinon l'image
+  // ne montre que la moitié de l'écran et les sections dérivent sans qu'aucune
+  // capture ne le dise.
   await window.webContents.executeJavaScript(`location.hash = '#/search'`);
   if (await waitForSelector(window.webContents, '.search__field')) {
     await window.webContents.executeJavaScript(`(() => {
       const field = document.querySelector('.search__field');
-      field.value = 'الله';
+      field.value = 'البخاري';
       field.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
-    // Le balayage ouvre chaque livre installé : il lui faut plus qu'une frame.
+    // Deux vagues, deux attentes : les sections de catalogue reviennent tout de
+    // suite, le balayage ouvre chaque livre installé l'un après l'autre. On
+    // attend la seconde — c'est elle qui décide quand l'écran est complet.
+    if (!(await waitForSelector(window.webContents, '.search__section-head'))) {
+      problems.push("search-results : aucune section n'a répondu");
+    }
     await wait(6000);
     const image = await window.webContents.capturePage();
     fs.writeFileSync(path.join(outDir, 'search-results.png'), image.toPNG());

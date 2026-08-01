@@ -19,10 +19,17 @@ const SORTS = [
 /** Le haut de l'écran ne montre que les plus présents : c'est une vitrine. */
 const PROMINENT = 7;
 
-/** Les auteurs du catalogue : le plus présent, les suivants, les siècles, tous. */
-export function authorsView(host) {
+/**
+ * Les auteurs du catalogue : le plus présent, les suivants, les siècles, tous.
+ *
+ * `?text=` pré-remplit l'index : c'est par là qu'arrive « voir les N auteurs »
+ * depuis la recherche générale. Sans lui, le lien annoncerait un nombre puis
+ * montrerait tout le fonds.
+ */
+export function authorsView(host, params) {
   const content = renderShell(host, { active: 'authors' });
-  asyncView(content, load, render, { empty: t('authors.empty') });
+  const text = params?.query?.text?.trim() ?? '';
+  asyncView(content, load, (data) => render(data, text), { empty: t('authors.empty') });
   return null;
 }
 
@@ -45,7 +52,7 @@ async function load() {
   return { stats, prominent: prominent.rows, lead, leadBooks, eras };
 }
 
-function render({ stats, prominent, lead, leadBooks, eras }) {
+function render({ stats, prominent, lead, leadBooks, eras }, text = '') {
   if (!stats.authorCount) return null;
   return reveal(
     h(
@@ -55,7 +62,7 @@ function render({ stats, prominent, lead, leadBooks, eras }) {
       leadSection(lead, leadBooks),
       prominentSection(prominent.slice(1)),
       centuriesSection(eras),
-      indexSection(),
+      indexSection(text),
     ),
   );
 }
@@ -274,8 +281,8 @@ function centuriesSection(eras) {
  * milliers d'auteurs : les rendre tous d'un coup, c'était autant de nœuds DOM
  * pour un écran qu'on ne lit jamais en entier.
  */
-function indexSection() {
-  const state = { offset: 0, limit: PAGE_SIZES[0], sort: 'name', text: '' };
+function indexSection(text = '') {
+  const state = { offset: 0, limit: PAGE_SIZES[0], sort: 'name', text };
   // `body` porte les quatre états ; la grille n'est montée que quand il y a
   // des lignes — un `<div>` d'état n'a rien à faire dans un `<ul>`.
   const body = h('div', { class: 'authors__index' }, loadingView());
@@ -283,6 +290,10 @@ function indexSection() {
   const subtitle = h('span', {});
   let timer = null;
   let token = 0;
+  // L'index est en bas de l'écran : arrivé ici avec un terme, on l'y amène une
+  // fois. Le geste se fait après la première réponse, quand la section est
+  // montée — pas au montage, où elle ne l'est pas encore.
+  let scrolled = false;
 
   const refresh = async () => {
     const mine = ++token;
@@ -299,6 +310,10 @@ function indexSection() {
           ? h('ul', { class: 'author-grid' }, rows.map(authorTile))
           : emptyView(t('authors.noMatch')),
       );
+      if (text && !scrolled && body.isConnected) {
+        scrolled = true;
+        body.closest('section')?.scrollIntoView({ block: 'start' });
+      }
       pager.replaceChildren(
         total > state.limit
           ? pagination({
@@ -326,6 +341,7 @@ function indexSection() {
     type: 'search',
     class: 'authors__search',
     placeholder: t('authors.search'),
+    value: text,
     oninput: (event) => {
       clearTimeout(timer);
       const value = event.target.value;

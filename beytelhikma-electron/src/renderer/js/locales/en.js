@@ -88,12 +88,16 @@ export default {
   'route.notFound.title': 'Page not found',
   'route.notFound.message': 'This page could not be found.',
 
-  'search.title': 'Search texts',
-  'search.inCatalog': 'Search the catalogue',
-  'search.field': 'Search inside your downloaded books…',
+  'search.title': 'Search',
+  'search.field': 'Search a book, an author, a path of study…',
   'search.tooShort': 'Type at least two characters.',
   'search.running': 'Searching downloaded books…',
   'search.slow': 'Opening the books may take a few seconds…',
+  'search.inAuthors': 'Authors',
+  'search.inCurricula': 'Paths of study',
+  'search.inCatalogBooks': 'Books in the catalogue',
+  'search.seeAll': 'See all {count}',
+  'search.noneInCatalog': 'Nothing in the catalogue for this term',
   'search.inBooks': 'In book texts',
   'search.inNotes': 'In my notes',
   'search.noneInBooks': 'No matches in your downloaded books',
@@ -524,8 +528,8 @@ export default {
 
   'search.aria': 'Search the library',
   'search.placeholder': 'Search a book, an author, an edition…',
-  'search.inText': 'In texts',
-  'search.inTextTitle': 'Search inside downloaded books (Ctrl + Enter)',
+  'search.toFilters': 'Filters',
+  'search.toFiltersTitle': 'Browse the catalogue with filters (Ctrl + Enter)',
 
   'shell.backHome': 'Back to home',
 

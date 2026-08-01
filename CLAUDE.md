@@ -104,7 +104,15 @@ Voir `docs/superpowers/specs/2026-07-31-source-distribution-configurable-design.
 
 ## Écrans
 
-Accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`, file + table paginée de tout le catalogue avec taille, pages, statut, suppression par lot), **collections** (`/collection/:id`), **recherche transversale** (`/search`), **mes notes** (`/notes`), **réglages** (`/settings`).
+Accueil, bibliothèque, fiche livre, lecteur, auteurs, **exploration** (`/explore`), **téléchargements** (`/downloads`, file + table paginée de tout le catalogue avec taille, pages, statut, suppression par lot), **collections** (`/collection/:id`), **recherche générale** (`/search`), **mes notes** (`/notes`), **réglages** (`/settings`).
+
+**La recherche générale montre cinq sections, en deux vagues.** Auteurs, cursus et livres viennent du catalogue ; passages et notes viennent du texte des livres installés. Les trois premières requêtes reviennent en quelques millisecondes, le balayage plein texte ouvre chaque livre l'un après l'autre : les attendre ensemble laisserait l'écran vide pour des réponses déjà prêtes. Deux vagues, un seul `#token`, et **un état vide par vague** — « rien dans le catalogue » et « rien dans vos livres installés » sont deux réponses différentes qu'un état vide unique confondrait.
+
+Les cursus s'y filtrent **côté vue** : leurs noms vivent dans `locales/*.js`, le processus principal ne les a pas. La comparaison passe par `normalizeArabic`, la même normalisation que les colonnes du catalogue.
+
+Dans la barre haute, `Entrée` mène à `/search` et `Ctrl+Entrée` à `/explore` : le défaut ne peut pas être l'écran de facettes quand l'écran général existe.
+
+**`Ctrl+F` se dispute par convention, pas par liste d'écrans.** La coquille l'écoute sur `window` pour viser le champ de la barre haute, le lecteur sur `document` pour chercher dans le livre ouvert ; `document` bulle avant `window`, donc le premier à répondre appelle `preventDefault()` et le second sort sur `defaultPrevented`. Une liste d'écrans exemptés devrait être tenue à jour au prochain écran — pas la convention. `test/shortcuts.test.js` la tient aux deux bouts.
 
 Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design.
 

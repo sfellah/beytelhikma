@@ -80,8 +80,16 @@ export function renderShell(host, { active }) {
    global qui vise le champ courant, plutôt qu'un écouteur par vue. */
 let searchField = null;
 
+/* `Ctrl+K` et `Ctrl+F` visent le même champ : le second est le geste qu'on
+   essaie d'abord, le premier celui qu'on apprend. Le lecteur garde le sien —
+   il pose son écouteur sur `document`, qui bulle avant `window`, et appelle
+   `preventDefault()` ; tester `defaultPrevented` lui laisse la main sans qu'il
+   y ait ici une liste d'écrans à tenir à jour. */
 addEventListener('keydown', (event) => {
-  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+  if (!(event.ctrlKey || event.metaKey)) return;
+  const key = event.key.toLowerCase();
+  if (key !== 'k' && key !== 'f') return;
+  if (event.defaultPrevented) return;
   if (!searchField?.isConnected) return;
   event.preventDefault();
   searchField.focus();
@@ -153,10 +161,10 @@ function rail(active) {
  * rendraient illisible.
  */
 function topbar() {
-  // Deux destinations pour un même champ : `Entrée` cherche un livre dans le
-  // catalogue, `Ctrl+Entrée` (ou le bouton) cherche le terme dans le texte des
-  // livres installés. Chercher un titre et chercher un passage ne se mélangent
-  // pas dans une même liste de résultats.
+  // Deux destinations pour un même champ : `Entrée` mène à la recherche
+  // générale — auteurs, cursus, livres, puis passages — et `Ctrl+Entrée` (ou le
+  // bouton) aux facettes du catalogue. Le défaut ne peut pas être l'écran de
+  // filtres quand l'écran général existe.
   const term = () => field.value.trim();
   const go = (base) => navigate(`${base}${term() ? `?text=${encodeURIComponent(term())}` : ''}`);
 
@@ -166,7 +174,7 @@ function topbar() {
     placeholder: t('search.placeholder'),
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
-      go(event.ctrlKey || event.metaKey ? '/search' : '/explore');
+      go(event.ctrlKey || event.metaKey ? '/explore' : '/search');
     },
   });
   searchField = field;
@@ -189,10 +197,10 @@ function topbar() {
         'button',
         {
           class: 'topbar__in-text label-sm',
-          title: t('search.inTextTitle'),
-          onclick: () => go('/search'),
+          title: t('search.toFiltersTitle'),
+          onclick: () => go('/explore'),
         },
-        t('search.inText'),
+        t('search.toFilters'),
       ),
       h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
     ),
