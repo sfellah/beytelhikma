@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { initial, n } from '../format.js';
 import { t } from '../i18n.js';
-import { arrowBackward, icon } from '../icons.js';
+import { arrowBackward, chevronForward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
@@ -308,7 +308,7 @@ function tocChapter(node, openReader) {
       h(
         'span',
         { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-        icon('chevronLeft', { size: 18, className: 'icon--chevron' }),
+        chevronForward({ size: 18, className: 'icon--chevron' }),
         node.title,
       ),
       h(

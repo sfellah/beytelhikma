@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { n } from '../format.js';
-import { currentLocale, t } from '../i18n.js';
-import { icon } from '../icons.js';
+import { t } from '../i18n.js';
+import { chevronBackward, chevronForward } from '../icons.js';
 
 /** Tailles de page proposées ; la première est le défaut des vues paginées. */
 export const PAGE_SIZES = [25, 50, 100];
@@ -19,9 +19,7 @@ export const PAGE_SIZES = [25, 50, 100];
 export function pagination({ total, offset, limit, onChange, onPageSize = null }) {
   const pages = Math.max(1, Math.ceil(total / limit));
   const current = Math.min(pages, Math.floor(offset / limit) + 1);
-  const rtl = currentLocale() === 'ar';
-
-  const step = (delta, name, label) =>
+  const step = (delta, chevron, label) =>
     h(
       'button',
       {
@@ -31,7 +29,7 @@ export function pagination({ total, offset, limit, onChange, onPageSize = null }
         disabled: delta < 0 ? current <= 1 : current >= pages,
         onclick: () => onChange(Math.max(0, (current - 1 + delta) * limit)),
       },
-      icon(name, { size: 20 }),
+      chevron({ size: 20 }),
     );
 
   const sizePicker =
@@ -56,13 +54,13 @@ export function pagination({ total, offset, limit, onChange, onPageSize = null }
     h(
       'div',
       { class: 'pagination__steps' },
-      step(-1, rtl ? 'chevronRight' : 'chevronLeft', t('pagination.previous')),
+      step(-1, chevronBackward, t('pagination.previous')),
       h(
         'span',
         { class: 'label-md' },
         `${n(current)} / ${n(pages)}`,
       ),
-      step(1, rtl ? 'chevronLeft' : 'chevronRight', t('pagination.next')),
+      step(1, chevronForward, t('pagination.next')),
     ),
     h('span', { class: 'label-sm muted' }, t('pagination.results', { total })),
   );

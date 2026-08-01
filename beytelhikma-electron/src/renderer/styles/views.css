@@ -1340,7 +1340,14 @@ html:not([dir='rtl']) .scroller--at-start {
   background: var(--surface-container-low);
 }
 
+/* Le chevron fermé pointe dans le sens de lecture (`chevronForward`) : ouvert,
+   il doit pointer vers le bas, donc tourner du côté opposé selon la direction.
+   Un angle figé le faisait pointer vers le haut sous interface anglaise. */
 .toc__chapter[open] > summary .icon--chevron {
+  transform: rotate(90deg);
+}
+
+[dir='rtl'] .toc__chapter[open] > summary .icon--chevron {
   transform: rotate(-90deg);
 }
 
@@ -1519,8 +1526,14 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-fg);
 }
 
-/* Le chevron part vers là où le bouton ramène : à droite, en RTL. */
+/* Le chevron part vers là où le bouton ramène : le début de la ligne, donc la
+   droite en RTL et la gauche en LTR. Figé, il s'écartait du côté opposé à ce
+   qu'il montre dès que l'interface passait en anglais. */
 .reader__back:hover .icon {
+  transform: translateX(-3px);
+}
+
+[dir='rtl'] .reader__back:hover .icon {
   transform: translateX(3px);
 }
 
@@ -1660,10 +1673,13 @@ html:not([dir='rtl']) .scroller--at-start {
   animation: page-turn-previous var(--motion-slow) var(--ease-out) both;
 }
 
+/* La page arrive du bord vers lequel on va : à gauche quand on avance en RTL,
+   à droite quand on avance en LTR. Un décalage figé faisait entrer la page
+   suivante par le bord d'où venait la précédente sous interface anglaise. */
 @keyframes page-turn-next {
   from {
     opacity: 0;
-    transform: translateX(-24px);
+    transform: translateX(24px);
     filter: blur(2px);
   }
 }
@@ -1671,9 +1687,33 @@ html:not([dir='rtl']) .scroller--at-start {
 @keyframes page-turn-previous {
   from {
     opacity: 0;
+    transform: translateX(-24px);
+    filter: blur(2px);
+  }
+}
+
+@keyframes page-turn-next-rtl {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+    filter: blur(2px);
+  }
+}
+
+@keyframes page-turn-previous-rtl {
+  from {
+    opacity: 0;
     transform: translateX(24px);
     filter: blur(2px);
   }
+}
+
+[dir='rtl'] .reader--page .reader__block.is-turned-next {
+  animation-name: page-turn-next-rtl;
+}
+
+[dir='rtl'] .reader--page .reader__block.is-turned-previous {
+  animation-name: page-turn-previous-rtl;
 }
 
 /* Le pied imprimé fait déjà filet : en fil continu il sépare deux pages, il
@@ -1829,19 +1869,33 @@ html:not([dir='rtl']) .scroller--at-start {
   margin-inline: var(--space-lg);
 }
 
-/* Jauge de lecture : rail sable, remplissage émeraude depuis la droite (sens
-   de lecture), poignée ronde — la « tasbih » de `DESIGN.md`. */
+/* Jauge de lecture : rail sable, remplissage émeraude, poignée ronde — la
+   « tasbih » de `DESIGN.md`.
+
+   Le remplissage part du bord d'où part la poignée, et ce bord est celui de la
+   direction de l'interface : un `input[type=range]` posé en RTL voit sa valeur
+   croître de la droite vers la gauche. Le dégradé était figé `to left` — sous
+   interface anglaise la poignée allait à droite et la jauge se remplissait par
+   la gauche, donc à l'envers. `to right` est le cas de base, RTL le renverse. */
 .reader__rail {
   width: 100%;
   height: 4px;
   appearance: none;
   border-radius: var(--radius-pill);
   background: linear-gradient(
-    to left,
+    to right,
     var(--reader-accent) 0 var(--reader-fill),
     color-mix(in srgb, var(--reader-rule) 60%, transparent) var(--reader-fill) 100%
   );
   cursor: pointer;
+}
+
+[dir='rtl'] .reader__rail {
+  background: linear-gradient(
+    to left,
+    var(--reader-accent) 0 var(--reader-fill),
+    color-mix(in srgb, var(--reader-rule) 60%, transparent) var(--reader-fill) 100%
+  );
 }
 
 .reader__rail::-webkit-slider-thumb {

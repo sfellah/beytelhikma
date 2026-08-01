@@ -327,3 +327,21 @@ export function arrowForward(options) {
 export function arrowBackward(options) {
   return icon(currentLocale() === 'ar' ? 'arrowRight' : 'arrowLeft', options);
 }
+
+/**
+ * Mêmes deux sens, tracés en chevron : la barre du lecteur et la pagination
+ * n'ont pas la place d'une flèche pleine. La règle est celle des flèches — le
+ * sens vient de la direction de l'interface, jamais d'une constante.
+ */
+export function chevronForward(options) {
+  return icon(currentLocale() === 'ar' ? 'chevronLeft' : 'chevronRight', options);
+}
+
+export function chevronBackward(options) {
+  return icon(currentLocale() === 'ar' ? 'chevronRight' : 'chevronLeft', options);
+}
+
+/** La direction de l'interface, pour qui doit décider autre chose qu'une icône. */
+export function isRtl() {
+  return currentLocale() === 'ar';
+}

@@ -4,7 +4,7 @@ import { renderBookHtml } from '../content-html.js';
 import { h } from '../dom.js';
 import { n } from '../format.js';
 import { t } from '../i18n.js';
-import { icon } from '../icons.js';
+import { chevronBackward, chevronForward, icon, isRtl } from '../icons.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
@@ -12,6 +12,17 @@ import { confirmDialog, noteDialog, shortcutsDialog } from '../components/modal.
 import { errorView, loadingView } from '../components/states.js';
 import { themeChoices } from '../components/theme-choices.js';
 import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
+
+/**
+ * Direction du **contenu**, qui n'est pas celle de l'interface : le corpus est
+ * arabe, une page de livre reste RTL sous une interface anglaise. Elle se pose
+ * explicitement — une direction implicite coïnciderait en `ar` et masquerait le
+ * défaut jusqu'à la première bascule.
+ */
+const CONTENT_DIR = 'rtl';
+
+/** Texte écrit par le lecteur : sa direction est celle de ce qu'il a tapé. */
+const USER_DIR = 'auto';
 
 const PAGE_WINDOW = 20;
 const MIN_FONT = 16;
@@ -64,9 +75,18 @@ const ANNOTATION_KINDS = [
   { value: 'bookmark', label: 'reader.tab.bookmark', icon: 'bookmark' },
 ];
 
+/**
+ * Les deux touches de feuilletage désignent un sens, pas une direction fixe :
+ * elles sont écrites en jetons et résolues à l'affichage. En arabe on avance
+ * vers la gauche, en anglais vers la droite — figées, elles annonceraient
+ * l'inverse de ce que fait le clavier dès que l'interface bascule.
+ */
+const KEY_FORWARD = 'key:forward';
+const KEY_BACKWARD = 'key:backward';
+
 const SHORTCUTS = [
-  { keys: ['←'], label: 'reader.shortcut.nextPage' },
-  { keys: ['→'], label: 'reader.shortcut.previousPage' },
+  { keys: [KEY_FORWARD], label: 'reader.shortcut.nextPage' },
+  { keys: [KEY_BACKWARD], label: 'reader.shortcut.previousPage' },
   { keys: ['Page ↓', 'Page ↑'], sep: '/', label: 'reader.shortcut.paging' },
   { keys: ['Home', 'End'], sep: '/', label: 'reader.shortcut.ends' },
   { keys: ['Ctrl', '+'], label: 'reader.shortcut.bigger' },
@@ -220,10 +240,13 @@ class Reader {
 
   #build() {
     // --- la page elle-même : entête discret, puis le fil des pages montées ---
+    // Le corpus est arabe : titre, chapitres et pages restent RTL sous une
+    // interface anglaise, et le disent. Une direction héritée du `<html>`
+    // marcherait par coïncidence en `ar` et casserait en `en`.
     const pageHead = h(
       'div',
       { class: 'reader__page-head' },
-      h('p', { class: 'headline-md' }, this.#title),
+      h('p', { class: 'headline-md', dir: CONTENT_DIR }, this.#title),
       h('span', { class: 'reader__hairline' }),
     );
     const flow = h('div', { class: 'reader__flow' });
@@ -236,11 +259,13 @@ class Reader {
     // dit pas où elle ramène.
     // `data-tool` est le point d'accroche stable des captures et des tests :
     // les infobulles portent maintenant leur raccourci, elles bougent.
+    // `name` est un nom d'icône, ou une fabrique quand le tracé dépend de la
+    // direction de l'interface (`chevronForward` et sa jumelle).
     const tool = (key, name, title, onclick) =>
       h(
         'button',
         { class: 'reader__tool', 'data-tool': key, title, onclick },
-        icon(name, { size: 20 }),
+        typeof name === 'function' ? name({ size: 20 }) : icon(name, { size: 20 }),
       );
 
     const fullscreenButton = tool('fullscreen', 'fullscreen', t('reader.fullscreen'), () =>
@@ -252,7 +277,8 @@ class Reader {
 
     // La sortie garde `data-tool="close"` : c'est le contrat que suivent les
     // captures et les tests, seul son habillage change. Le chevron pointe vers
-    // le début de ligne — en RTL, la droite — comme tout retour arrière.
+    // le début de ligne — la droite en RTL, la gauche en LTR — comme tout
+    // retour arrière : il suit la direction de l'interface, il n'est pas figé.
     const backButton = h(
       'button',
       {
@@ -261,7 +287,7 @@ class Reader {
         title: t('reader.backTitle'),
         onclick: () => back(),
       },
-      icon('chevronRight', { size: 20 }),
+      chevronBackward({ size: 20 }),
       h('span', { class: 'reader__back-label label-md' }, t('reader.back')),
     );
 
@@ -275,7 +301,7 @@ class Reader {
         h(
           'div',
           { class: 'reader__titles' },
-          h('h1', { class: 'truncate' }, this.#title),
+          h('h1', { class: 'truncate', dir: CONTENT_DIR }, this.#title),
         ),
         h(
           'div',
@@ -304,10 +330,10 @@ class Reader {
       oninput: (event) => this.#show(Number(event.target.value) - 1),
     });
 
-    const previous = tool('previous', 'chevronRight', t('reader.shortcut.previousPage'), () =>
+    const previous = tool('previous', chevronBackward, t('reader.shortcut.previousPage'), () =>
       this.#move(-1),
     );
-    const next = tool('next', 'chevronLeft', t('reader.shortcut.nextPage'), () => this.#move(1));
+    const next = tool('next', chevronForward, t('reader.shortcut.nextPage'), () => this.#move(1));
     const pagerLabel = h('span', { class: 'reader__pager-label label-md' });
     const percent = h('span', { class: 'reader__percent label-sm' });
 
@@ -518,7 +544,7 @@ class Reader {
               class: `reader__toc-item${entry.parentTocId != null ? ' is-child' : ''}`,
               onclick: () => this.#goToPage(entry.pageId),
             },
-            h('span', { class: 'truncate' }, entry.title),
+            h('span', { class: 'truncate', dir: CONTENT_DIR }, entry.title),
             h(
               'span',
               { class: 'label-sm muted' },
@@ -770,7 +796,11 @@ class Reader {
 
     const body =
       entry.kind === 'bookmark'
-        ? h('p', { class: 'body-md' }, entry.bookmark.label ?? t('reader.savedPosition'))
+        ? h(
+            'p',
+            { class: 'body-md', dir: USER_DIR },
+            entry.bookmark.label ?? t('reader.savedPosition'),
+          )
         : h(
             'div',
             { class: 'reader__annotation-text' },
@@ -779,11 +809,12 @@ class Reader {
                 'p',
                 {
                   class: 'reader__annotation-quote',
+                  dir: CONTENT_DIR,
                   style: { '--highlight-color': entry.highlight.color },
                 },
                 entry.highlight.selectedText,
               ),
-            entry.note && h('p', { class: 'body-md' }, entry.note.content),
+            entry.note && h('p', { class: 'body-md', dir: USER_DIR }, entry.note.content),
           );
 
     return h(
@@ -1089,7 +1120,7 @@ class Reader {
         h(
           'button',
           { class: 'reader__result is-chapter', onclick: () => this.#goToPage(entry.pageId) },
-          h('span', { class: 'reader__result-title truncate' }, entry.title),
+          h('span', { class: 'reader__result-title truncate', dir: CONTENT_DIR }, entry.title),
           h(
             'span',
             { class: 'label-sm muted' },
@@ -1103,7 +1134,7 @@ class Reader {
           { class: 'reader__result', onclick: () => this.#goToPage(entry.pageId) },
           h(
             'p',
-            { class: 'reader__result-snippet' },
+            { class: 'reader__result-snippet', dir: CONTENT_DIR },
             entry.snippet.before,
             h('mark', {}, entry.snippet.match),
             entry.snippet.after,
@@ -1224,9 +1255,9 @@ class Reader {
    * page, puis le pied imprimé — qui sert aussi de séparateur en fil continu.
    */
   #makeBlock(index, page) {
-    const body = h('article', { class: 'reader__page' });
-    const footnotes = h('aside', { class: 'reader__footnotes' });
-    const chapter = h('h2', { class: 'reader__chapter' });
+    const body = h('article', { class: 'reader__page', dir: CONTENT_DIR });
+    const footnotes = h('aside', { class: 'reader__footnotes', dir: CONTENT_DIR });
+    const chapter = h('h2', { class: 'reader__chapter', dir: CONTENT_DIR });
     const foot = h('div', { class: 'reader__page-foot label-sm' });
     const ribbon = h(
       'span',
@@ -1594,7 +1625,11 @@ class Reader {
       // règle, plutôt qu'une liste d'exceptions à tenir.
       shortcuts: SHORTCUTS.map((entry) => ({
         ...entry,
-        keys: entry.keys.map((key) => t(key)),
+        keys: entry.keys.map((key) => {
+          if (key === KEY_FORWARD) return isRtl() ? '←' : '→';
+          if (key === KEY_BACKWARD) return isRtl() ? '→' : '←';
+          return t(key);
+        }),
         label: t(entry.label),
       })),
     });
@@ -1744,9 +1779,13 @@ class Reader {
       this.#show(this.#pageCount - 1);
       return;
     }
-    // Sens de lecture arabe : la page suivante est à gauche.
-    if (event.key === 'ArrowLeft' || event.key === 'PageDown') this.#move(1);
-    if (event.key === 'ArrowRight' || event.key === 'PageUp') this.#move(-1);
+    // Le feuilletage suit la direction de l'interface, comme les deux chevrons
+    // de la barre basse : en arabe la page suivante est à gauche, en anglais à
+    // droite. Une flèche figée ferait reculer le bouton qui avance.
+    const forward = isRtl() ? 'ArrowLeft' : 'ArrowRight';
+    const backward = isRtl() ? 'ArrowRight' : 'ArrowLeft';
+    if (event.key === forward || event.key === 'PageDown') this.#move(1);
+    if (event.key === backward || event.key === 'PageUp') this.#move(-1);
   }
 
   #onWheel(event) {
