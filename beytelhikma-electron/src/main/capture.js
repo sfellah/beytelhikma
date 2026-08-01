@@ -37,6 +37,30 @@ async function firstEditionId(window) {
   return editionId;
 }
 
+/**
+ * Une édition qui porte une relation certaine — autre édition, recueil, ou les
+ * textes d'un recueil. On balaie le début du catalogue plutôt que de coder un
+ * identifiant en dur : ils diffèrent entre l'échantillon et le corpus Shamela.
+ */
+async function relatedEditionId(window, fallback) {
+  const found = await window.webContents.executeJavaScript(
+    `(async () => {
+       const repository = window.beytelhikma.repository;
+       const books = await repository.getBooks({ limit: 60 });
+       for (const book of books) {
+         const related = await repository.getRelatedBooks(book.editionId);
+         const certain =
+           related.editions.rows.length +
+           related.partOf.rows.length +
+           related.contains.rows.length;
+         if (certain > 0) return book.editionId;
+       }
+       return null;
+     })()`,
+  );
+  return found ?? fallback;
+}
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitForSelector(contents, selector, timeout = 8000) {
@@ -51,12 +75,21 @@ async function waitForSelector(contents, selector, timeout = 8000) {
   return false;
 }
 
-async function shoot(window, name, route, selector, outDir, problems) {
+async function shoot(window, name, route, selector, outDir, problems, { scrollTo = null } = {}) {
   await window.webContents.executeJavaScript(
     `location.hash = ${JSON.stringify(`#${route}`)}`,
   );
   if (!(await waitForSelector(window.webContents, selector))) {
     problems.push(`${name} : « ${selector} » jamais monté`);
+  }
+  // `capturePage` ne rend que la fenêtre : une section sous la ligne de flottaison
+  // n'existe sur aucune image tant qu'on ne l'a pas amenée à l'écran.
+  if (scrollTo) {
+    await window.webContents.executeJavaScript(
+      `document.querySelector(${JSON.stringify(scrollTo)})
+         ?.scrollIntoView({ block: 'start' })`,
+    );
+    await wait(300);
   }
   // Une frame de plus pour laisser les transitions se poser.
   await wait(500);
@@ -380,6 +413,41 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   for (const [name, route, selector] of routes) {
     await shoot(window, name, route, selector, outDir, problems);
   }
+
+  // Les bandes certaines ne concernent qu'une minorité de livres — 7 % pour
+  // `same_group`, 1 % pour `part_of` : capturer le premier venu ne montrerait
+  // que le repli par auteur et par discipline.
+  // Les cursus pointent le corpus Shamela : sur le jeu d'exemple aucun ne se
+  // résout, et une capture d'écran vide vaut moins que pas de capture du tout.
+  const curriculumId = await window.webContents.executeJavaScript(
+    `window.beytelhikma.repository
+       .getCurricula()
+       .then((list) => list[0]?.id ?? null)`,
+  );
+  if (curriculumId) {
+    await shoot(window, 'curricula', '/curricula', '.curricula__grid', outDir, problems);
+    await shoot(
+      window,
+      'curriculum',
+      `/curriculum/${curriculumId}`,
+      '.curriculum__steps',
+      outDir,
+      problems,
+    );
+  } else {
+    console.log('cursus : aucun ne se résout sur cette bibliothèque — captures sautées');
+  }
+
+  const linked = await relatedEditionId(window, editionId);
+  await shoot(
+    window,
+    'book-relations',
+    `/book/${linked}`,
+    '.detail__relations',
+    outDir,
+    problems,
+    { scrollTo: '.detail__relations' },
+  );
 
   // Les trois listes paginées (auteur, discipline, siècle) partagent un écran :
   // en capturer une suffit à voir la grille, le sous-titre et la barre de pages.

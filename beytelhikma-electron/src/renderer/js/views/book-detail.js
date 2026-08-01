@@ -24,16 +24,9 @@ async function load(editionId) {
   const [toc, progress, related] = await Promise.all([
     repository.getToc(editionId).catch(() => []),
     repository.getProgress(editionId),
-    detail.summary.categoryId
-      ? repository.getBooksByCategory(detail.summary.categoryId, { limit: 8 })
-      : [],
+    repository.getRelatedBooks(editionId),
   ]);
-  return {
-    detail,
-    toc,
-    progress,
-    related: related.filter((book) => book.editionId !== editionId),
-  };
+  return { detail, toc, progress, related };
 }
 
 function render({ detail, toc, progress, related }) {
@@ -104,7 +97,7 @@ function render({ detail, toc, progress, related }) {
         toc.length > 0 && tocSection(toc, openReader),
       ),
     ),
-    related.length > 0 && relatedSection(related),
+    relatedSections(related, detail),
   );
 }
 
@@ -331,7 +324,75 @@ function tocChapter(node, openReader) {
   return details;
 }
 
-function relatedSection(related) {
+// ------------------------------------------------------- livres en relation
+
+/**
+ * Les bandes vont de la relation certaine au simple voisinage, et une bande
+ * vide n'est pas dessinée. Sur le corpus publié, `same_group` ne concerne que
+ * 7 % des livres et `part_of` 1 % : sans les deux dernières bandes, la section
+ * serait absente de neuf fiches sur dix.
+ */
+function relatedSections(related, detail) {
+  const authorId = detail.authors[0]?.authorId ?? null;
+  const bands = [
+    {
+      band: related.editions,
+      title: t('detail.relatedEditions'),
+      hint: t('detail.relatedEditionsHint'),
+      // La pastille dit le lien qui a fait venir la carte. L'intitulé de la
+      // bande le dit aussi, mais une carte se lit seule : dans un défilement
+      // horizontal, l'intitulé est déjà sorti de l'écran.
+      tag: t('detail.tagEdition'),
+      // Le titre d'une autre édition est le même : ce qui la distingue est sa
+      // taille et son tirage, c'est donc cela qu'on écrit sous la carte.
+      caption: editionCaption,
+    },
+    {
+      band: related.partOf,
+      title: t('detail.relatedPartOf'),
+      hint: t('detail.relatedPartOfHint'),
+      tag: t('detail.tagPartOf'),
+    },
+    {
+      band: related.contains,
+      title: t('detail.relatedContains'),
+      hint: t('detail.relatedContainsHint'),
+      tag: t('detail.tagContains'),
+    },
+    {
+      band: related.sameAuthor,
+      title: t('detail.relatedAuthor'),
+      hint: t('detail.relatedAuthorHint'),
+      tag: t('detail.tagAuthor'),
+      href: authorId ? `#/author/${authorId}` : null,
+    },
+    {
+      band: related.sameCategory,
+      title: t('detail.related'),
+      hint: t('detail.relatedHint'),
+      tag: t('detail.tagCategory'),
+      href: related.sameCategory.categoryId != null
+        ? `#/category/${related.sameCategory.categoryId}`
+        : null,
+    },
+  ].filter((entry) => entry.band?.rows?.length);
+
+  if (!bands.length) return null;
+  return h('div', { class: 'detail__relations' }, bands.map(relatedBand));
+}
+
+const editionCaption = (book) =>
+  [
+    book.pageCount ? t('detail.pages', { count: book.pageCount }) : null,
+    book.volumeCount > 1 ? t('detail.volumes', { count: book.volumeCount }) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+function relatedBand({ band, title, hint, href, caption, tag }) {
+  // `total` vient du dépôt, pas de `rows.length` : la bande n'affiche qu'une
+  // tranche et doit dire combien elle laisse de côté.
+  const rest = band.total - band.rows.length;
   return h(
     'section',
     { class: 'detail__related' },
@@ -341,14 +402,23 @@ function relatedSection(related) {
       h(
         'div',
         {},
-        h('h2', { class: 'headline-lg' }, t('detail.related')),
-        h('p', { class: 'body-md' }, t('detail.relatedHint')),
+        h('h2', { class: 'headline-lg' }, title),
+        h('p', { class: 'body-md' }, hint),
       ),
+      href &&
+        rest > 0 &&
+        h('a', { class: 'link-action label-md', href }, t('detail.seeAll', { count: band.total })),
     ),
     h(
       'div',
       { class: 'scroller no-scrollbar' },
-      related.map((book) => bookCard(book, { action: 'open' })),
+      band.rows.map((book) =>
+        bookCard(book, {
+          action: 'open',
+          badge: tag,
+          caption: caption ? caption(book) : null,
+        }),
+      ),
     ),
   );
 }

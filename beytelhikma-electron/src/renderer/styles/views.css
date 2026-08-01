@@ -1383,6 +1383,204 @@ html:not([dir='rtl']) .scroller--at-start {
   padding-top: var(--space-xl);
 }
 
+/* Plusieurs bandes se suivent : chacune garde son filet, l'espacement les
+   sépare sans les enfermer dans un cadre de plus. */
+.detail__relations {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+/* ------------------------------------------------------------- cursus */
+
+.curricula {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.curricula__grid {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.curriculum-card {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-lowest);
+  cursor: pointer;
+}
+
+.curriculum-card:hover {
+  border-color: var(--primary);
+}
+
+/* Le rayon : les livres du cursus rangés debout, dans l'ordre. L'épaisseur et
+   la hauteur de chaque tranche sont posées par la vue — elles viennent du
+   nombre de pages —, la planche est ici. */
+.shelf {
+  display: grid;
+  align-content: end;
+  min-height: 124px;
+  padding-bottom: var(--space-sm);
+  border-bottom: 3px solid var(--rule);
+}
+
+.shelf__books {
+  display: flex;
+  align-items: flex-end;
+  /* Serrés comme des volumes qui se touchent : c'est le liseré sombre de
+     chaque tranche qui les sépare, pas du vide. */
+  gap: 1px;
+  justify-content: center;
+  /* Un cursus de seize volumes ne doit pas élargir sa carte : les tranches
+     débordent en défilement plutôt que de casser la grille. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shelf__books::-webkit-scrollbar {
+  display: none;
+}
+
+/* Les nerfs d'une reliure : trois filets dorés en travers de la tranche, aux
+   tiers, comme sur un dos à nerfs. C'est ce qui distingue un livre rangé d'une
+   barre de graphique — la première version en manquait, et se lisait comme un
+   histogramme. */
+.shelf__spine {
+  flex: none;
+  border-radius: 3px 3px 0 0;
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0 25%,
+      var(--cover-gilt) 25% 26.2%,
+      transparent 26.2% 48%,
+      var(--cover-gilt) 48% 49.2%,
+      transparent 49.2% 71%,
+      var(--cover-gilt) 71% 72.2%,
+      transparent 72.2% 100%
+    ),
+    linear-gradient(160deg, var(--cover-from), var(--cover-to));
+  /* Trois traits de plus : le filet doré du plat, la nervure sombre qui détache
+     du voisin, et les bandeaux de tête et de queue. */
+  box-shadow:
+    inset 0 0 0 1px var(--cover-gilt),
+    inset -1px 0 0 0 rgb(0 0 0 / 0.45),
+    inset 0 9px 0 -8px var(--cover-gilt),
+    inset 0 -9px 0 -8px var(--cover-gilt);
+}
+
+/* Le fleuron du caisson central, réservé aux tranches assez larges : un losange
+   doré, écho du médaillon que `components/cover.js` pose sur les multi-tomes. */
+.shelf__spine--ornate {
+  background-image:
+    radial-gradient(
+      ellipse 3px 6px at 50% 37%,
+      var(--cover-gilt) 0 55%,
+      transparent 55%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0 25%,
+      var(--cover-gilt) 25% 26.2%,
+      transparent 26.2% 48%,
+      var(--cover-gilt) 48% 49.2%,
+      transparent 49.2% 71%,
+      var(--cover-gilt) 71% 72.2%,
+      transparent 72.2% 100%
+    ),
+    linear-gradient(160deg, var(--cover-from), var(--cover-to));
+}
+
+/* Une étape finie porte sa coiffe dorée pleine : la seule marque qui se lit sur
+   une tranche de huit pixels, sans texte ni icône. */
+.shelf__spine.is-done {
+  box-shadow:
+    inset 0 0 0 1px var(--cover-gilt),
+    inset -1px 0 0 0 rgb(0 0 0 / 0.45),
+    inset 0 6px 0 0 rgb(217 184 113),
+    inset 0 -9px 0 -8px var(--cover-gilt);
+}
+
+.curriculum-card__progress {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.curriculum-card__missing {
+  color: var(--ink-mute);
+}
+
+.curriculum {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.curriculum__steps {
+  display: grid;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.curriculum-step {
+  display: grid;
+  grid-template-columns: auto 64px 1fr auto;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-lowest);
+}
+
+.curriculum-step.is-done {
+  border-color: var(--primary);
+}
+
+.curriculum-step__rank {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+}
+
+.curriculum-step.is-done .curriculum-step__rank {
+  background: var(--primary);
+  color: var(--on-primary, var(--surface-container-lowest));
+}
+
+.curriculum-step__cover {
+  cursor: pointer;
+}
+
+.curriculum-step__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.curriculum-step__text a {
+  color: inherit;
+}
+
+@media (max-width: 640px) {
+  .curriculum-step {
+    grid-template-columns: auto 48px 1fr;
+  }
+
+  .curriculum-step > .button {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (min-width: 1000px) {
   .detail {
     grid-template-columns: 4fr 8fr;

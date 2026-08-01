@@ -16,6 +16,7 @@ const NAV = [
   { key: 'explore', path: '/explore', label: 'nav.explore', icon: 'compass', primary: true },
   { key: 'search', path: '/search', label: 'nav.search', icon: 'search' },
   { key: 'notes', path: '/notes', label: 'nav.notes', icon: 'notes', primary: true },
+  { key: 'curricula', path: '/curricula', label: 'nav.curricula', icon: 'rows' },
   { key: 'authors', path: '/authors', label: 'nav.authors', icon: 'pen' },
 ];
 

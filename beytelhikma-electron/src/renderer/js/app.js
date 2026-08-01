@@ -7,6 +7,7 @@ import { syncTheme } from './theme.js';
 import { authorsView } from './views/authors.js';
 import { bookDetailView } from './views/book-detail.js';
 import { collectionDetailView } from './views/collections.js';
+import { curriculaView, curriculumDetailView } from './views/curricula.js';
 import { downloadsView } from './views/downloads.js';
 import { exploreView } from './views/explore.js';
 import { homeView } from './views/home.js';
@@ -28,6 +29,8 @@ defineRoutes(
     '/era/:id': collectionView('era'),
     '/undated': collectionView('undated'),
     '/collection/:id': collectionDetailView,
+    '/curricula': curriculaView,
+    '/curriculum/:id': curriculumDetailView,
     '/explore': exploreView,
     '/search': searchView,
     '/notes': notesView,
