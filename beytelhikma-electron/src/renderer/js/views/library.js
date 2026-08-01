@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { n, ordinal } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -10,14 +11,14 @@ import { emptyView, errorView, loadingView } from '../components/states.js';
 import { collectionsStrip } from './collections.js';
 
 const FILTERS = [
-  { key: 'all', label: 'الكل' },
-  { key: 'reading', label: 'قيد القراءة' },
-  { key: 'done', label: 'مكتمل' },
+  { key: 'all', label: 'library.filter.all' },
+  { key: 'reading', label: 'library.filter.reading' },
+  { key: 'done', label: 'library.filter.done' },
 ];
 
 const SORTS = [
-  { key: 'recent', label: 'الأحدث' },
-  { key: 'title', label: 'العنوان' },
+  { key: 'recent', label: 'library.sort.recent' },
+  { key: 'title', label: 'library.sort.title' },
 ];
 
 /**
@@ -54,7 +55,7 @@ class LibraryScreen {
   #build() {
     const grid = h('section', { class: 'library__grid' }, loadingView());
     const pager = h('div', { class: 'library__pager' });
-    const lede = h('p', { class: 'body-md muted' }, 'تصفح وقراءة مجموعتك الخاصة.');
+    const lede = h('p', { class: 'body-md muted' }, t('library.lede'));
 
     const segmented = h(
       'div',
@@ -71,7 +72,7 @@ class LibraryScreen {
               this.#refresh();
             },
           },
-          h('span', {}, item.label),
+          h('span', {}, t(item.label)),
         ),
       ),
     );
@@ -84,12 +85,12 @@ class LibraryScreen {
           const index = SORTS.findIndex((item) => item.key === this.#query.sort);
           const next = SORTS[(index + 1) % SORTS.length];
           this.#query = { ...this.#query, sort: next.key, offset: 0 };
-          sortButton.lastChild.textContent = next.label;
+          sortButton.lastChild.textContent = t(next.label);
           this.#refresh();
         },
       },
       icon('sort', { size: 18 }),
-      h('span', {}, SORTS[0].label),
+      h('span', {}, t(SORTS[0].label)),
     );
 
     const toggle = h(
@@ -100,7 +101,7 @@ class LibraryScreen {
           'button',
           {
             class: layout === this.#query.layout ? 'is-active' : '',
-            title: layout === 'grid' ? 'شبكة' : 'قائمة',
+            title: t(layout === 'grid' ? 'library.grid' : 'library.list'),
             onclick: (event) => {
               this.#query = { ...this.#query, layout };
               for (const button of toggle.children) button.classList.remove('is-active');
@@ -123,7 +124,7 @@ class LibraryScreen {
         h(
           'section',
           { class: 'library__header' },
-          h('div', {}, h('h1', { class: 'display-lg' }, 'مكتبتي'), lede),
+          h('div', {}, h('h1', { class: 'display-lg' }, t('library.title')), lede),
           h('div', { class: 'library__tools' }, segmented, sortButton, toggle),
         ),
         grid,
@@ -151,7 +152,7 @@ class LibraryScreen {
               this.#refresh();
             },
           },
-          h('span', {}, `${item.label} (${n(counts[item.key] ?? 0)})`),
+          h('span', {}, `${t(item.label)} (${n(counts[item.key] ?? 0)})`),
         ),
       ),
     );
@@ -165,19 +166,19 @@ class LibraryScreen {
 
       this.#drawCounts(counts);
       this.#nodes.lede.textContent = counts.all
-        ? `${n(counts.all)} كتابًا في مكتبتك، ${n(counts.reading)} قيد القراءة.`
-        : 'مكتبتك فارغة بعد.';
+        ? t('library.counts', { total: counts.all, reading: counts.reading })
+        : t('library.empty');
 
       this.#nodes.grid.replaceChildren(
         ...(rows.length
           ? rows.map((entry) =>
               bookCard(entry.book, {
                 progress: entry.percent ?? 0,
-                badge: (entry.percent ?? 0) === 0 ? 'جديد' : null,
+                badge: (entry.percent ?? 0) === 0 ? t('library.new') : null,
                 action: entry.percent > 0 ? 'read' : 'open',
               }),
             )
-          : [emptyView(counts.all ? 'لا يوجد كتاب في هذا التصنيف' : 'مكتبتك فارغة بعد')]),
+          : [emptyView(t(counts.all ? 'library.emptyScope' : 'library.empty'))]),
       );
       this.#applyLayout();
 
@@ -258,7 +259,7 @@ class ScopeScreen {
             'button',
             { onclick: () => navigate('/home') },
             icon('arrowRight', { size: 18 }),
-            ' العودة للرئيسية',
+            t('shell.backHome'),
           ),
           h('span', { class: 'muted' }, '/'),
           h('span', { class: 'breadcrumb__current' }, title),
@@ -271,16 +272,16 @@ class ScopeScreen {
   }
 
   #title(label) {
-    if (this.#scope === 'era') return `${ordinal(Number(this.#id))} الهجري`;
-    if (this.#scope === 'undated') return 'غير مؤرّخ';
-    return label ?? (this.#scope === 'author' ? 'المؤلف' : 'التخصص');
+    if (this.#scope === 'era') return t('scope.era', { century: ordinal(Number(this.#id)) });
+    if (this.#scope === 'undated') return t('scope.undated');
+    return label ?? t(this.#scope === 'author' ? 'scope.author' : 'scope.category');
   }
 
   #subtitle(total) {
-    const count = `${n(total)} كتاب`;
-    if (this.#scope === 'era') return `${count} لمؤلفين توفّوا في هذا القرن`;
-    if (this.#scope === 'undated') return `${count} لا تُعرف سنة وفاة مؤلفها`;
-    if (this.#scope === 'category') return `${count} في هذا التخصص`;
+    const count = t('scope.count', { total });
+    if (this.#scope === 'era') return t('scope.eraHint', { count });
+    if (this.#scope === 'undated') return t('scope.undatedHint', { count });
+    if (this.#scope === 'category') return t('scope.categoryHint', { count });
     return count;
   }
 
@@ -296,7 +297,7 @@ class ScopeScreen {
 
       if (!total) {
         this.#nodes = {};
-        this.#host.replaceChildren(emptyView('لا يوجد كتاب هنا بعد'));
+        this.#host.replaceChildren(emptyView(t('scope.empty')));
         return;
       }
 
