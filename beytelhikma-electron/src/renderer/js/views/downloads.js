@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { n } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -12,33 +13,33 @@ import { emptyView, errorView, loadingView } from '../components/states.js';
 const SECTIONS = [
   {
     key: 'active',
-    title: 'قيد التنزيل',
+    title: 'downloads.group.downloading',
     keep: (job) => job.status === 'downloading' || job.status === 'verifying',
   },
-  { key: 'queued', title: 'في الانتظار', keep: (job) => job.status === 'queued' },
-  { key: 'failed', title: 'فشل', keep: (job) => job.status === 'failed' },
+  { key: 'queued', title: 'downloads.group.queued', keep: (job) => job.status === 'queued' },
+  { key: 'failed', title: 'downloads.group.failed', keep: (job) => job.status === 'failed' },
 ];
 
 const STATUS_FILTERS = [
-  { value: '', label: 'كل الكتب' },
-  { value: 'installed', label: 'المُنزَّلة' },
-  { value: 'missing', label: 'غير المُنزَّلة' },
+  { value: '', label: 'downloads.scope.all' },
+  { value: 'installed', label: 'downloads.scope.installed' },
+  { value: 'missing', label: 'downloads.scope.missing' },
 ];
 
 const SORTS = [
-  { value: 'title', label: 'العنوان' },
-  { value: 'size', label: 'الحجم' },
-  { value: 'pages', label: 'عدد الصفحات' },
-  { value: 'recent', label: 'الأحدث' },
+  { value: 'title', label: 'downloads.sort.title' },
+  { value: 'size', label: 'downloads.sort.size' },
+  { value: 'pages', label: 'downloads.sort.pages' },
+  { value: 'recent', label: 'downloads.sort.recent' },
 ];
 
 /** Libellé et teinte de chaque statut, pour la colonne « الحالة ». */
 const STATUS_LABELS = {
-  installed: ['مُنزَّل', 'is-installed'],
-  queued: ['في الانتظار', 'is-pending'],
-  downloading: ['جارٍ التنزيل', 'is-pending'],
-  verifying: ['جارٍ التحقق', 'is-pending'],
-  failed: ['فشل', 'is-failed'],
+  installed: ['downloads.status.installed', 'is-installed'],
+  queued: ['downloads.status.queued', 'is-pending'],
+  downloading: ['downloads.status.downloading', 'is-pending'],
+  verifying: ['downloads.status.verifying', 'is-pending'],
+  failed: ['downloads.status.failed', 'is-failed'],
   // `removed` décrit une ligne d'historique, pas un état visible : pour qui
   // regarde la table, un livre effacé est un livre non téléchargé.
 };
@@ -107,7 +108,7 @@ class DownloadsScreen {
     const search = h('input', {
       type: 'search',
       class: 'downloads__search',
-      placeholder: 'تصفية بالعنوان أو المؤلف…',
+      placeholder: t('downloads.filter'),
       oninput: (event) => {
         clearTimeout(this.#searchTimer);
         const value = event.target.value;
@@ -126,7 +127,7 @@ class DownloadsScreen {
           h(
             'option',
             { value: option.value, selected: option.value === current },
-            option.label,
+            t(option.label),
           ),
         ),
       );
@@ -138,7 +139,7 @@ class DownloadsScreen {
       h(
         'label',
         { class: 'downloads__filter label-sm' },
-        h('span', {}, 'الحالة'),
+        h('span', {}, t('downloads.statusLabel')),
         select(STATUS_FILTERS, this.#query.status, (value) => {
           this.#query = { ...this.#query, status: value, offset: 0 };
           this.#refresh();
@@ -147,7 +148,7 @@ class DownloadsScreen {
       h(
         'label',
         { class: 'downloads__filter label-sm' },
-        h('span', {}, 'الترتيب'),
+        h('span', {}, t('downloads.sortLabel')),
         select(SORTS, this.#query.sort, (value) => {
           this.#query = { ...this.#query, sort: value, offset: 0 };
           this.#refresh();
@@ -164,7 +165,7 @@ class DownloadsScreen {
         h(
           'div',
           { class: 'downloads__header' },
-          h('h1', { class: 'display-lg' }, 'التنزيلات'),
+          h('h1', { class: 'display-lg' }, t('downloads.title')),
           summary,
         ),
         queue,
@@ -174,7 +175,7 @@ class DownloadsScreen {
           h(
             'div',
             { class: 'downloads__manage-head' },
-            h('h2', { class: 'headline-lg' }, 'كل الكتب'),
+            h('h2', { class: 'headline-lg' }, t('downloads.scope.all')),
             toolbar,
           ),
           bulk,
@@ -198,8 +199,10 @@ class DownloadsScreen {
       if (token !== this.#token || !this.#host.isConnected) return;
 
       this.#nodes.summary.textContent =
-        `${n(usage.bookCount)} كتابًا على هذا الجهاز • ${formatBytes(usage.bytes) || '٠ ك.ب'}` +
-        (jobs.length ? ` • ${n(jobs.length)} في الطابور` : '');
+        t('downloads.usage', {
+          count: usage.bookCount,
+          size: formatBytes(usage.bytes) || t('format.zeroBytes'),
+        }) + (jobs.length ? t('downloads.inQueue', { count: jobs.length }) : '');
 
       this.#drawQueue(jobs);
       this.#drawTable(listing);
@@ -257,7 +260,7 @@ class DownloadsScreen {
           h(
             'div',
             { class: 'downloads__section-head' },
-            h('h2', { class: 'headline-lg' }, section.title),
+            h('h2', { class: 'headline-lg' }, t(section.title)),
             section.key === 'failed' &&
               h(
                 'button',
@@ -265,7 +268,7 @@ class DownloadsScreen {
                   class: 'button button--tonal',
                   onclick: () => this.#run(() => repository.clearFailedDownloads()),
                 },
-                'مسح الإخفاقات',
+                t('downloads.clearFailed'),
               ),
           ),
           items.map((job) => this.#jobRow(job)),
@@ -285,13 +288,17 @@ class DownloadsScreen {
         { class: 'download-row__main' },
         h('p', { class: 'title-md' }, job.title ?? job.editionId),
         failed
-          ? h('p', { class: 'label-sm download-action__error' }, job.error ?? 'فشل التنزيل')
+          ? h('p', { class: 'label-sm download-action__error' }, job.error ?? t('download.failed'))
           : h('div', { class: 'progress' }, h('span', { style: { width: `${percent}%` } })),
         !failed &&
           h(
             'p',
             { class: 'label-sm muted' },
-            `${n(percent)}٪ • ${formatBytes(job.receivedBytes)} / ${formatBytes(job.totalBytes)}`,
+            t('downloads.progress', {
+              percent,
+              received: formatBytes(job.receivedBytes),
+              total: formatBytes(job.totalBytes),
+            }),
           ),
       ),
       failed
@@ -299,7 +306,7 @@ class DownloadsScreen {
             'button',
             {
               class: 'button--icon',
-              title: 'إعادة المحاولة',
+              title: t('download.retry'),
               onclick: () => this.#run(() => repository.retryDownload(job.editionId)),
             },
             icon('download', { size: 20 }),
@@ -308,7 +315,7 @@ class DownloadsScreen {
             'button',
             {
               class: 'button--icon',
-              title: 'إلغاء',
+              title: t('download.cancel'),
               onclick: () => this.#run(() => repository.cancelDownload(job.editionId)),
             },
             icon('close', { size: 20 }),
@@ -320,7 +327,7 @@ class DownloadsScreen {
 
   #drawTable({ rows }) {
     if (!rows.length) {
-      this.#nodes.table.replaceChildren(emptyView('لا كتب مطابقة لهذه التصفية'));
+      this.#nodes.table.replaceChildren(emptyView(t('downloads.noMatch')));
       return;
     }
 
@@ -338,8 +345,8 @@ class DownloadsScreen {
         h('input', {
           type: 'checkbox',
           checked: allChecked,
-          title: 'تحديد الصفحة',
-          'aria-label': 'تحديد الصفحة',
+          title: t('downloads.selectPage'),
+          'aria-label': t('downloads.selectPage'),
           onchange: (event) => {
             for (const id of pageIds) {
               if (event.target.checked) this.#selection.add(id);
@@ -349,12 +356,12 @@ class DownloadsScreen {
           },
         }),
       ),
-      h('th', {}, 'الكتاب'),
-      h('th', {}, 'التخصص'),
-      h('th', { class: 'books-table__num' }, 'الصفحات'),
-      h('th', { class: 'books-table__num' }, 'الحجم'),
-      h('th', {}, 'الحالة'),
-      h('th', { class: 'books-table__actions' }, 'إجراءات'),
+      h('th', {}, t('downloads.column.book')),
+      h('th', {}, t('downloads.column.field')),
+      h('th', { class: 'books-table__num' }, t('downloads.column.pages')),
+      h('th', { class: 'books-table__num' }, t('downloads.column.size')),
+      h('th', {}, t('downloads.statusLabel')),
+      h('th', { class: 'books-table__actions' }, t('downloads.column.actions')),
     );
 
     this.#nodes.table.replaceChildren(
@@ -373,7 +380,7 @@ class DownloadsScreen {
 
   #bookRow(row) {
     const status = row.downloadStatus ?? null;
-    const [label, tone] = STATUS_LABELS[status] ?? ['غير مُنزَّل', ''];
+    const [label, tone] = STATUS_LABELS[status] ?? ['downloads.status.missing', ''];
     const percent = Math.round((row.percent ?? 0) * 100);
 
     const statusCell = BUSY.has(status)
@@ -381,12 +388,12 @@ class DownloadsScreen {
           'div',
           { class: 'books-table__status' },
           h('div', { class: 'progress' }, h('span', { style: { width: `${percent}%` } })),
-          h('span', { class: 'label-sm muted' }, `${n(percent)}٪`),
+          h('span', { class: 'label-sm muted' }, t('format.percent', { value: percent })),
         )
       : h(
           'span',
           { class: `books-table__badge ${tone}`.trim() },
-          status === 'failed' ? row.error ?? label : label,
+          status === 'failed' ? (row.error ?? t(label)) : t(label),
         );
 
     // Installé : la taille qui compte est celle prise sur le disque, décompressée.
@@ -445,21 +452,21 @@ class DownloadsScreen {
 
     if (BUSY.has(status)) {
       return [
-        button('close', 'إلغاء', () =>
+        button('close', t('download.cancel'), () =>
           this.#run(() => repository.cancelDownload(row.editionId)),
         ),
       ];
     }
     if (status === 'installed') {
       return [
-        button('bookOpen', 'قراءة', () => navigate(`/reader/${row.editionId}`)),
-        button('trash', 'حذف', () => this.#confirmDelete([row]), 'is-danger'),
+        button('bookOpen', t('downloads.read'), () => navigate(`/reader/${row.editionId}`)),
+        button('trash', t('action.delete'), () => this.#confirmDelete([row]), 'is-danger'),
       ];
     }
     return [
       button(
         'download',
-        status === 'failed' ? 'إعادة المحاولة' : 'تنزيل',
+        t(status === 'failed' ? 'download.retry' : 'explore.download'),
         () =>
           this.#run(() =>
             status === 'failed'
@@ -495,7 +502,7 @@ class DownloadsScreen {
         h(
           'span',
           { class: 'label-md' },
-          `${n(selected.length)} محدَّد`,
+          t('downloads.selectedCount', { count: selected.length }),
         ),
         missing.length > 0 &&
           h(
@@ -507,11 +514,11 @@ class DownloadsScreen {
                   const queued = await repository.downloadSelection(
                     missing.map((row) => row.editionId),
                   );
-                  toast(`أُضيف ${n(queued)} كتابًا إلى الطابور`);
+                  toast(t('downloads.queued', { count: queued }));
                 }),
             },
             icon('download', { size: 18 }),
-            h('span', {}, `تنزيل (${n(missing.length)})`),
+            h('span', {}, t('downloads.downloadCount', { count: missing.length })),
           ),
         installed.length > 0 &&
           h(
@@ -521,7 +528,7 @@ class DownloadsScreen {
               onclick: () => this.#confirmDelete(installed),
             },
             icon('trash', { size: 18 }),
-            h('span', {}, `حذف (${n(installed.length)})`),
+            h('span', {}, t('downloads.deleteCount', { count: installed.length })),
           ),
         h(
           'button',
@@ -532,7 +539,7 @@ class DownloadsScreen {
               this.#refresh();
             },
           },
-          'إلغاء التحديد',
+          t('downloads.clearSelection'),
         ),
       ),
     );
@@ -541,18 +548,20 @@ class DownloadsScreen {
   async #confirmDelete(rows) {
     const bytes = rows.reduce((total, row) => total + (row.localBytes || 0), 0);
     const choice = await confirmDialog({
-      title: rows.length === 1 ? 'حذف هذا الكتاب؟' : `حذف ${n(rows.length)} كتابًا؟`,
+      title:
+        rows.length === 1
+          ? t('downloads.deleteOne')
+          : t('downloads.deleteMany', { count: rows.length }),
       message:
-        `سيُحرَّر ${formatBytes(bytes) || '٠ ك.ب'}. ` +
-        'مواضع القراءة والملاحظات تبقى كما هي، ويمكن إعادة التنزيل لاحقًا.',
-      actions: [{ value: 'go', label: 'حذف', variant: 'danger' }],
+        t('downloads.deleteMessage', { size: formatBytes(bytes) || t('format.zeroBytes') }),
+      actions: [{ value: 'go', label: t('action.delete'), variant: 'danger' }],
     });
     if (choice !== 'go') return;
 
     await this.#run(async () => {
       const removed = await repository.deleteBooks(rows.map((row) => row.editionId));
       for (const row of rows) this.#selection.delete(row.editionId);
-      toast(`حُذف ${n(removed)} كتابًا`);
+      toast(t('downloads.deleted', { count: removed }));
     });
   }
 
@@ -561,7 +570,7 @@ class DownloadsScreen {
     try {
       await action();
     } catch (error) {
-      toast(error?.message ?? 'تعذّر تنفيذ العملية');
+      toast(error?.message ?? t('notes.actionFailed'));
     }
     if (this.#host.isConnected) this.#refresh();
   }
