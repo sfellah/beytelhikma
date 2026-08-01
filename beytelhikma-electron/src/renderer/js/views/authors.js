@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { initial, n, ordinal } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { renderShell } from '../shell.js';
@@ -10,9 +11,9 @@ import { asyncView, emptyView, errorView, loadingView } from '../components/stat
 
 /** Tris de l'index : le fonds, l'alphabet, la chronologie. */
 const SORTS = [
-  { key: 'name', label: 'أبجديًا' },
-  { key: 'count', label: 'حسب عدد الكتب' },
-  { key: 'death', label: 'حسب سنة الوفاة' },
+  { key: 'name', label: 'authors.sort.name' },
+  { key: 'count', label: 'authors.sort.count' },
+  { key: 'death', label: 'authors.sort.death' },
 ];
 
 /** Le haut de l'écran ne montre que les plus présents : c'est une vitrine. */
@@ -21,7 +22,7 @@ const PROMINENT = 7;
 /** Les auteurs du catalogue : le plus présent, les suivants, les siècles, tous. */
 export function authorsView(host) {
   const content = renderShell(host, { active: 'authors' });
-  asyncView(content, load, render, { empty: 'لا يوجد مؤلف في الفهرس بعد' });
+  asyncView(content, load, render, { empty: t('authors.empty') });
   return null;
 }
 
@@ -66,14 +67,18 @@ function headerSection(stats) {
   return h(
     'section',
     { class: 'authors__header', 'aria-labelledby': 'authors-title', 'data-reveal': 0 },
-    h('h1', { class: 'authors__title', id: 'authors-title' }, 'المؤلفون'),
+    h('h1', { class: 'authors__title', id: 'authors-title' }, t('authors.title')),
     h(
       'p',
       { class: 'body-lg authors__lede' },
       firstCentury && lastCentury
-        ? `${n(authorCount)} مؤلفًا، ${n(bookCount)} كتابًا،` +
-          ` من ${ordinal(firstCentury)} إلى ${ordinal(lastCentury)} الهجري.`
-        : `${n(authorCount)} مؤلفًا، ${n(bookCount)} كتابًا في الفهرس.`,
+        ? t('authors.summarySpan', {
+            authors: authorCount,
+            books: bookCount,
+            first: ordinal(firstCentury),
+            last: ordinal(lastCentury),
+          })
+        : t('authors.summary', { authors: authorCount, books: bookCount }),
     ),
   );
 }
@@ -93,7 +98,7 @@ function leadSection(lead, books) {
       'aria-labelledby': 'lead-title',
       'data-reveal': 1,
     },
-    sectionHead('lead-title', 'الأوفر حضورًا', 'أكثر مؤلف تمثيلًا في هذا الفهرس'),
+    sectionHead('lead-title', t('authors.leadTitle'), t('authors.leadHint')),
     h(
       'article',
       { class: 'lead-card' },
@@ -111,10 +116,13 @@ function leadSection(lead, books) {
             'p',
             { class: 'label-md lead-card__meta' },
             lead.deathYearHijri
-              ? `توفي سنة ${lead.deathYearHijri} هـ — ${ordinal(century(lead))}`
-              : 'تاريخ الوفاة غير مثبت',
+              ? t('authors.died', {
+                  year: lead.deathYearHijri,
+                  century: ordinal(century(lead)),
+                })
+              : t('authors.diedUnknown'),
             ' — ',
-            `${lead.bookCount} كتاب`,
+            t('authors.books', { count: lead.bookCount }),
           ),
         ),
       ),
@@ -135,7 +143,7 @@ function leadSection(lead, books) {
       h(
         'a',
         { class: 'button button--filled lead-card__cta', href: `#/author/${lead.authorId}` },
-        h('span', {}, `كل كتب ${name}`),
+        h('span', {}, t('authors.allBooksOf', { name })),
         icon('arrowLeft', { size: 18 }),
       ),
     ),
@@ -155,10 +163,10 @@ function leadBio(text) {
       class: 'lead-card__bio-toggle label-md',
       onclick: () => {
         const clamped = paragraph.classList.toggle('is-clamped');
-        toggle.textContent = clamped ? 'قراءة الترجمة كاملة' : 'طيّ الترجمة';
+        toggle.textContent = t(clamped ? 'authors.readFullBio' : 'authors.foldBio');
       },
     },
-    'قراءة الترجمة كاملة',
+    t('authors.readFullBio'),
   );
   return h('div', { class: 'lead-card__bio-wrap' }, paragraph, toggle);
 }
@@ -176,7 +184,7 @@ function prominentSection(authors) {
       'aria-labelledby': 'prominent-title',
       'data-reveal': 2,
     },
-    sectionHead('prominent-title', 'أعلام المكتبة', 'مرتّبون حسب عدد الكتب في الفهرس'),
+    sectionHead('prominent-title', t('authors.prominentTitle'), t('authors.prominentHint')),
     h(
       'ul',
       { class: 'medallions' },
@@ -203,13 +211,15 @@ function prominentSection(authors) {
               h(
                 'span',
                 { class: 'label-sm muted' },
-                author.deathYearHijri ? `ت ${author.deathYearHijri} هـ` : 'مؤلف',
+                author.deathYearHijri
+                  ? t('authors.deathShort', { year: author.deathYearHijri })
+                  : t('authors.one'),
               ),
               h('span', {
                 class: 'medallion__bar',
                 style: { '--fill': `${Math.round(((author.bookCount ?? 0) / max) * 100)}%` },
               }),
-              h('span', { class: 'label-sm muted' }, `${author.bookCount} كتاب`),
+              h('span', { class: 'label-sm muted' }, t('authors.books', { count: author.bookCount })),
             ),
           ),
         ),
@@ -237,7 +247,7 @@ function centuriesSection(eras) {
       'aria-labelledby': 'centuries-title',
       'data-reveal': 3,
     },
-    sectionHead('centuries-title', 'طبقات المؤلفين', 'حسب قرن الوفاة الهجري'),
+    sectionHead('centuries-title', t('authors.centuriesTitle'), t('authors.centuriesHint')),
     h(
       'ol',
       { class: 'layers layers--compact' },
@@ -249,7 +259,7 @@ function centuriesSection(eras) {
             'a',
             { class: 'layer__label', href: `#/era/${era.century}` },
             h('span', { class: 'title-md layer__century' }, ordinal(era.century)),
-            h('span', { class: 'label-sm muted' }, `${n(era.bookCount)} كتاب`),
+            h('span', { class: 'label-sm muted' }, t('authors.books', { count: era.bookCount })),
           ),
         ),
       ),
@@ -281,13 +291,13 @@ function indexSection() {
       if (mine !== token || !body.isConnected) return;
 
       subtitle.textContent = state.text
-        ? `${n(total)} مؤلفًا يطابق « ${state.text} »`
-        : `${n(total)} مؤلفًا في الفهرس`;
+        ? t('authors.matching', { total, text: state.text })
+        : t('authors.total', { total });
 
       body.replaceChildren(
         rows.length
           ? h('ul', { class: 'author-grid' }, rows.map(authorTile))
-          : emptyView('لا مؤلف بهذا الاسم'),
+          : emptyView(t('authors.noMatch')),
       );
       pager.replaceChildren(
         total > state.limit
@@ -315,7 +325,7 @@ function indexSection() {
   const search = h('input', {
     type: 'search',
     class: 'authors__search',
-    placeholder: 'ابحث عن مؤلف…',
+    placeholder: t('authors.search'),
     oninput: (event) => {
       clearTimeout(timer);
       const value = event.target.value;
@@ -341,7 +351,7 @@ function indexSection() {
             refresh();
           },
         },
-        entry.label,
+        t(entry.label),
       ),
     ),
   );
@@ -355,7 +365,7 @@ function indexSection() {
       'aria-labelledby': 'index-title',
       'data-reveal': 4,
     },
-    sectionHead('index-title', 'كل المؤلفين', subtitle),
+    sectionHead('index-title', t('authors.indexTitle'), subtitle),
     h(
       'div',
       { class: 'authors__toolbar' },
@@ -387,8 +397,11 @@ function authorTile(author) {
           'span',
           { class: 'label-sm muted truncate' },
           author.deathYearHijri
-            ? `ت ${author.deathYearHijri} هـ — ${author.bookCount} كتاب`
-            : `${author.bookCount} كتاب`,
+            ? t('authors.deathAndBooks', {
+                year: author.deathYearHijri,
+                count: author.bookCount,
+              })
+            : t('authors.books', { count: author.bookCount }),
         ),
       ),
       h('span', { class: 'author-tile__chevron' }, icon('arrowLeft', { size: 16 })),
