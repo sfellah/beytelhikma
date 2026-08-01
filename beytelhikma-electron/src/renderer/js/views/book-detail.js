@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { initial, n } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -115,7 +116,7 @@ function breadcrumb(book) {
       'button',
       { onclick: () => navigate('/library') },
       icon('arrowRight', { size: 18 }),
-      ' العودة للمكتبة',
+      t('detail.backToLibrary'),
     ),
     book.categoryLabel &&
       h('span', { class: 'muted' }, '/'),
@@ -134,7 +135,7 @@ function tags(book, detail) {
   const labels = [
     book.categoryLabel,
     detail.bookTypeLabel,
-    detail.volumes.length > 1 ? `${detail.volumes.length} أجزاء` : null,
+    detail.volumes.length > 1 ? t('detail.volumes', { count: detail.volumes.length }) : null,
   ].filter(Boolean);
   if (!labels.length) return null;
   return h(
@@ -158,25 +159,27 @@ function authorBadge(author) {
       h(
         'p',
         { class: 'label-sm muted' },
-        author.deathYearHijri ? `المؤلف • توفي سنة ${author.deathYearHijri} هـ` : 'المؤلف',
+        author.deathYearHijri
+          ? t('detail.authorDied', { year: author.deathYearHijri })
+          : t('detail.author'),
       ),
     ),
     h(
       'a',
       { class: 'detail__author-link', href: `#/author/${author.authorId}` },
-      'عرض أعماله',
+      t('detail.otherWorks'),
     ),
   );
 }
 
 function metadata(detail) {
   const rows = [
-    ['الناشر', detail.publisher],
-    ['الطبعة', detail.editionLabel],
-    ['سنة النشر', detail.publicationYear],
-    ['عدد الصفحات', detail.pageCount ? `${detail.pageCount} صفحة` : null],
-    ['عدد الأجزاء', detail.volumes.length > 1 ? detail.volumes.length : null],
-    ['اللغة', detail.summary.language === 'ar' ? 'العربية' : detail.summary.language],
+    [t('detail.publisher'), detail.publisher],
+    [t('detail.edition'), detail.editionLabel],
+    [t('detail.year'), detail.publicationYear],
+    [t('detail.pageCount'), detail.pageCount ? t('detail.pages', { count: detail.pageCount }) : null],
+    [t('detail.volumeCount'), detail.volumes.length > 1 ? n(detail.volumes.length) : null],
+    [t('detail.language'), detail.summary.language === 'ar' ? t('detail.arabic') : detail.summary.language],
   ].filter(([, value]) => value != null && value !== '');
 
   if (!rows.length) return null;
@@ -208,7 +211,7 @@ function buildTree(entries) {
  */
 const tocPageLabel = (node) => {
   const printed = node.printedPageNum ?? node.pageSequenceNum;
-  return printed == null ? '' : `ص ${n(printed)}`;
+  return printed == null ? '' : t('detail.page', { page: printed });
 };
 
 /** Chapitres montés d'un coup ; au-delà, on déplie à la demande. */
@@ -235,7 +238,7 @@ function tocSection(entries, openReader) {
             h(
               'span',
               {},
-              `عرض المزيد (${n(roots.length - shown)})`,
+              t('detail.showMore', { count: roots.length - shown }),
             ),
           )
         : h('span', {}),
@@ -250,8 +253,8 @@ function tocSection(entries, openReader) {
       'h3',
       { class: 'title-md' },
       icon('toc', { size: 20 }),
-      'فهرس المحتويات',
-      h('span', { class: 'label-sm muted' }, `${n(roots.length)} فصلًا`),
+      t('detail.toc'),
+      h('span', { class: 'label-sm muted' }, t('detail.chapters', { count: roots.length })),
     ),
     list,
     more,
@@ -312,7 +315,7 @@ function tocChapter(node, openReader) {
         'span',
         {
           class: 'label-sm muted',
-          title: 'فتح هذه الصفحة',
+          title: t('detail.openPage'),
           onclick: (event) => {
             // Sans cela, le clic replierait aussi le chapitre.
             event.preventDefault();
@@ -338,8 +341,8 @@ function relatedSection(related) {
       h(
         'div',
         {},
-        h('h2', { class: 'headline-lg' }, 'أعمال ذات صلة'),
-        h('p', { class: 'body-md' }, 'كتب أخرى من التخصص نفسه'),
+        h('h2', { class: 'headline-lg' }, t('detail.related')),
+        h('p', { class: 'body-md' }, t('detail.relatedHint')),
       ),
     ),
     h(
