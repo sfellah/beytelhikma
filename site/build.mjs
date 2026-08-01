@@ -17,6 +17,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { toArabicDigits } from '../beytelhikma-electron/src/shared/digits.js';
 import { translate } from '../beytelhikma-electron/src/shared/translate.js';
 import {
   BASE_PATH,
@@ -30,7 +31,6 @@ import {
 } from './config.mjs';
 import { mergeChangelogs, parseChangelog } from './lib/changelog.mjs';
 import { buildIndex, missingPlatforms, parseUpdaterManifest } from './lib/releases.mjs';
-import { nightMediaCss } from './lib/theme-css.mjs';
 import { escapeHtml } from './lib/html.mjs';
 import { layout, pagePath } from './templates/layout.mjs';
 import { home } from './templates/home.mjs';
@@ -55,6 +55,10 @@ function parseArgs(argv) {
     if (flag === '--out') options.out = path.resolve(argv[++index]);
     else if (flag === '--books') options.books = Number(argv[++index]);
     else if (flag === '--allow-missing') options.allowMissing = true;
+    // Sert à relire les pages peuplées en local : `--data test/fixtures/data`
+    // rend le site comme s'il existait une version publiée. En production, le
+    // workflow écrit dans `site/data`, qui est le défaut.
+    else if (flag === '--data') options.dataDir = path.resolve(argv[++index]);
     else throw new Error(`Option inconnue : ${flag}`);
   }
   return options;
@@ -97,6 +101,23 @@ async function readBookCount(override) {
     throw new Error('catalog-seed.json ne porte pas de `edition_count`.');
   }
   return seed.edition_count;
+}
+
+/**
+ * Un décompte, groupé selon la langue.
+ *
+ * `translate` convertit les chiffres mais ne groupe rien — c'est voulu côté
+ * application, où les nombres affichés sont petits. Ici le corpus se compte en
+ * milliers, et `8568` posé au milieu d'une phrase se lit mal dans les trois
+ * langues. On rend donc une **chaîne déjà localisée** : `translate` la laisse
+ * intacte, ce qui est exactement le contrat qu'il annonce.
+ */
+export function formatCount(value, locale) {
+  const digits = String(value);
+  if (locale === 'ar') return toArabicDigits(digits);
+  // Espace fine insécable en français (U+202F), virgule en anglais.
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, locale === 'fr' ? ' ' : ',');
+  return grouped;
 }
 
 /** Les manifestes d'`electron-updater` téléchargés par le workflow, par tag. */
@@ -210,10 +231,14 @@ export async function build(options = {}) {
   const builtVersion = index.latest?.version ?? appPackage.version;
 
   // --- les fichiers hérités de l'application, copiés et jamais recopiés ----
+  // `tokens.css` fournit la palette — émeraude, sable, encre — dont `site.css`
+  // dérive son papier et ses filets. Le site ne reprend **pas** les ambiances
+  // de l'application : il n'a qu'une lumière, franche et chaude. Trois
+  // ambiances servent à lire des heures durant ; une page de présentation se
+  // parcourt, et son fond est une identité, pas un confort.
   const tokens = await fs.readFile(path.join(RENDERER, 'styles', 'tokens.css'), 'utf8');
   await fs.mkdir(path.join(out, 'styles'), { recursive: true });
   await fs.writeFile(path.join(out, 'styles', 'tokens.css'), tokens);
-  await fs.writeFile(path.join(out, 'styles', 'theme-system.css'), nightMediaCss(tokens));
   await copyFile(
     path.join(RENDERER, 'styles', 'fonts.css'),
     path.join(out, 'styles', 'fonts.css'),
@@ -253,10 +278,17 @@ export async function build(options = {}) {
       day: 'numeric',
     });
     const fmtDate = (iso) => (iso ? formatter.format(new Date(iso)) : '—');
+    const count = formatCount(books, locale.key);
 
     const bodies = {
       index: () =>
-        home({ locale: locale.key, t, latest: index.latest, books, defaultPlatform: 'windows' }),
+        home({
+          locale: locale.key,
+          t,
+          latest: index.latest,
+          books: count,
+          defaultPlatform: 'windows',
+        }),
       download: () =>
         download({ locale: locale.key, t, fmtDate, latest: index.latest, repoUrl: REPO_URL }),
       releases: () => releasesPage({ locale: locale.key, t, fmtDate, index }),
@@ -269,7 +301,7 @@ export async function build(options = {}) {
         releases: t('releases.title'),
       };
       const descriptions = {
-        index: t('home.description', { books }),
+        index: t('home.description', { books: count }),
         download: t('download.description', { version: index.latest?.version ?? '—' }),
         releases: t('releases.description'),
       };

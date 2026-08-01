@@ -27,8 +27,11 @@ export default {
   'home.cta.secondary': 'See releases',
   'home.cta.pending': 'Coming soon',
   'home.platforms': 'Available for',
-  'home.shot.alt': 'The Beyt El Hikma home screen',
-  'home.shot.reader.alt': 'The reader, with a book page open',
+
+  'plate.home': 'The home screen: disciplines, centuries, where you left off.',
+  'plate.reader': 'The reader, a page set.',
+  'plate.night': 'The same page, night mood.',
+  'plate.explore': 'Browsing the catalogue by discipline and by era.',
 
   'features.heading': 'What it does',
   'features.lede':
@@ -129,4 +132,6 @@ export default {
   'footer.license': 'Published under the AGPL-3.0 licence',
   'footer.corpus': 'Corpus from the Shamela Library',
   'footer.built': 'Site build {version}',
+  'colophon.heading': 'Colophon',
+  'colophon.typefaces': 'Set in EB Garamond, Literata and Amiri, all self-hosted.',
 };

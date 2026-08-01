@@ -54,15 +54,25 @@ function header(locale, page, t) {
 </header>`;
 }
 
+/**
+ * Le pied est un colophon : qui édite, sous quelle licence, d'où vient le
+ * texte, en quels caractères il est composé. C'est la fin de livre, et c'est
+ * aussi le seul endroit honnête où dire que les polices sont embarquées.
+ */
 function footer(t, { repoUrl, builtVersion }) {
   return `<footer class="footer">
   <div class="footer__inner">
-    <p class="footer__line">
-      <a class="footer__link" href="${safeUrl(repoUrl)}" rel="noopener">${icon('code')}${escapeHtml(t('nav.source'))}</a>
-      <a class="footer__link" href="${safeUrl(`${repoUrl}/issues`)}" rel="noopener">${icon('external')}${escapeHtml(t('footer.issues'))}</a>
-    </p>
-    <p class="footer__note">${escapeHtml(t('footer.license'))} · ${escapeHtml(t('footer.corpus'))}</p>
-    <p class="footer__note footer__note--faint">${escapeHtml(t('footer.built', { version: builtVersion }))}</p>
+    <h2 class="footer__heading">${escapeHtml(t('colophon.heading'))}</h2>
+    <div>
+      <p class="footer__line">
+        <a class="footer__link" href="${safeUrl(repoUrl)}" rel="noopener">${icon('code')}${escapeHtml(t('nav.source'))}</a>
+        <a class="footer__link" href="${safeUrl(`${repoUrl}/issues`)}" rel="noopener">${icon('external')}${escapeHtml(t('footer.issues'))}</a>
+      </p>
+      <p class="footer__note">${escapeHtml(t('footer.license'))}</p>
+      <p class="footer__note">${escapeHtml(t('footer.corpus'))}</p>
+      <p class="footer__note">${escapeHtml(t('colophon.typefaces'))}</p>
+      <p class="footer__note footer__note--faint">${escapeHtml(t('footer.built', { version: builtVersion }))}</p>
+    </div>
   </div>
 </footer>`;
 }
@@ -101,8 +111,8 @@ export function layout({
   <meta property="og:url" content="${escapeHtml(absoluteUrl(pagePath(locale, page)))}" />
   <meta property="og:image" content="${escapeHtml(absoluteUrl('assets/brand/lockup.png'))}" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#fbf4ed" />
   <link rel="stylesheet" href="${url('styles/tokens.css')}" />
-  <link rel="stylesheet" href="${url('styles/theme-system.css')}" />
   <link rel="stylesheet" href="${url('styles/fonts.css')}" />
   <link rel="stylesheet" href="${url('styles/site.css')}" />
 </head>

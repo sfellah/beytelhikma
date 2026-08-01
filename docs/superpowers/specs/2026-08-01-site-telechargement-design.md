@@ -113,6 +113,55 @@ Deux détails de détection : Android se présente comme Linux — proposer une
 AppImage à un téléphone serait un lien mort déguisé en recommandation ; et
 aucune architecture n'est devinée, la seule cible publiée étant x86-64.
 
+## Le monde visuel : les pages de titre d'un livre
+
+Le site ne se compose pas comme une page de produit mais comme la **tête d'un
+livre imprimé** : une page de garde, des planches légendées, un sommaire, un
+colophon. C'est l'expression honnête d'une bibliothèque de 8 568 ouvrages, et
+c'est ce qui l'écarte du gabarit qu'on reconnaît au premier coup d'œil — grille
+de cartes identiques, icône en carré arrondi au-dessus de chaque titre,
+dégradés, verre dépoli, halos colorés.
+
+**Le filet remplace la carte.** La structure est faite de traits d'un pixel.
+Une carte est le conteneur paresseux ; un filet est une décision. Les quatre
+fonctions ne sont donc pas quatre cellules identiques mais quatre entrées de
+sommaire : titre en vedette, texte en regard, un trait entre chacune.
+
+**Une seule lumière, claire et chaude.** Le site n'a pas d'ambiance nuit et ne
+suit pas `prefers-color-scheme`. Trois ambiances servent à lire des heures
+durant — c'est le métier de l'application. Une page de présentation se
+parcourt, et son fond est une identité, pas un réglage de confort.
+
+Le papier est **dérivé** du sable du projet (`--secondary-container`) par
+`color-mix`, jamais posé en valeur neuve : `--surface` (#fbf8fc) tire sur le
+mauve froid alors que la note de design du projet le décrit comme un « crème de
+bonne qualité ». Le site tient la description sans inventer de seconde palette.
+L'encre grise (`--outline`) donnait 4,18:1 sur ce papier — sous le seuil AA
+pour du petit texte, et c'est précisément ce qu'elle porte : dates, tailles,
+libellés. Elle est ramenée vers l'encre jusqu'à 6,2:1.
+
+**Trois voix, et pas une de plus.** EB Garamond annonce, Literata se lit, IBM
+Plex Sans Arabic tient la marge — libellés, métadonnées, navigation, en petites
+capitales espacées. Sur les pages arabes, Amiri prend le titre **et** le
+texte : le naskh de bibliothèque du projet fait les deux, et la coupure
+serif/sans latine n'a pas d'équivalent en arabe. Amiri y monte d'un cran de
+corps, sa hauteur d'œil étant plus basse ; capitales et interlettrage y sont
+annulés, l'arabe n'ayant pas de capitales et l'interlettrage disjoignant les
+liaisons.
+
+Les chiffres du texte courant sont elzéviriens ; ceux des tableaux, alignés et
+tabulaires. Le décompte du corpus est groupé selon la langue — `8 568`,
+`8,568`, `٨٥٦٨` — en rendant une chaîne déjà localisée, que `translate` laisse
+alors intacte.
+
+**Un seul moment écrit.** Le filet de la ligne de rappel se tire une fois au
+chargement. Rien d'autre ne bouge : une page de titre qui s'anime section par
+section est une page qui se regarde au lieu de se lire.
+
+Quatre tests gardent tout cela : aucune ambiance nuit, papier et encre dérivés
+des jetons, les trois voix déclarées, et aucun retour des tics du gabarit —
+dégradé, `backdrop-filter`, `box-shadow`, rayon de coin au-delà de 4 px.
+
 ## Ce que les maquettes ont perdu
 
 `ui-examples/site-home.html` et `site-download.html` ont fourni la structure :

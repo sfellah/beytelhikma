@@ -35,8 +35,11 @@ export default {
   'home.cta.secondary': 'Voir les versions',
   'home.cta.pending': 'Bientôt disponible',
   'home.platforms': 'Disponible pour',
-  'home.shot.alt': "Écran d'accueil de Beyt El Hikma",
-  'home.shot.reader.alt': 'Le lecteur, une page de livre ouverte',
+
+  'plate.home': 'L’accueil : disciplines, siècles, reprise de lecture.',
+  'plate.reader': 'Le lecteur, une page posée.',
+  'plate.night': 'La même page, ambiance nuit.',
+  'plate.explore': 'L’exploration du catalogue, par discipline et par époque.',
 
   'features.heading': "Ce qu'elle fait",
   'features.lede':
@@ -140,4 +143,6 @@ export default {
   'footer.license': 'Publié sous licence AGPL-3.0',
   'footer.corpus': 'Corpus issu de la Bibliothèque Shamela',
   'footer.built': 'Version {version} du site',
+  'colophon.heading': 'Colophon',
+  'colophon.typefaces': 'Composé en EB Garamond, Literata et Amiri, toutes embarquées.',
 };

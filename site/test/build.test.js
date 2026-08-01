@@ -91,11 +91,44 @@ test('les jetons de l’application sont copiés à l’identique', async () => 
   assert.equal(await read('styles/tokens.css'), source);
 });
 
-test('l’ambiance nuit est dérivée des jetons, pas recopiée', async () => {
-  const derived = await read('styles/theme-system.css');
-  assert.match(derived, /@media \(prefers-color-scheme: dark\)/);
-  assert.match(derived, /--surface:/);
-  assert.match(derived, /:root:not\(\[data-theme\]\)/);
+test('le site n’a qu’une lumière : aucune ambiance nuit', async () => {
+  // Trois ambiances servent à lire des heures durant ; une page de
+  // présentation se parcourt, et son fond est une identité, pas un confort.
+  const css = await read('styles/site.css');
+  assert.doesNotMatch(css, /prefers-color-scheme/);
+  assert.doesNotMatch(await read('ar/index.html'), /theme-system\.css/);
+});
+
+test('le papier et l’encre sont dérivés des jetons, jamais posés en valeurs neuves', async () => {
+  // Une seconde palette finit toujours par diverger : c'est la panne `sepia`
+  // déjà vécue sur ce projet. Les couleurs propres au site se dérivent donc
+  // par `color-mix` des jetons de l'application.
+  const css = await read('styles/site.css');
+  assert.match(css, /--paper: color-mix\(in srgb, var\(--secondary-container\)/);
+  assert.match(css, /--ink: color-mix\(in srgb, var\(--on-surface\)/);
+});
+
+test('les trois voix typographiques sont posées', async () => {
+  const css = await read('styles/site.css');
+  assert.match(css, /--title: 'EB Garamond'/);
+  assert.match(css, /--text: 'Literata'/);
+  assert.match(css, /--margin-voice: 'IBM Plex Sans Arabic'/);
+  // L'arabe n'a pas d'équivalent à la coupure serif/sans latine : Amiri porte
+  // le titre et le texte.
+  assert.match(css, /html\[lang='ar'\][^}]*--title: 'Amiri'/);
+});
+
+test('les tics du gabarit de démonstration ne reviennent pas', async () => {
+  // Dégradés, verre dépoli, halos sans décalage et rayons de 16 px : ce sont
+  // les marques du gabarit qu'on est venu retirer. Elles reviennent seules si
+  // rien ne les surveille.
+  const css = await read('styles/site.css');
+  assert.doesNotMatch(css, /linear-gradient|radial-gradient/);
+  assert.doesNotMatch(css, /backdrop-filter/);
+  assert.doesNotMatch(css, /box-shadow/);
+  for (const [, value] of css.matchAll(/border-radius:\s*([^;]+);/g)) {
+    assert.match(value.trim(), /^(0|[1-4]px)$/, `rayon de coin trop grand : ${value.trim()}`);
+  }
 });
 
 test('polices, marque et captures sont présentes', async () => {

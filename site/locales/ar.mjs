@@ -27,8 +27,11 @@ export default {
   'home.cta.secondary': 'اطّلع على الإصدارات',
   'home.cta.pending': 'قريبًا',
   'home.platforms': 'متاح على',
-  'home.shot.alt': 'الشاشة الرئيسية لبيت الحكمة',
-  'home.shot.reader.alt': 'القارئ، وصفحة كتاب مفتوحة',
+
+  'plate.home': 'الرئيسية: الفنون، والقرون، وموضع الوقوف.',
+  'plate.reader': 'القارئ، وصفحة موضوعة.',
+  'plate.night': 'الصفحة نفسها، في سمة الليل.',
+  'plate.explore': 'استكشاف الفهرس بالفنّ وبالعصر.',
 
   'features.heading': 'ما الذي يقدّمه',
   'features.lede': 'أربعة خيارات في التصميم، مُلتزَمة حتى النهاية — وهي ما يميّزه عن قارئ ملفات آخر.',
@@ -126,4 +129,6 @@ export default {
   'footer.license': 'منشور برخصة AGPL-3.0',
   'footer.corpus': 'المدوّنة مصدرها المكتبة الشاملة',
   'footer.built': 'بناء الموقع {version}',
+  'colophon.heading': 'الترقيمة',
+  'colophon.typefaces': 'رُكِّب بخطوط أميري وEB Garamond وLiterata، وكلّها مضمَّنة.',
 };

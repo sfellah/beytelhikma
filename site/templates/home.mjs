@@ -1,11 +1,17 @@
 /**
- * L'accueil : ce que fait l'application, montré avant d'être dit.
+ * L'accueil, composé comme une page de titre : une annonce, deux planches
+ * légendées, un sommaire.
  *
  * Trois choses de la maquette ne sont pas reprises, parce qu'elles seraient
  * fausses : la synchronisation cloud, la « version navigateur » et les
  * applications mobiles à venir. L'application est locale, de bureau, sans
  * compte — une page d'accueil qui promet le contraire se paie au premier
  * téléchargement.
+ *
+ * Trois autres sont parties parce qu'elles étaient du décor : le cadre de
+ * fenêtre avec ses pastilles rouge-jaune-vert, l'icône en carré arrondi au-
+ * dessus de chaque titre, et la grille de quatre cartes identiques. Une
+ * capture devient une planche, une fonction devient une entrée de sommaire.
  */
 import { url } from '../config.mjs';
 import { attrs, escapeHtml, icon } from '../lib/html.mjs';
@@ -13,7 +19,7 @@ import { pagePath } from './layout.mjs';
 
 function badge(latest, t) {
   const text = latest ? t('home.badge', { version: latest.version }) : t('home.badge.none');
-  return `<p class="badge">${icon('layers')}<span>${escapeHtml(text)}</span></p>`;
+  return `<p class="badge">${escapeHtml(text)}</p>`;
 }
 
 function calls(locale, latest, t, defaultPlatform) {
@@ -24,22 +30,35 @@ function calls(locale, latest, t, defaultPlatform) {
 
   return `<p class="hero__calls">
       <a class="button button--primary"${attrs({ href: download, 'data-cta': 'primary' })}>${icon('download')}<span data-cta-label>${escapeHtml(label)}</span></a>
-      <a class="button button--ghost" href="${url(pagePath(locale, 'releases'))}">${escapeHtml(t('home.cta.secondary'))}</a>
+      <a class="link" href="${url(pagePath(locale, 'releases'))}">${escapeHtml(t('home.cta.secondary'))}</a>
     </p>`;
 }
 
-function shot(name, alt, { className }) {
-  return `<figure class="${escapeHtml(className)}">
-        <div class="frame">
-          <div class="frame__bar"><span></span><span></span><span></span></div>
-          <img class="frame__shot" src="${url(`assets/shots/${name}`)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" width="1280" height="800" />
+/**
+ * Une planche : le cadre, la vue, la légende sous un filet.
+ *
+ * L'image porte un `alt` vide **exprès** : la légende est visible et la
+ * décrit. Répéter le même texte dans l'`alt` le ferait annoncer deux fois de
+ * suite par un lecteur d'écran.
+ */
+function plate(name, caption, { className = '', eager = false } = {}) {
+  // Les deux planches de tête ne sont pas différées : elles sont ce que
+  // l'écran montre en premier, et `lazy` sur une image au-dessus de la ligne
+  // de flottaison retarde exactement le pixel qui compte.
+  const loading = eager
+    ? 'loading="eager" fetchpriority="high"'
+    : 'loading="lazy" fetchpriority="low"';
+
+  return `<figure class="plate${className ? ` ${className}` : ''}">
+        <div class="plate__frame">
+          <img class="plate__shot" src="${url(`assets/shots/${name}`)}" alt="" ${loading} decoding="async" width="1280" height="800" />
         </div>
+        <figcaption class="plate__caption">${escapeHtml(caption)}</figcaption>
       </figure>`;
 }
 
-function feature({ id, iconName, title, body, wide = false, media = null }) {
-  return `<article class="feature${wide ? ' feature--wide' : ''}" id="${escapeHtml(id)}">
-      <span class="feature__icon">${icon(iconName)}</span>
+function feature({ id, title, body, media = null }) {
+  return `<article class="feature" id="${escapeHtml(id)}">
       <h3 class="feature__title">${escapeHtml(title)}</h3>
       <p class="feature__body">${escapeHtml(body)}</p>
       ${media ?? ''}
@@ -48,13 +67,13 @@ function feature({ id, iconName, title, body, wide = false, media = null }) {
 
 export function home({ locale, t, latest, books, defaultPlatform }) {
   const trust = [
-    ['lock', t('trust.free'), t('trust.free.detail')],
-    ['security', t('trust.private'), t('trust.private.detail')],
-    ['offline', t('trust.offline'), t('trust.offline.detail')],
+    [t('trust.free'), t('trust.free.detail')],
+    [t('trust.private'), t('trust.private.detail')],
+    [t('trust.offline'), t('trust.offline.detail')],
   ]
     .map(
-      ([name, title, detail]) =>
-        `<li class="trust__item">${icon(name)}<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span></li>`,
+      ([title, detail]) =>
+        `<li class="trust__item"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span></li>`,
     )
     .join('\n      ');
 
@@ -65,15 +84,16 @@ export function home({ locale, t, latest, books, defaultPlatform }) {
       <h1 class="hero__heading">${escapeHtml(t('home.heading'))}<br /><span class="hero__accent">${escapeHtml(t('home.heading.accent'))}</span></h1>
       <p class="hero__lede">${escapeHtml(t('home.lede', { books }))}</p>
       ${calls(locale, latest, t, defaultPlatform)}
-      <ul class="trust">
+    </div>
+    <ul class="trust">
       ${trust}
-      </ul>
-    </div>
-    <div class="hero__media">
-      ${shot('home.png', t('home.shot.alt'), { className: 'hero__shot' })}
-      ${shot('reader.png', t('home.shot.reader.alt'), { className: 'hero__shot hero__shot--behind' })}
-    </div>
+    </ul>
   </div>
+</section>
+
+<section class="plates">
+  ${plate('home.png', t('plate.home'), { eager: true })}
+  ${plate('reader.png', t('plate.reader'), { eager: true })}
 </section>
 
 <section class="features" id="features">
@@ -85,29 +105,23 @@ export function home({ locale, t, latest, books, defaultPlatform }) {
     <div class="features__grid">
       ${feature({
         id: 'offline',
-        iconName: 'offline',
         title: t('features.offline.title'),
         body: t('features.offline.body'),
-        wide: true,
-        media: shot('explore.png', t('home.shot.alt'), { className: 'feature__media' }),
+        media: plate('explore.png', t('plate.explore'), { className: 'feature__media' }),
       })}
       ${feature({
         id: 'corpus',
-        iconName: 'book',
         title: t('features.corpus.title', { books }),
         body: t('features.corpus.body'),
       })}
       ${feature({
         id: 'reading',
-        iconName: 'layers',
         title: t('features.reading.title'),
         body: t('features.reading.body'),
-        wide: true,
-        media: shot('reader-night.png', t('home.shot.reader.alt'), { className: 'feature__media' }),
+        media: plate('reader-night.png', t('plate.night'), { className: 'feature__media' }),
       })}
       ${feature({
         id: 'arabic',
-        iconName: 'globe',
         title: t('features.arabic.title'),
         body: t('features.arabic.body'),
       })}
