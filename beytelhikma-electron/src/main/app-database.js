@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 import zlib from 'node:zlib';
 import initSqlJs from 'sql.js';
 
+import { assertEditionId } from './edition-id.js';
+
 const require = createRequire(import.meta.url);
 
 /** sql.js compile le WASM une seule fois par processus. */
@@ -362,8 +364,12 @@ export class AppDatabase {
   /**
    * Ouvre un livre **installé**. Contrairement au catalogue, aucun fichier n'est
    * copié ici : c'est `download-manager.js` qui installe les livres.
+   *
+   * L'identifiant est validé avant le `path.join` : il vient du rendu, donc
+   * d'un fragment d'URL, et il désigne un nom de fichier (voir `edition-id.js`).
    */
   async book(editionId) {
+    assertEditionId(editionId);
     const cached = this.#books.get(editionId);
     if (cached) return cached;
     const file = path.join(this.#root, 'books', `${editionId}.sqlite`);
@@ -434,11 +440,21 @@ export class AppDatabase {
     return true;
   }
 
-  /** Réécrit `user.sqlite` sur disque : sql.js ne connaît que la mémoire. */
+  /**
+   * Réécrit `user.sqlite` sur disque : sql.js ne connaît que la mémoire.
+   *
+   * De côté puis renommage, comme le catalogue. Écrire en place expose la
+   * seule base qu'on ne puisse pas retélécharger — progression, surlignages,
+   * notes, collections — à une coupure au milieu du `write`, qui la laisserait
+   * tronquée donc illisible. Et la fenêtre est large : un téléchargement en
+   * cours déclenche cette écriture toutes les 500 ms.
+   */
   #persistUser() {
     if (!this.#user) return;
     const file = path.join(this.#root, 'user.sqlite');
-    fs.writeFileSync(file, Buffer.from(this.#user.export()));
+    const staged = `${file}.tmp`;
+    fs.writeFileSync(staged, Buffer.from(this.#user.export()));
+    fs.renameSync(staged, file); // atomique : le dernier geste
   }
 
   /** Exécute [run] puis persiste la base utilisateur. */

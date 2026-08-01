@@ -668,3 +668,41 @@ test('les deux listes de méthodes exposées ne peuvent pas diverger', async () 
     assert.equal(typeof repository[name], 'function', `${name} n'existe pas sur le dépôt`);
   }
 });
+
+/**
+ * Le catalogue nourrit deux caches de session : l'ordre alphabétique
+ * (`#titleOrderCache`) et l'index des noms (`#nameIndex`). Une mise à jour de
+ * catalogue doit jeter les deux.
+ *
+ * La panne d'origine : `installCatalogUpdate` remettait le premier à zéro et
+ * oubliait le second. La recherche continuait de rendre des `edition_id`
+ * disparus, et de rater les nouveaux, jusqu'au redémarrage.
+ *
+ * Le test est structurel — la mise à jour elle-même demande un bucket — mais il
+ * porte la propriété qui compte : **une seule liste**, et elle est appelée.
+ */
+test('une mise à jour de catalogue jette tous les caches qui en dérivent', () => {
+  const source = fs.readFileSync(
+    path.join(projectRoot, 'src', 'main', 'book-repository.js'),
+    'utf8',
+  );
+
+  const caches = [...source.matchAll(/^\s{2}#(\w*(?:Cache|Index))\s*=/gm)].map((m) => m[1]);
+  assert.ok(caches.length >= 2, 'les champs de cache sont bien lus');
+
+  const oubli = source.match(/#forgetCatalogCaches\(\)\s*\{([^}]*)\}/)?.[1];
+  assert.ok(oubli, '#forgetCatalogCaches doit exister');
+  for (const cache of caches) {
+    assert.ok(oubli.includes(`#${cache} = null`), `${cache} survit à la mise à jour`);
+  }
+
+  const installe = source.match(/installCatalogUpdate\(\)\s*\{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(installe?.includes('#forgetCatalogCaches()'), 'la mise à jour doit les jeter');
+  // Remettre un cache à zéro ailleurs, c'est rouvrir la porte : le prochain
+  // cache ajouté ne serait pas dans la liste.
+  assert.equal(
+    installe.includes('Cache = null') || installe.includes('Index = null'),
+    false,
+    'aucune remise à zéro à la main hors de #forgetCatalogCaches',
+  );
+});

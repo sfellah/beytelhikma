@@ -4,11 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
+import { assertBaseUrl } from '../shared/distribution.js';
 import { all, first } from './app-database.js';
 import { cssFor, installFont } from './font-installer.js';
 import { decideUpdate, fetchPointer, installCatalog } from './catalog-updater.js';
 import { buildCount, buildFacetQuery, buildList } from './catalog-query.js';
 import { DownloadQueue } from './download-manager.js';
+import { assertEditionId, isEditionId } from './edition-id.js';
 
 /** Erreur remontée à l'interface : message lisible + cause technique. */
 export class RepositoryError extends Error {
@@ -276,6 +278,20 @@ export class BookRepository {
     return this.#downloads;
   }
 
+  /**
+   * Jette tout ce qui a été dérivé du catalogue. À appeler dès qu'il change.
+   *
+   * Les deux caches sont listés **ici et nulle part ailleurs** : c'est d'un
+   * oubli qu'était née la panne — `installCatalogUpdate` remettait
+   * `#titleOrderCache` à zéro mais laissait `#nameIndex`, et la recherche
+   * continuait de rendre des éditions disparues jusqu'au redémarrage. Le
+   * troisième cache ajouté demain se déclare là.
+   */
+  #forgetCatalogCaches() {
+    this.#nameIndex = null;
+    this.#titleOrderCache = null;
+  }
+
   async #guard(what, run) {
     try {
       return await run();
@@ -378,6 +394,9 @@ export class BookRepository {
         throw new Error('téléchargement en cours : annuler avant de supprimer');
       }
 
+      // Trois `rmSync(…, { force: true })` suivent, sur des chemins construits
+      // avec cet identifiant : il est validé avant, jamais après.
+      assertEditionId(editionId);
       this.#db.closeBook(editionId);
       const root = this.#db.root;
       fs.rmSync(path.join(root, 'books', `${editionId}.sqlite`), { force: true });
@@ -556,7 +575,7 @@ export class BookRepository {
   getStorageUsage() {
     return this.#guard("lecture de l'espace occupé", async () => {
       const dir = path.join(this.#db.root, 'books');
-      const ids = this.#db.installedBooks();
+      const ids = this.#db.installedBooks().filter(isEditionId);
       let bytes = 0;
       for (const editionId of ids) {
         try {
@@ -2067,7 +2086,7 @@ export class BookRepository {
    */
   setDownloadBaseUrl(url) {
     return this.#guard("réglage de l'adresse du serveur", async () => {
-      const value = String(url ?? '').trim();
+      const value = assertBaseUrl(url);
       await this.saveSetting('distribution.base_url', value);
       this.#downloads?.setBaseUrl(value || null);
     });
@@ -2115,7 +2134,7 @@ export class BookRepository {
         storageRoot: this.#db.root,
       });
       await this.#db.reloadCatalog();
-      this.#titleOrderCache = null;
+      this.#forgetCatalogCaches();
       return { catalogVersion: verdict.pointer.catalog_version };
     });
   }

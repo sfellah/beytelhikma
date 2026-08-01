@@ -26,6 +26,16 @@ export const POINTER_KEY = 'catalog/latest.json';
 const POINTER_TIMEOUT_MS = 8000;
 
 /**
+ * Un SHA-256 en hexadécimal, et rien d'autre.
+ *
+ * L'empreinte est **exigée** d'un pointeur, pas seulement comparée quand elle
+ * est présente : un pointeur qui n'en porte pas faisait installer n'importe
+ * quel catalogue sans contrôle, et c'est le catalogue qui devient ensuite la
+ * source de vérité de toute l'application.
+ */
+const EMPREINTE_VALIDE = /^[0-9a-f]{64}$/i;
+
+/**
  * Lit le pointeur. Renvoie `null` pour **toute** anomalie — réseau, HTTP, JSON.
  *
  * Aucune levée : l'appelant est un démarrage d'application, pas une requête
@@ -73,6 +83,12 @@ export function decideUpdate({ pointer, localVersion, declinedVersion }) {
   if (!estEntierPositif(pointer.catalog_version) || !pointer.object_key) {
     return { action: 'none', reason: 'malformed', pointer: null };
   }
+  // Sans empreinte, rien à vérifier à l'installation : on ne le propose donc
+  // même pas. Le refus est silencieux comme les autres — l'utilisateur n'a
+  // aucune action à entreprendre, c'est la publication qui est fautive.
+  if (!EMPREINTE_VALIDE.test(String(pointer.sha256 ?? ''))) {
+    return { action: 'none', reason: 'malformed', pointer: null };
+  }
   if (
     !estEntierPositif(pointer.schema_version) ||
     pointer.schema_version > SUPPORTED_SCHEMA_VERSION
@@ -104,6 +120,10 @@ export async function installCatalog({ pointer, baseUrl, storageRoot, signal = n
   const cible = resolveObject(baseUrl, pointer.object_key);
   if (cible.kind !== 'http') {
     throw new Error(`clé de catalogue non téléchargeable : ${pointer.object_key}`);
+  }
+  // Avant la requête : rien ne sert de tirer quarante mégaoctets qu'on refusera.
+  if (!EMPREINTE_VALIDE.test(String(pointer.sha256 ?? ''))) {
+    throw new Error('pointeur sans empreinte : catalogue refusé');
   }
 
   fs.mkdirSync(storageRoot, { recursive: true });
@@ -140,7 +160,7 @@ export async function installCatalog({ pointer, baseUrl, storageRoot, signal = n
     );
 
     const obtenue = empreinte.digest('hex');
-    if (pointer.sha256 && obtenue !== pointer.sha256) {
+    if (obtenue.toLowerCase() !== String(pointer.sha256).toLowerCase()) {
       throw new Error(`empreinte du catalogue invalide : ${obtenue} au lieu de ${pointer.sha256}`);
     }
 
