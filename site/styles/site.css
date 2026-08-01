@@ -1,0 +1,1134 @@
+/* Beyt El Hikma — la feuille du site.
+   ==================================================================
+
+   Le monde retenu : **les pages de titre d'un livre imprimé.** Une page de
+   garde, un sommaire, des planches légendées, un colophon. C'est l'expression
+   honnête d'une bibliothèque de 8 568 ouvrages, et l'exact contraire du
+   gabarit de landing que les maquettes proposaient — grille de cartes
+   identiques, icône en carré arrondi, dégradés et halos.
+
+   Trois règles tiennent la page :
+
+   1. **Le filet remplace la carte.** La structure est faite de traits d'un
+      pixel, pas de rectangles ombrés. Une carte est le conteneur paresseux ;
+      un filet est une décision typographique.
+   2. **Papier franc, jamais de nuit.** Le site suit une seule ambiance, claire
+      et chaude. L'application, elle, garde ses trois ambiances — c'est un
+      espace de lecture, pas une page de présentation.
+   3. **Rien n'est inventé en couleur.** Les teintes viennent toutes de
+      `tokens.css`, copié depuis l'application. Le papier chaud est *dérivé*
+      du sable du projet par `color-mix`, jamais posé en valeur nouvelle : une
+      seconde palette finit toujours par diverger.
+
+   Propriétés logiques uniquement — les pages arabes sont RTL et les latines
+   LTR, sur la même feuille. */
+
+/* ============================================================ surfaces ==== */
+
+:root {
+  /* Le papier : le sable `--secondary-container` du projet, étendu sur du
+     blanc. Le `--surface` de l'application (#fbf8fc) tire sur le mauve froid ;
+     sa propre note de design le décrit pourtant comme un « crème de bonne
+     qualité ». Ici on tient la description. */
+  --paper: color-mix(in srgb, var(--secondary-container) 34%, #ffffff);
+  --paper-deep: color-mix(in srgb, var(--secondary-container) 52%, #ffffff);
+
+  /* L'encre, réchauffée d'un rien par le même sable : un noir froid sur du
+     crème se voit, et se voit comme une erreur. */
+  --ink: color-mix(in srgb, var(--on-surface) 92%, var(--secondary) 8%);
+  --ink-soft: var(--on-surface-variant);
+  /* `--outline` seul donne 4,18:1 sur ce papier — sous le seuil pour du petit
+     texte, et c'est précisément ce que cette encre porte : dates, tailles,
+     libellés de marge. On la ramène vers l'encre jusqu'à 6,2:1. */
+  --ink-faint: color-mix(in srgb, var(--outline) 70%, var(--on-surface));
+
+  /* Le filet. Réchauffé lui aussi, sinon il verdit sur le crème. */
+  --rule: color-mix(in srgb, var(--outline-variant) 62%, var(--secondary-container));
+  --rule-strong: color-mix(in srgb, var(--outline) 40%, var(--secondary-container));
+
+  --measure: 68ch;
+  --gutter: clamp(1.25rem, 5vw, 3.5rem);
+  --column: min(100% - 2 * var(--gutter), 74rem);
+
+  /* Trois voix, et pas une de plus.
+     — le titre : EB Garamond, garalde de bibliothèque, pour ce qui s'annonce ;
+     — le texte : Literata, dessinée pour lire un livre à l'écran ;
+     — la marge : IBM Plex Sans Arabic, petite et espacée, pour ce qui se
+       consulte sans se lire — libellés, métadonnées, navigation.
+     Sur les pages arabes, Amiri prend le titre et le texte : le naskh de
+     bibliothèque du projet fait les deux, et la coupure serif/sans latine n'a
+     pas d'équivalent en arabe. */
+  --title: 'EB Garamond', 'Source Serif 4', Georgia, serif;
+  --text: 'Literata', 'Source Serif 4', Georgia, serif;
+  --margin-voice: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+}
+
+html[lang='ar'] {
+  --title: 'Amiri', 'Noto Naskh Arabic', serif;
+  --text: 'Amiri', 'Noto Naskh Arabic', serif;
+}
+
+/* ================================================================ base ==== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+  line-height: 1.65;
+  /* Chiffres elzéviriens dans le texte courant : ils s'assoient sur la ligne
+     de base comme des minuscules, ce qui est la raison d'être d'un livre. Les
+     tableaux les reprennent en chiffres alignés, plus bas. */
+  font-variant-numeric: oldstyle-nums;
+  text-rendering: optimizeLegibility;
+}
+
+html[lang='ar'] body {
+  /* Amiri a une hauteur d'œil basse : au même corps que Literata, il paraît
+     d'un cran plus petit. On rend l'optique, pas le nombre.
+     Et l'arabe vocalisé demande de l'air entre les lignes — les signes de
+     tashkīl se posent au-dessus et au-dessous du corps. */
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
+  line-height: 1.95;
+  font-variant-numeric: normal;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--title);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+html[lang='ar'] :is(h1, h2, h3) {
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 0;
+}
+
+img {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+a {
+  color: var(--primary);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: from-font;
+}
+
+::selection {
+  background: var(--secondary-container);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* Note de composition, valable partout plus bas : sur les pages arabes, la
+   mise en capitales et l'interlettrage sont annulés. L'arabe n'a pas de
+   capitales — la première ne fait rien — et le second disjoint les liaisons
+   du naskh, ce qui rend le mot illisible. */
+
+.icon {
+  inline-size: 1.05em;
+  block-size: 1.05em;
+  flex: none;
+}
+
+.skip {
+  position: absolute;
+  inset-block-start: -100%;
+  inset-inline-start: 1rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--margin-voice);
+  font-size: 0.8125rem;
+}
+
+.skip:focus {
+  inset-block-start: 0.5rem;
+}
+
+/* ============================================================ masthead ==== */
+
+/* Pas de barre collante. Une page de titre ne suit pas le lecteur ; la
+   navigation est en tête et reprise dans le colophon. */
+.topbar {
+  border-block-end: 1px solid var(--rule);
+}
+
+.topbar__inner {
+  inline-size: var(--column);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding-block: 1.1rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.brand__mark {
+  inline-size: 26px;
+  block-size: 26px;
+  align-self: center;
+}
+
+.brand__name {
+  font-family: var(--title);
+  font-size: 1.4rem;
+  letter-spacing: 0.01em;
+  /* Sans cela, « Beyt El Hikma » casse en trois lignes dès que la barre serre.
+     Un nom d'ouvrage ne se coupe pas. */
+  white-space: nowrap;
+}
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* En dessous de 48rem, le bandeau s'empile : la marque sur une ligne, la
+   navigation en dessous, qui se replie. En rangée, « English » sortait de
+   l'écran et la marque se brisait. */
+@media (max-width: 48rem) {
+  .topbar__inner {
+    flex-direction: column;
+    align-items: start;
+    gap: 0.9rem;
+    padding-block: 0.9rem;
+  }
+
+  .topbar__nav {
+    inline-size: 100%;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.1rem;
+  }
+}
+
+.topbar__link {
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding-block: 0.35rem;
+  border-block-end: 1px solid transparent;
+}
+
+html[lang='ar'] .topbar__link,
+html[lang='ar'] .lang__link {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.topbar__link:hover,
+.topbar__link--on {
+  color: var(--ink);
+  border-block-end-color: var(--rule-strong);
+}
+
+.lang {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+}
+
+.lang__link {
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  text-decoration: none;
+}
+
+.lang__link:hover {
+  color: var(--ink);
+}
+
+.lang__link--on {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+/* ============================================================= boutons ==== */
+
+/* Un seul bouton plein sur la page, et il est carré. Le reste est du texte
+   souligné : dans un livre, ce qui appelle une action est écrit, pas embossé. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.6rem;
+  border: 1px solid var(--primary);
+  border-radius: 2px;
+  font-family: var(--margin-voice);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[lang='ar'] .button {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.9375rem;
+}
+
+.button--primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.button--primary:hover {
+  background: color-mix(in srgb, var(--primary) 85%, #ffffff);
+}
+
+.button--small {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--rule-strong);
+}
+
+.button--small:hover {
+  border-color: var(--primary);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--margin-voice);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+html[lang='ar'] .link {
+  letter-spacing: 0;
+  font-size: 0.9375rem;
+}
+
+/* ========================================================= page de titre ==== */
+
+.hero {
+  padding-block: clamp(3.5rem, 9vw, 7rem) clamp(3rem, 7vw, 5rem);
+}
+
+.hero__inner {
+  inline-size: var(--column);
+  margin-inline: auto;
+}
+
+.hero__text {
+  max-inline-size: 46rem;
+}
+
+/* La ligne de rappel : un filet, un mot, un filet. Pas une pastille. */
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-block-end: 2rem;
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+html[lang='ar'] .badge {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.badge::after {
+  content: '';
+  flex: 1;
+  block-size: 1px;
+  background: var(--rule);
+}
+
+.badge .icon {
+  display: none;
+}
+
+.hero__heading {
+  font-size: clamp(2.6rem, 1.4rem + 5.2vw, 5rem);
+  letter-spacing: -0.02em;
+}
+
+html[lang='ar'] .hero__heading {
+  font-size: clamp(2.2rem, 1.2rem + 4.4vw, 4.2rem);
+  letter-spacing: 0;
+}
+
+.hero__accent {
+  font-style: italic;
+  color: var(--primary);
+}
+
+html[lang='ar'] .hero__accent {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.hero__lede {
+  margin-block-start: 1.75rem;
+  max-inline-size: 44ch;
+  font-size: clamp(1.125rem, 1.05rem + 0.35vw, 1.3125rem);
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+html[lang='ar'] .hero__lede {
+  line-height: 1.9;
+  max-inline-size: 46ch;
+}
+
+.hero__calls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+  margin-block-start: 2.5rem;
+}
+
+/* Les trois garanties, en pied de page de titre : un filet au-dessus, trois
+   colonnes, aucune icône. Ce sont des faits, pas des arguments. */
+.trust {
+  display: grid;
+  gap: 1.5rem 3rem;
+  margin-block-start: clamp(3rem, 6vw, 4.5rem);
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--rule);
+  padding-inline: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .trust {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.trust__item {
+  display: block;
+}
+
+.trust__item .icon {
+  display: none;
+}
+
+.trust__item strong {
+  display: block;
+  font-family: var(--title);
+  font-size: 1.125rem;
+  font-weight: 400;
+}
+
+.trust__item span {
+  display: block;
+  margin-block-start: 0.2rem;
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+html[lang='ar'] .trust__item span {
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+/* ============================================================ planches ==== */
+
+/* Une capture est une planche : un filet, la vue, une légende sous le trait.
+   Le cadre de fenêtre avec ses trois pastilles a disparu — c'est le tic le
+   plus reconnaissable de la maquette de démonstration, et il donne à voir un
+   navigateur là où l'objet est une application. */
+.plate {
+  margin: 0;
+}
+
+.plate__frame {
+  border: 1px solid var(--rule);
+  background: #ffffff;
+  padding: 0.5rem;
+}
+
+.plate__shot {
+  display: block;
+  inline-size: 100%;
+}
+
+.plate__caption {
+  margin-block-start: 0.7rem;
+  padding-block-start: 0.55rem;
+  border-block-start: 1px solid var(--rule);
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  font-variant-numeric: normal;
+}
+
+html[lang='ar'] .plate__caption {
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.plates {
+  inline-size: var(--column);
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  padding-block-end: clamp(3rem, 7vw, 5rem);
+}
+
+@media (min-width: 52rem) {
+  .plates {
+    grid-template-columns: 1.35fr 1fr;
+    align-items: start;
+  }
+}
+
+/* ============================================================ sommaire ==== */
+
+.features {
+  border-block-start: 1px solid var(--rule);
+  padding-block: clamp(3rem, 7vw, 5rem);
+}
+
+.features__inner {
+  inline-size: var(--column);
+  margin-inline: auto;
+}
+
+.section-head {
+  max-inline-size: var(--measure);
+  margin-block-end: clamp(2rem, 5vw, 3rem);
+}
+
+.section-head__title {
+  font-size: clamp(1.75rem, 1.3rem + 1.8vw, 2.5rem);
+}
+
+.section-head__lede {
+  margin-block-start: 0.75rem;
+  color: var(--ink-soft);
+  max-inline-size: 56ch;
+}
+
+/* Un sommaire, pas une grille de cartes : titre en vedette, texte en regard,
+   un filet entre chaque entrée. La cellule identique répétée quatre fois est
+   précisément ce qu'on est venu retirer. */
+.features__grid {
+  display: grid;
+}
+
+.feature {
+  display: grid;
+  gap: 0.5rem 3rem;
+  padding-block: clamp(1.75rem, 4vw, 2.5rem);
+  border-block-start: 1px solid var(--rule);
+}
+
+.feature:last-child {
+  border-block-end: 1px solid var(--rule);
+}
+
+@media (min-width: 52rem) {
+  .feature {
+    grid-template-columns: 22rem minmax(0, 1fr);
+  }
+}
+
+.feature__icon {
+  display: none;
+}
+
+.feature__title {
+  font-size: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
+}
+
+.feature__body {
+  color: var(--ink-soft);
+  max-inline-size: 58ch;
+}
+
+.feature__media {
+  margin-block-start: 1.5rem;
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 52rem) {
+  .feature__media {
+    grid-column: 2;
+    margin-block-start: 1.25rem;
+  }
+}
+
+/* ============================================================= chapeau ==== */
+
+.lead {
+  inline-size: var(--column);
+  margin-inline: auto;
+  padding-block: clamp(3rem, 7vw, 4.5rem) clamp(1.5rem, 4vw, 2.5rem);
+  border-block-end: 1px solid var(--rule);
+  margin-block-end: clamp(2rem, 5vw, 3rem);
+}
+
+.lead__title {
+  font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.5rem);
+  letter-spacing: -0.018em;
+}
+
+html[lang='ar'] .lead__title {
+  letter-spacing: 0;
+}
+
+.lead__text {
+  margin-block-start: 0.9rem;
+  max-inline-size: var(--measure);
+  color: var(--ink-soft);
+}
+
+.lead__aside {
+  margin-block-start: 1.25rem;
+}
+
+/* ======================================================= téléchargement ==== */
+
+.download {
+  inline-size: var(--column);
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(2.5rem, 6vw, 4rem);
+  padding-block-end: clamp(3.5rem, 8vw, 6rem);
+}
+
+@media (min-width: 60rem) {
+  .download {
+    grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+    align-items: start;
+  }
+}
+
+.download__platforms {
+  display: grid;
+}
+
+.platform {
+  padding-block: clamp(1.5rem, 4vw, 2rem);
+  border-block-start: 1px solid var(--rule);
+}
+
+.platform:last-child {
+  border-block-end: 1px solid var(--rule);
+}
+
+/* La plateforme reconnue se marque par un filet plus appuyé et un mot, pas
+   par un cadre coloré : le repère doit se voir sans repeindre la page. */
+.platform--mine {
+  border-block-start-width: 2px;
+  border-block-start-color: var(--primary);
+}
+
+.platform__recommended {
+  margin-block-end: 0.5rem;
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+html[lang='ar'] .platform__recommended {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.platform__title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: var(--title);
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-block-end: 1.25rem;
+}
+
+.platform__title .icon {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  color: var(--ink-faint);
+}
+
+.platform__assets {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asset__link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--title);
+  font-size: 1.1875rem;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.asset__link .icon {
+  align-self: center;
+  color: var(--ink-faint);
+}
+
+.asset__link:hover .asset__name {
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
+.asset__size {
+  margin-inline-start: auto;
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-variant-numeric: normal;
+}
+
+.asset__hint {
+  margin-block-start: 0.25rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  max-inline-size: 52ch;
+}
+
+.asset__digest {
+  margin-block-start: 0.5rem;
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .asset__digest {
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.asset__digest summary {
+  cursor: pointer;
+}
+
+.asset__sha {
+  display: block;
+  margin-block-start: 0.4rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--paper-deep);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}
+
+/* Le cahier de droite : les faits vérifiables, en chiffres alignés. */
+.specs {
+  padding-block-start: 1.5rem;
+  border-block-start: 2px solid var(--ink);
+}
+
+.specs__title {
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  margin-block-end: 1.25rem;
+}
+
+html[lang='ar'] .specs__title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.9375rem;
+}
+
+.specs__list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.specs__row {
+  display: grid;
+  gap: 0.15rem;
+  padding-block-end: 1rem;
+  border-block-end: 1px solid var(--rule);
+}
+
+.specs__row:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+
+.specs__row dt {
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .specs__row dt {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.specs__row dd {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+/* L'avertissement Windows : un encadré sobre. Il dit une gêne réelle, il ne
+   doit ni se cacher ni crier. */
+.notice {
+  margin-block-start: 2rem;
+  padding: 1.1rem 1.25rem;
+  background: color-mix(in srgb, var(--secondary-container) 45%, var(--paper));
+  border-inline-start: 1px solid var(--secondary);
+}
+
+.notice__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--title);
+  font-size: 1.0625rem;
+  font-weight: 400;
+  margin-block-end: 0.4rem;
+}
+
+.notice__title .icon {
+  color: var(--secondary);
+}
+
+.notice__body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+/* ============================================================ versions ==== */
+
+.releases {
+  inline-size: var(--column);
+  margin-inline: auto;
+  padding-block-end: clamp(3.5rem, 8vw, 6rem);
+}
+
+.timeline {
+  display: grid;
+  max-inline-size: 54rem;
+}
+
+/* Une entrée de journal : filet, numéro de version en vedette, date en marge.
+   Ni carte, ni ombre, ni barre colorée sur le côté. */
+.release {
+  display: grid;
+  gap: 0.75rem 3rem;
+  padding-block: clamp(2rem, 5vw, 3rem);
+  border-block-start: 1px solid var(--rule);
+}
+
+.release:last-child {
+  border-block-end: 1px solid var(--rule);
+}
+
+.release--current {
+  border-block-start-width: 2px;
+  border-block-start-color: var(--ink);
+}
+
+@media (min-width: 48rem) {
+  .release {
+    grid-template-columns: 14rem minmax(0, 1fr);
+  }
+
+  .release__head {
+    grid-row: span 2;
+  }
+}
+
+.release__version {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--title);
+  font-size: 2rem;
+  font-weight: 400;
+  font-variant-numeric: lining-nums;
+}
+
+.chip {
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .chip {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.chip--on {
+  color: var(--primary);
+}
+
+.release__date {
+  margin-block-start: 0.3rem;
+  font-family: var(--margin-voice);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-variant-numeric: normal;
+}
+
+html[lang='ar'] .release__date {
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.release__group + .release__group {
+  margin-block-start: 1.5rem;
+}
+
+.release__kind {
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .release__kind {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.release__kind .icon {
+  display: none;
+}
+
+.release__group--added .release__kind,
+.release__group--security .release__kind {
+  color: var(--primary);
+}
+
+.release__items {
+  margin: 0.6rem 0 0;
+  padding-inline-start: 1.1rem;
+  max-inline-size: var(--measure);
+}
+
+.release__items li {
+  padding-inline-start: 0.25rem;
+}
+
+.release__items li + li {
+  margin-block-start: 0.4rem;
+}
+
+.release__items li::marker {
+  color: var(--ink-faint);
+}
+
+.release__foot {
+  margin-block-start: 1.25rem;
+}
+
+.release__empty {
+  color: var(--ink-faint);
+}
+
+/* ============================================================ colophon ==== */
+
+/* Le pied est une trisagion de fin de livre : qui édite, sous quelle licence,
+   d'où vient le texte, en quels caractères il est composé. */
+.footer {
+  border-block-start: 1px solid var(--rule);
+  padding-block: clamp(2.5rem, 6vw, 4rem);
+}
+
+.footer__inner {
+  inline-size: var(--column);
+  margin-inline: auto;
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 48rem) {
+  .footer__inner {
+    grid-template-columns: 14rem minmax(0, 1fr);
+  }
+}
+
+.footer__heading {
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .footer__heading {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.footer__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-block-end: 1rem;
+}
+
+.footer__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--margin-voice);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.footer__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.footer__note {
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  max-inline-size: var(--measure);
+}
+
+.footer__note + .footer__note {
+  margin-block-start: 0.3rem;
+}
+
+.footer__note--faint {
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+}
+
+/* ============================================================ mouvement ==== */
+
+/* Un seul moment écrit : le filet du bandeau se tire une fois, au chargement.
+   Rien d'autre ne bouge — une page de titre qui s'anime section par section
+   est une page qui se regarde au lieu de se lire. */
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.badge::after {
+  transform-origin: left;
+  animation: rule-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[dir='rtl'] .badge::after {
+  transform-origin: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge::after {
+    animation: none;
+  }
+
+  .button {
+    transition: none;
+  }
+}
+
+/* ============================================================= impression ==== */
+
+@media print {
+  .topbar__nav,
+  .skip,
+  .button {
+    display: none;
+  }
+
+  body {
+    background: #ffffff;
+  }
+}

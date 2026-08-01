@@ -1,3 +1,5 @@
+import { currentLocale } from './i18n.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
@@ -214,6 +216,27 @@ const ICONS = {
     ['line', 9, 20, 15, 20],
     ['line', 12, 4, 12, 20],
   ],
+  trash: [
+    ['polyline', '3 6 21 6'],
+    ['path', 'M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6'],
+    ['path', 'M5.5 6h13l-1 13.5A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5z'],
+    ['line', 10, 10.5, 10, 17],
+    ['line', 14, 10.5, 14, 17],
+  ],
+  filter: [
+    ['polygon', '3 4 21 4 14 12.5 14 20 10 21.5 10 12.5'],
+  ],
+  chevronDown: [['polyline', '5 9 12 16 19 9']],
+  chevronUp: [['polyline', '5 15 12 8 19 15']],
+  folder: [
+    ['path', 'M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h9A1.5 1.5 0 0 1 21 10v8.5A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z'],
+  ],
+  notes: [
+    ['path', 'M5 3.5h9.5L19 8v12.5H5z'],
+    ['polyline', '14 3.5 14 8.5 19 8.5'],
+    ['line', 8, 12, 16, 12],
+    ['line', 8, 16, 13, 16],
+  ],
 };
 
 function shape(spec) {
@@ -283,4 +306,24 @@ export function categoryIcon(label) {
     السيرة: 'clock',
   };
   return table[label] ?? 'book';
+}
+
+/**
+ * Flèches de sens de lecture.
+ *
+ * `arrowLeft` et `arrowRight` désignent une direction à l'écran, pas une
+ * intention : en arabe « avancer » pointe à gauche, en anglais à droite. Une
+ * flèche figée désignerait donc l'inverse de ce qu'elle fait dès que
+ * l'interface bascule — c'est le défaut qu'on a vu sur la carte « كل المكتبة »
+ * de l'accueil.
+ *
+ * `forward` = entrer, ouvrir, page suivante. `backward` = revenir, page
+ * précédente.
+ */
+export function arrowForward(options) {
+  return icon(currentLocale() === 'ar' ? 'arrowLeft' : 'arrowRight', options);
+}
+
+export function arrowBackward(options) {
+  return icon(currentLocale() === 'ar' ? 'arrowRight' : 'arrowLeft', options);
 }

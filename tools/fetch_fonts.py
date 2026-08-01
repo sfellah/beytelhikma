@@ -27,6 +27,11 @@ API = (
     "?family=Amiri:wght@400;700"
     "&family=Noto+Naskh+Arabic:wght@400;500;700"
     "&family=IBM+Plex+Sans+Arabic:wght@400;500;600"
+    # Faces latines de l'interface anglaise. Elles n'ont pas de sous-ensemble
+    # arabe : seul `latin` sera retenu pour elles.
+    "&family=Literata:wght@400;600"
+    "&family=EB+Garamond:wght@400;600"
+    "&family=Source+Serif+4:wght@400;600"
     "&display=swap"
 )
 
@@ -36,6 +41,9 @@ SLUGS = {
     "Amiri": "amiri",
     "Noto Naskh Arabic": "noto-naskh-arabic",
     "IBM Plex Sans Arabic": "ibm-plex-sans-arabic",
+    "Literata": "literata",
+    "EB Garamond": "eb-garamond",
+    "Source Serif 4": "source-serif-4",
 }
 
 
@@ -51,8 +59,10 @@ def main() -> None:
 
     lines = [
         "/* Polices embarquées : sous-ensembles arabe + latin de Google Fonts.",
-        "   Amiri et Noto Naskh Arabic pour lire, IBM Plex Sans Arabic pour",
-        "   manœuvrer. Généré par `tools/fetch_fonts.py`, ne pas éditer. */",
+        "   Arabes — Amiri et Noto Naskh Arabic pour lire, IBM Plex Sans Arabic",
+        "   pour manœuvrer. Latines — Literata, EB Garamond et Source Serif 4,",
+        "   pour l'interface en anglais.",
+        "   Généré par `tools/fetch_fonts.py`, ne pas éditer. */",
         "",
     ]
     seen = set()

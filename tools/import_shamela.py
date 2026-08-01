@@ -15,8 +15,8 @@ Sortie (par défaut `dist/shamela/`) :
     import-report.json + .csv
 
 Le schéma produit est celui de `tools/_common.py`, identique à celui du
-générateur d'exemple : les clients Flutter et Electron lisent la sortie sans
-aucune modification.
+générateur d'exemple : le client Electron lit la sortie sans aucune
+modification.
 
 Voir `tools/notebooks/01_un_livre_vers_sqlite.ipynb` pour la transformation
 d'un seul livre, commentée étape par étape.

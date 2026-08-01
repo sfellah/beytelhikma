@@ -122,12 +122,16 @@ export function buildWhere(query, { installedIds = [] } = {}, except = null) {
 
 const SUMMARY_COLUMNS = `
   e.edition_id, e.work_id, e.title_ar, e.subtitle_ar, e.category_id,
-  e.volume_count, e.language, e.cover_url,
+  e.book_type_label, e.volume_count, e.language, e.cover_url,
   (SELECT label_ar FROM categories c WHERE c.category_id = e.category_id)  AS category_label,
   (SELECT COALESCE(a.short_name_ar, a.full_name_ar)
      FROM edition_authors ea JOIN authors a ON a.author_id = ea.author_id
     WHERE ea.edition_id = e.edition_id AND ea.role = 'author'
     ORDER BY ea.position LIMIT 1)                                          AS author_name,
+  (SELECT a.death_year_hijri
+     FROM edition_authors ea JOIN authors a ON a.author_id = ea.author_id
+    WHERE ea.edition_id = e.edition_id AND ea.role = 'author'
+    ORDER BY ea.position LIMIT 1)                                          AS author_death_year,
   r.page_count, r.published_at, r.compressed_size`;
 
 export function buildList(query, options = {}) {

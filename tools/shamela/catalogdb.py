@@ -173,7 +173,7 @@ def build_catalog(
 
             con.execute(
                 """INSERT INTO book_releases (release_id, edition_id, schema_version, content_version,
-                                              source_version, download_url, compressed_size,
+                                              source_version, object_key, compressed_size,
                                               uncompressed_size, sha256, page_count, toc_count,
                                               fts_version, min_app_version, published_at, is_active)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
@@ -183,7 +183,12 @@ def build_catalog(
                     SCHEMA_VERSION,
                     CONTENT_VERSION,
                     result.get("snapshot_id"),
-                    f"local://books/{eid}.sqlite",
+                    # `local://` est la clé hors ligne : elle vaut tant que le
+                    # livre n'est pas publié. Un livre déjà monté au bucket
+                    # porte sa vraie clé au manifest, et la reprise la remonte
+                    # ici — sans quoi une réécriture du catalogue redonnerait
+                    # une adresse locale à un livre publié.
+                    result.get("object_key") or f"local://books/{eid}.sqlite",
                     result.get("compressed_bytes") or result["output_bytes"],
                     result["output_bytes"],
                     result["sha256"],

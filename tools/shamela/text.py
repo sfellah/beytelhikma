@@ -150,9 +150,8 @@ def to_search(body_plain: str) -> str:
 def clean_footnotes(raw: str | None) -> str | None:
     """Notes -> texte brut avec `\\n`. Jamais de HTML.
 
-    Les deux clients affichent les notes dans un nœud texte
-    (`reader_page_view.dart`, `reader.js`) : y mettre du HTML afficherait des
-    balises à l'écran.
+    Le client affiche les notes dans un nœud texte (`reader.js`) : y mettre
+    du HTML afficherait des balises à l'écran.
 
     Ordre critique : `strip_html` supprime les `\\r`, il faut donc les convertir
     en `\\n` AVANT de l'appeler, sinon toutes les notes se retrouvent collées.

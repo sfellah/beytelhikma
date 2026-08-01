@@ -1,0 +1,13 @@
+{
+  "name": "beytelhikma-site",
+  "version": "0.1.0",
+  "description": "Site de présentation et de téléchargement de Beyt El Hikma",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node serve.mjs",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "license": "AGPL-3.0-or-later"
+}

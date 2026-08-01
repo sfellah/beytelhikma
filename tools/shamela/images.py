@@ -3,8 +3,8 @@
 363 balises `<img>` réparties sur 88 livres, en `image/png` et `image/jpg`.
 Elles sont responsables de lignes JSONL de plusieurs centaines de kilo-octets.
 
-Aucun des deux clients n'affiche d'images (ni `ALLOWED_TAGS` côté Electron ni le
-parseur Flutter ne connaissent `img`). On les sort du texte, on les catalogue
+Le client n'affiche pas d'images (`ALLOWED_TAGS` côté Electron ne connaît pas
+`img`). On les sort du texte, on les catalogue
 dans `assets`, et on laisse un marqueur `data-asset` qui préserve le lien
 page <-> image — de quoi reconstruire une table `page_assets` plus tard sans
 relire les 19 Go du corpus.

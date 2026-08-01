@@ -80,6 +80,18 @@
   --teal-veil: rgb(45 47 44 / 8%);
   --parchment-bg: var(--surface);
 
+  /* Fond de la correspondance de recherche. C'était `#e8cf9a` en dur dans
+     `views.css` : le seul or de l'interface qui ne passait pas par un jeton,
+     donc le seul qui ne pouvait pas suivre l'ambiance. */
+  --mark-color: #e8cf9a;
+
+  /* Force des teintes portées sur du texte. Elles vivaient dans `.reader` ;
+     elles remontent ici parce que c'est le thème qui les dicte, et que
+     `paper` — n'ayant pas de bloc — n'a nulle part ailleurs où les dire. */
+  --highlight-strength: 42%;
+  --quote-strength: 26%;
+  --mark-strength: 55%;
+
   /* Espacements — base 4px, grands écarts entre sections (pilier « serein »). */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -131,9 +143,111 @@
   /* Coquille : barre latérale libellée, à droite (RTL natif). */
   --rail-width: 256px;
 
+  /* Mouvement. Une seule courbe d'arrivée — décélération exponentielle, jamais
+     de rebond : le pilier « serein » ne supporte pas qu'un élément dépasse puis
+     revienne. `--motion-fast` acquitte un geste, `--motion-base` explique un
+     changement d'état, `--motion-slow` porte le seul moment écrit du produit,
+     la page qui se pose. Ce qui sort part plus vite que ce qui entre. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+
   /* Élévation « aérienne » : flou large, opacité minime, teintée émeraude.
      Jamais de noir — l'ombre doit rester organique. */
   --shadow-sm: 0 4px 12px rgb(43 105 84 / 4%);
   --shadow-md: 0 20px 20px rgb(43 105 84 / 6%);
   --shadow-lg: 0 24px 48px rgb(43 105 84 / 10%);
+}
+
+/* ======================================================== ambiances ==== */
+
+/* Le thème se pose sur `<html>` par `data-theme` (voir `js/theme.js`) et rien
+   d'autre ne change : les alias de lecture (`--page`, `--ink`, `--rule`…) sont
+   déclarés en `var(…)` plus haut, ils suivent sans être redéclarés.
+
+   `paper` n'a pas de bloc. C'est le `:root` ci-dessus — le fond parchemin est
+   l'identité du projet, il reste le défaut et non un cas particulier.
+   `test/theme.test.js` vérifie cette règle dans les deux sens. */
+
+/* Blanc : un aplatissement du clair, pas une seconde palette. On retire la
+   pointe mauve du parchemin et on resserre l'échelle des conteneurs. */
+:root[data-theme='white'] {
+  --surface: #ffffff;
+  --surface-dim: #ececec;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f7f7f7;
+  --surface-container: #f2f2f2;
+  --surface-container-high: #ebebeb;
+  --surface-container-highest: #e5e5e5;
+  --surface-variant: #e5e5e5;
+  --background: #ffffff;
+
+  --on-surface: #131315;
+  --outline-variant: #d4d4d4;
+
+  --gold-veil: rgb(244 223 203 / 40%);
+}
+
+/* Nuit : le graphite de la palette. Les rôles s'échangent — `--primary` prend
+   la valeur claire de `--primary-fixed-dim`, sinon l'émeraude #003527
+   disparaît sur fond sombre. Même bascule pour le sable, le graphite et
+   l'erreur. Les ombres passent au noir : une ombre teintée émeraude à 4 %
+   d'opacité ne se voit pas sur du #1a1c1a. */
+:root[data-theme='night'] {
+  --surface: #1a1c1a;
+  --surface-dim: #121412;
+  --surface-bright: #353834;
+  --surface-container-lowest: #0e100e;
+  --surface-container-low: #1f221f;
+  --surface-container: #232622;
+  --surface-container-high: #2d302c;
+  --surface-container-highest: #383b37;
+  --surface-variant: #383b37;
+  --background: #1a1c1a;
+  --inverse-surface: #e6e3de;
+  --inverse-on-surface: #2d302c;
+
+  --on-surface: #e6e3de;
+  --on-surface-variant: #b2b2ae;
+  --outline: #8b938d;
+  --outline-variant: rgb(230 227 222 / 16%);
+
+  --primary: #95d3ba;
+  --on-primary: #002117;
+  --primary-container: #0b513d;
+  --on-primary-container: #b0f0d6;
+  --inverse-primary: #003527;
+
+  --secondary: #d7c3b0;
+  --on-secondary: #241a0e;
+  --secondary-container: #524436;
+  --on-secondary-container: #f4dfcb;
+
+  --tertiary: #c7c7c2;
+  --on-tertiary: #2d2f2c;
+  --tertiary-container: #444542;
+  --on-tertiary-container: #e3e3de;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+
+  --emerald-veil: rgb(149 211 186 / 12%);
+  --gold-veil: rgb(215 195 176 / 22%);
+  --teal-veil: rgb(199 199 194 / 10%);
+  --mark-color: #8a7440;
+
+  --shadow-sm: 0 4px 12px rgb(0 0 0 / 28%);
+  --shadow-md: 0 20px 20px rgb(0 0 0 / 34%);
+  --shadow-lg: 0 24px 48px rgb(0 0 0 / 44%);
+
+  /* Un surlignage se voit sur papier, il se devine en nuit — au-delà, la
+     pastille claire mangerait l'encre. */
+  --highlight-strength: 26%;
+  --quote-strength: 20%;
+  --mark-strength: 34%;
 }

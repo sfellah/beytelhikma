@@ -1,16 +1,22 @@
-"""Publie les livres importés vers un bucket MinIO compatible S3.
+"""Publie les livres importés vers un bucket S3 — MinIO ou AWS.
 
 Entrée : la sortie de `import_shamela.py --compress` (`dist/shamela/`).
 Sortie : les objets `books/<edition_id>/<content_version>/book.sqlite.zst` et
-leur manifest, puis `download_url` réécrit dans `dist/shamela/catalog.sqlite`.
+leur manifest, puis `object_key` réécrit dans `dist/shamela/catalog.sqlite`.
+
+Le catalogue publié ne porte **aucun hôte** : seulement des clés relatives. Le
+client les colle derrière l'URL de base qu'il a en réglage, ce qui rend le même
+catalogue servable depuis AWS, un MinIO local ou un CDN sans le republier.
 
 Les chemins sont immutables : une nouvelle `content_version` crée un nouvel
-objet, jamais un écrasement.
+objet, jamais un écrasement. C'est ce qui autorise `Cache-Control: immutable`.
 
-Identifiants lus dans MINIO_ACCESS_KEY / MINIO_SECRET_KEY. Jamais dans le dépôt.
+Identifiants lus dans MINIO_ACCESS_KEY / MINIO_SECRET_KEY, à défaut dans les
+AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY usuels. Jamais dans le dépôt.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -28,18 +34,59 @@ READ_ONLY_POLICY = {
     ],
 }
 
+# Les objets sont immutables par construction (la version est dans le chemin) :
+# un client peut donc les garder un an sans jamais revalider.
+CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# Le pointeur est la seule chose du bucket qui change sous une clé fixe. Le
+# mettre en cache comme le reste tuerait la mise à jour en silence : tout
+# marcherait le premier jour, et plus rien ne bougerait ensuite.
+POINTER_KEY = "catalog/latest.json"
+POINTER_CACHE_CONTROL = "no-cache"
+
+# Le téléchargeur reprend par en-tête `Range` ; un navigateur ne verra les
+# en-têtes de reprise que s'ils sont explicitement exposés.
+CORS_RULES = [
+    {
+        "AllowedMethods": ["GET", "HEAD"],
+        "AllowedOrigins": ["*"],
+        "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
+        "ExposeHeaders": [
+            "Content-Range",
+            "Content-Length",
+            "Accept-Ranges",
+            "ETag",
+            "x-amz-meta-sha256",
+            "x-amz-meta-uncompressed-size",
+        ],
+        "MaxAgeSeconds": 86400,
+    }
+]
+
 
 def object_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/book.sqlite.zst"
 
 
-def ensure_bucket(client, bucket: str) -> bool:
-    """Crée le bucket s'il manque. Renvoie True s'il vient d'être créé."""
+def catalog_key(catalog_version: int) -> str:
+    return f"catalog/{catalog_version}/catalog.sqlite.zst"
+
+
+def ensure_bucket(client, bucket: str, region: str | None = None) -> bool:
+    """Crée le bucket s'il manque. Renvoie True s'il vient d'être créé.
+
+    Hors `us-east-1`, AWS refuse un `create_bucket` sans `LocationConstraint` :
+    un bucket créé dans la mauvaise région servirait les livres depuis l'autre
+    bout du monde, à supposer qu'il soit créé du tout.
+    """
     try:
         client.head_bucket(Bucket=bucket)
         return False
     except Exception:
-        client.create_bucket(Bucket=bucket)
+        kwargs = {"Bucket": bucket}
+        if region and region != "us-east-1":
+            kwargs["CreateBucketConfiguration"] = {"LocationConstraint": region}
+        client.create_bucket(**kwargs)
         return True
 
 
@@ -86,8 +133,13 @@ def manifest_key(edition_id: str, content_version: int) -> str:
     return f"books/{edition_id}/{content_version}/manifest.json"
 
 
-def _upload(client, bucket, key, body, content_type, metadata, force, report):
-    """Envoie [body] sous [key], sauf si un objet de même taille est déjà là."""
+def _upload(client, bucket, key, body, content_type, metadata, force, report,
+            cache_control=CACHE_CONTROL):
+    """Envoie [body] sous [key], sauf si un objet de même taille est déjà là.
+
+    Le raccourci « même taille = déjà là » est faux pour le pointeur, dont la
+    taille ne bouge pas d'une version à l'autre : il part toujours en `force`.
+    """
     if not force:
         try:
             head = client.head_object(Bucket=bucket, Key=key)
@@ -101,18 +153,22 @@ def _upload(client, bucket, key, body, content_type, metadata, force, report):
         Key=key,
         Body=body,
         ContentType=content_type,
+        CacheControl=cache_control,
         Metadata=metadata,
     )
     report["uploaded"] += 1
 
 
-def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
-    """Monte les livres puis réécrit `download_url`. Renvoie un compte rendu."""
+def publish(client, *, src, bucket, force=False, dry_run=False):
+    """Monte les livres puis réécrit `object_key`. Renvoie un compte rendu."""
     report = {
         "uploaded": 0,
         "skipped": 0,
         "updated": 0,
         "compressed": 0,
+        # Livres montés lors d'une tranche précédente, dont les fichiers ont été
+        # effacés pour rendre la place. Ils ne sont ni envoyés ni manquants.
+        "already": 0,
         # Essai à blanc : ce qui *serait* fait, puisque rien ne l'est.
         "planned": 0,
         "would_compress": 0,
@@ -131,6 +187,11 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
     updates = []
     for release_id, edition_id, content_version in releases:
         manifest_path = os.path.join(books_dir, f"{edition_id}.manifest.json")
+        manifest = {}
+        if os.path.exists(manifest_path):
+            with open(manifest_path, encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        key = object_key(edition_id, content_version)
 
         if dry_run:
             # Un essai à blanc n'ouvre ni ne compresse aucun fichier : il se
@@ -139,7 +200,10 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
             has_archive = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite.zst"))
             has_source = os.path.exists(os.path.join(books_dir, f"{edition_id}.sqlite"))
             if not has_archive and not has_source:
-                report["missing"].append(edition_id)
+                if manifest.get("object_key") == key:
+                    report["already"] += 1
+                else:
+                    report["missing"].append(edition_id)
                 continue
             report["planned"] += 2  # l'archive et son manifest
             if not has_archive:
@@ -148,17 +212,34 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
 
         packed = _archive(books_dir, edition_id, report)
         if packed is None:
-            report["missing"].append(edition_id)
+            # Fichier absent, mais le manifest porte déjà la clé : le livre a
+            # été monté par une tranche précédente puis effacé. Le catalogue
+            # doit quand même recevoir sa clé, sinon il repartirait en
+            # `local://` et le client ne saurait pas où le chercher.
+            if manifest.get("object_key") == key:
+                report["already"] += 1
+                updates.append((key, manifest.get("compressed_size") or 0, release_id))
+            else:
+                report["missing"].append(edition_id)
             continue
 
         with open(packed, "rb") as fh:
             body = fh.read()
-        manifest = {}
-        if os.path.exists(manifest_path):
-            with open(manifest_path, encoding="utf-8") as fh:
-                manifest = json.load(fh)
 
-        key = object_key(edition_id, content_version)
+        # La clé est écrite au manifest **avant** son envoi. C'est la seule
+        # trace qui survit à la suppression du fichier, et celle dont la reprise
+        # se sert pour reconstruire un catalogue complet depuis un disque
+        # presque vide. La compléter après l'envoi ferait diverger la copie
+        # locale de celle du bucket, et le passage suivant renverrait tous les
+        # manifests pour cette seule différence.
+        manifest["object_key"] = key
+        manifest["compressed_size"] = len(body)
+        if os.path.exists(manifest_path):
+            temporary = f"{manifest_path}.part"
+            with open(temporary, "w", encoding="utf-8") as fh:
+                json.dump(manifest, fh, ensure_ascii=False, indent=2)
+            os.replace(temporary, manifest_path)
+
         _upload(
             client,
             bucket,
@@ -182,11 +263,12 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
             force,
             report,
         )
-        updates.append((f"{public_base.rstrip('/')}/{key}", len(body), release_id))
+
+        updates.append((key, len(body), release_id))
 
     if updates and not dry_run:
         con.executemany(
-            "UPDATE book_releases SET download_url = ?, compressed_size = ? WHERE release_id = ?",
+            "UPDATE book_releases SET object_key = ?, compressed_size = ? WHERE release_id = ?",
             updates,
         )
         con.commit()
@@ -202,25 +284,221 @@ def publish(client, *, src, bucket, public_base, force=False, dry_run=False):
 
 
 def set_anonymous_policy(client, bucket):
-    """Rend `books/*` lisible sans authentification. À lancer une seule fois."""
+    """Rend `books/*` et `catalog/*` lisibles sans authentification.
+
+    Deux préfixes explicites, jamais le bucket entier : le listing anonyme doit
+    continuer de répondre 403. Le catalogue ne porte que des métadonnées de
+    livres déjà publics — l'ouvrir ne concède rien.
+    """
     policy = json.loads(json.dumps(READ_ONLY_POLICY))
-    policy["Statement"][0]["Resource"] = [f"arn:aws:s3:::{bucket}/books/*"]
+    policy["Statement"][0]["Resource"] = [
+        f"arn:aws:s3:::{bucket}/books/*",
+        f"arn:aws:s3:::{bucket}/catalog/*",
+    ]
     client.put_bucket_policy(Bucket=bucket, Policy=json.dumps(policy))
+
+
+def publish_catalog(client, *, src, bucket, force=False, dry_run=False):
+    """Monte le catalogue compressé sous un chemin versionné, puis son pointeur.
+
+    Le pointeur est écrit **en dernier** : tant qu'il n'a pas bougé, aucun client
+    ne peut découvrir un catalogue à moitié monté.
+    """
+    catalog_path = os.path.join(src, "catalog.sqlite")
+    if not os.path.exists(catalog_path):
+        raise SystemExit(f"catalogue introuvable : {catalog_path}")
+
+    con = sqlite3.connect(catalog_path)
+    row = con.execute(
+        "SELECT catalog_version, schema_version, generated_at, edition_count FROM catalog_info"
+    ).fetchone()
+    con.close()
+    if row is None:
+        raise SystemExit("catalog_info est vide : impossible de versionner le catalogue")
+    catalog_version, schema_version, generated_at, edition_count = row
+
+    report = {
+        "catalog_version": catalog_version,
+        "uploaded": 0,
+        "skipped": 0,
+        "planned": 0,
+        "compressed": 0,
+    }
+    if dry_run:
+        report["planned"] = 2  # le catalogue et son pointeur
+        return report
+
+    try:
+        import zstandard
+    except ImportError:
+        print("erreur : zstandard est requis (pip install zstandard)", file=sys.stderr)
+        raise SystemExit(2)
+
+    with open(catalog_path, "rb") as fh:
+        raw = fh.read()
+    body = zstandard.ZstdCompressor(level=19).compress(raw)
+    report["compressed"] += 1
+    digest = hashlib.sha256(raw).hexdigest()
+
+    key = catalog_key(catalog_version)
+    _upload(
+        client,
+        bucket,
+        key,
+        body,
+        "application/zstd",
+        {"sha256": digest, "uncompressed-size": str(len(raw))},
+        force,
+        report,
+    )
+
+    pointer = {
+        "catalog_version": catalog_version,
+        "schema_version": schema_version,
+        "generated_at": generated_at,
+        "edition_count": edition_count,
+        "object_key": key,
+        "sha256": digest,
+        "compressed_size": len(body),
+        "uncompressed_size": len(raw),
+    }
+    _upload(
+        client,
+        bucket,
+        POINTER_KEY,
+        json.dumps(pointer, ensure_ascii=False, indent=2).encode("utf-8"),
+        "application/json",
+        {},
+        True,  # jamais sauté : sa taille ne change pas d'une version à l'autre
+        report,
+        cache_control=POINTER_CACHE_CONTROL,
+    )
+    return report
+
+
+def _try(label, fn, applied, skipped):
+    """Applique un réglage optionnel ; MinIO n'implémente pas toute l'API S3."""
+    try:
+        fn()
+        applied.append(label)
+    except Exception as exc:  # noqa: BLE001 — un réglage absent n'est pas fatal
+        skipped.append(f"{label} ({type(exc).__name__})")
+
+
+def configure_bucket(client, bucket, region=None):
+    """Pose la configuration d'un bucket de distribution publique.
+
+    Le principe : **rien n'est public sauf `books/*`, et par politique, jamais
+    par ACL**. Une ACL publique posée par erreur sur un objet ne rendrait rien
+    lisible, puisque les ACL sont désactivées et ignorées.
+    """
+    applied, skipped = [], []
+    created = ensure_bucket(client, bucket, region)
+
+    # ACL désactivées : le propriétaire du bucket possède tout, et le seul
+    # chemin vers du public est la politique ci-dessous — un seul endroit à
+    # auditer au lieu de deux.
+    _try(
+        "ownership=BucketOwnerEnforced",
+        lambda: client.put_bucket_ownership_controls(
+            Bucket=bucket,
+            OwnershipControls={"Rules": [{"ObjectOwnership": "BucketOwnerEnforced"}]},
+        ),
+        applied,
+        skipped,
+    )
+
+    # AWS bloque tout accès public par défaut sur un bucket neuf. On lève le
+    # blocage des *politiques* seulement : les ACL publiques restent bloquées
+    # et ignorées, ce qui est exactement le garde-fou qu'on veut garder.
+    _try(
+        "public-access-block (politiques autorisées, ACL bloquées)",
+        lambda: client.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": False,
+                "RestrictPublicBuckets": False,
+            },
+        ),
+        applied,
+        skipped,
+    )
+
+    _try(
+        "chiffrement SSE-S3",
+        lambda: client.put_bucket_encryption(
+            Bucket=bucket,
+            ServerSideEncryptionConfiguration={
+                "Rules": [
+                    {
+                        "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
+                        "BucketKeyEnabled": True,
+                    }
+                ]
+            },
+        ),
+        applied,
+        skipped,
+    )
+
+    _try(
+        "CORS (GET/HEAD + Range)",
+        lambda: client.put_bucket_cors(
+            Bucket=bucket, CORSConfiguration={"CORSRules": CORS_RULES}
+        ),
+        applied,
+        skipped,
+    )
+
+    # Un envoi interrompu laisse des morceaux facturés que personne ne voit.
+    _try(
+        "cycle de vie (multipart abandonnés à 7 jours)",
+        lambda: client.put_bucket_lifecycle_configuration(
+            Bucket=bucket,
+            LifecycleConfiguration={
+                "Rules": [
+                    {
+                        "ID": "abort-incomplete-multipart",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": ""},
+                        "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7},
+                    }
+                ]
+            },
+        ),
+        applied,
+        skipped,
+    )
+
+    # En dernier : la politique n'est acceptée qu'une fois le blocage levé.
+    _try(
+        "lecture publique de books/*",
+        lambda: set_anonymous_policy(client, bucket),
+        applied,
+        skipped,
+    )
+    return {"created": created, "applied": applied, "skipped": skipped}
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Publie dist/shamela vers MinIO")
     parser.add_argument("--src", default="dist/shamela")
-    parser.add_argument("--endpoint", default="http://127.0.0.1:9000")
-    parser.add_argument("--bucket", default="beytelhikma")
     parser.add_argument(
-        "--public-base",
-        default=None,
-        help="préfixe des URL publiques ; par défaut <endpoint>/<bucket>",
+        "--endpoint",
+        default="http://127.0.0.1:9000",
+        help="URL du serveur S3 ; chaîne vide ou 'aws' pour AWS S3",
     )
+    parser.add_argument("--region", default=None, help="région AWS (défaut : AWS_REGION)")
+    parser.add_argument("--bucket", default="beytelhikma")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--set-anonymous-policy", action="store_true")
+    parser.add_argument("--catalog-only", action="store_true",
+                        help="ne publier que le catalogue et son pointeur")
+    parser.add_argument("--skip-catalog", action="store_true",
+                        help="ne publier que les livres")
     return parser
 
 
@@ -232,46 +510,71 @@ def main(argv=None):
         print("erreur : boto3 est requis (pip install boto3)", file=sys.stderr)
         return 2
 
-    access = os.environ.get("MINIO_ACCESS_KEY")
-    secret = os.environ.get("MINIO_SECRET_KEY")
+    access = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID")
+    secret = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
     if not access or not secret:
-        print("erreur : définir MINIO_ACCESS_KEY et MINIO_SECRET_KEY", file=sys.stderr)
+        print(
+            "erreur : définir MINIO_ACCESS_KEY/MINIO_SECRET_KEY "
+            "ou AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY",
+            file=sys.stderr,
+        )
         return 2
+
+    endpoint = None if args.endpoint in ("", "aws") else args.endpoint
+    region = args.region or os.environ.get("AWS_REGION") or "us-east-1"
 
     client = boto3.client(
         "s3",
-        endpoint_url=args.endpoint,
+        endpoint_url=endpoint,
         aws_access_key_id=access,
         aws_secret_access_key=secret,
-        region_name="us-east-1",
+        region_name=region,
     )
 
     if args.set_anonymous_policy:
-        if ensure_bucket(client, args.bucket):
-            print(f"bucket créé : {args.bucket}")
-        set_anonymous_policy(client, args.bucket)
-        print(f"policy de lecture publique posée sur {args.bucket}/books/*")
+        result = configure_bucket(client, args.bucket, region)
+        if result["created"]:
+            print(f"bucket créé : {args.bucket} ({region})")
+        for label in result["applied"]:
+            print(f"  posé    : {label}")
+        for label in result["skipped"]:
+            print(f"  ignoré  : {label}", file=sys.stderr)
 
-    public_base = args.public_base or f"{args.endpoint.rstrip('/')}/{args.bucket}"
-    report = publish(
-        client,
-        src=args.src,
-        bucket=args.bucket,
-        public_base=public_base,
-        force=args.force,
-        dry_run=args.dry_run,
-    )
-    if args.dry_run:
-        print(
-            f"essai à blanc — objets à envoyer : {report['planned']} • "
-            f"à compresser : {report['would_compress']} • "
-            f"livres sans fichier : {len(report['missing'])}"
+    if not args.catalog_only:
+        report = publish(
+            client,
+            src=args.src,
+            bucket=args.bucket,
+            force=args.force,
+            dry_run=args.dry_run,
         )
-    else:
-        print(
-            f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
-            f"compressés : {report['compressed']} • catalogue mis à jour : {report['updated']}"
+        if args.dry_run:
+            print(
+                f"essai à blanc — objets à envoyer : {report['planned']} • "
+                f"à compresser : {report['would_compress']} • "
+                f"déjà montés : {report['already']} • "
+                f"livres sans fichier : {len(report['missing'])}"
+            )
+        else:
+            print(
+                f"envoyés : {report['uploaded']} • ignorés : {report['skipped']} • "
+                f"compressés : {report['compressed']} • déjà montés : {report['already']} • "
+                f"catalogue mis à jour : {report['updated']}"
+            )
+
+    # Le catalogue part **après** les livres : un pointeur qui annonce des
+    # éditions dont les objets ne sont pas encore montés ferait échouer des
+    # téléchargements chez ceux qui le liraient entre les deux.
+    if not args.skip_catalog:
+        catalog_report = publish_catalog(
+            client,
+            src=args.src,
+            bucket=args.bucket,
+            force=args.force,
+            dry_run=args.dry_run,
         )
+        verbe = "à publier" if args.dry_run else "publié"
+        print(f"catalogue v{catalog_report['catalog_version']} {verbe} • pointeur {POINTER_KEY}")
     return 0
 
 

@@ -1,9 +1,11 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron';
 
 import { AppDatabase, resolveLibrarySource } from './app-database.js';
 import { BookRepository, REPOSITORY_METHODS } from './book-repository.js';
+import { resolveUserFontPath } from './font-installer.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(here, '..', '..');
@@ -11,20 +13,70 @@ const projectRoot = path.join(here, '..', '..');
 let database;
 let repository;
 
+/**
+ * Le schéma qui sert les polices ajoutées.
+ *
+ * Elles vivent dans `userData/fonts/`, hors du dossier de l'application : la
+ * page étant chargée par `loadFile`, elles ne sont pas `'self'`. Ce schéma leur
+ * ouvre une porte, et une seule — la CSP ne gagne que `font-src userfont:`,
+ * `script-src` et `style-src` ne bougent pas. Une police ajoutée ne peut donc
+ * jamais exécuter quoi que ce soit.
+ *
+ * Déclaré avant `app.whenReady()` : après, Electron refuse d'enregistrer un
+ * schéma privilégié.
+ */
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'userfont', privileges: { standard: true, secure: true, supportFetchAPI: false } },
+]);
+
+/** Sert `userfont://fonts/<clé>/<fichier>.woff2`, et rien d'autre. */
+function serveUserFont(request) {
+  const url = new URL(request.url);
+  // `resolveUserFontPath` est le seul rempart entre une URL et le disque : il
+  // rend `null` dès que la cible sort de la racine ou n'est pas un `.woff2`.
+  const file = resolveUserFontPath(path.join(database.root, 'fonts'), url.pathname.replace(/^\//, ''));
+  if (!file) return new Response('', { status: 403 });
+  return net.fetch(pathToFileURL(file).toString());
+}
+
+/**
+ * D'où vient le catalogue au démarrage.
+ *
+ * En développement, d'un dossier de bibliothèque local (`dist/shamela` ou
+ * `assets/sample`). Dans une application empaquetée, aucun des deux n'existe :
+ * c'est la graine embarquée par `scripts/fetch-seed.mjs` qui l'apporte, et
+ * `librarySource` reste nul — donc **aucun livre ne peut venir d'ailleurs que
+ * du bucket**, ce qui est le comportement voulu en production.
+ */
+function resoudreOrigine() {
+  try {
+    const librarySource = resolveLibrarySource(projectRoot);
+    console.log(`[beytelhikma] bibliothèque : ${librarySource}`);
+    return { librarySource, seedArchive: null };
+  } catch (erreur) {
+    const seedArchive = app.isPackaged
+      ? path.join(process.resourcesPath, 'catalog.sqlite.zst')
+      : path.join(projectRoot, 'assets', 'catalog.sqlite.zst');
+    console.log(`[beytelhikma] graine embarquée : ${seedArchive}`);
+    if (!fs.existsSync(seedArchive)) throw erreur; // ni source ni graine : le message d'origine
+    return { librarySource: null, seedArchive };
+  }
+}
+
 async function openRepository() {
-  const librarySource = resolveLibrarySource(projectRoot);
-  console.log(`[beytelhikma] bibliothèque : ${librarySource}`);
+  const { librarySource, seedArchive } = resoudreOrigine();
   database = new AppDatabase({
     librarySource,
+    seedArchive,
     storageRoot: path.join(app.getPath('userData'), 'library'),
   });
   await database.initialize();
   repository = new BookRepository(database);
   const downloads = repository.createDownloadQueue();
 
-  // Réglage optionnel : pointer un autre MinIO sans régénérer le catalogue.
+  // Réglage optionnel : pointer un autre bucket sans republier le catalogue.
   const settings = await repository.getSettings();
-  downloads.setBaseUrl(settings['minio.base_url'] ?? null);
+  downloads.setBaseUrl(settings['distribution.base_url'] ?? null);
 
   downloads.on('change', (jobs) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -85,6 +137,7 @@ function createWindow({ capture = false } = {}) {
 
 app.whenReady().then(async () => {
   await openRepository();
+  protocol.handle('userfont', serveUserFont);
   registerIpc();
   const window = createWindow({ capture: Boolean(process.env.BEYT_CAPTURE) });
 

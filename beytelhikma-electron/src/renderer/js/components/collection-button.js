@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { toast } from '../shell.js';
@@ -9,7 +10,8 @@ import { pickCollection } from './collection-picker.js';
  * sélection de l'exploration. [editionIds] est évalué au clic : la sélection
  * change entre le rendu et l'action.
  */
-export function collectionPickerButton(editionIds, { label = 'إضافة إلى مجموعة' } = {}) {
+export function collectionPickerButton(editionIds, { label = null } = {}) {
+  const text = label ?? t('collection.add');
   return h(
     'button',
     {
@@ -20,10 +22,10 @@ export function collectionPickerButton(editionIds, { label = 'إضافة إلى 
         const collectionId = await pickCollection();
         if (!collectionId) return;
         const added = await repository.addToCollection(collectionId, ids);
-        toast(added ? `أُضيف ${added} كتابًا` : 'الكتب موجودة في المجموعة بالفعل');
+        toast(added ? t('collection.added', { count: added }) : t('collection.alreadyIn'));
       },
     },
     icon('plusSquare', { size: 20 }),
-    h('span', {}, label),
+    h('span', {}, text),
   );
 }

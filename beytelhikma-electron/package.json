@@ -1,6 +1,6 @@
 {
   "name": "beytelhikma-electron",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Beyt El Hikma — bibliothèque numérique arabe, portage Electron",
   "private": true,
   "type": "module",
@@ -8,17 +8,99 @@
   "scripts": {
     "start": "electron .",
     "shot": "node tools/capture-cli.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "seed": "node scripts/fetch-seed.mjs",
+    "release:win": "npm test && npm run seed && electron-builder --win",
+    "release:linux": "npm test && npm run seed && electron-builder --linux"
   },
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "Beyt El Hikma",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sfellah/beytelhikma.git"
+  },
   "dependencies": {
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "electron": "^38.0.0"
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8"
   },
   "allowScripts": {
     "electron@38.8.6": true
+  },
+  "build": {
+    "appId": "org.beytelhikma.desktop",
+    "productName": "Beyt El Hikma",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!src/renderer/assets/brand/lockup*.png",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/catalog.sqlite.zst",
+        "to": "catalog.sqlite.zst"
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/sql.js/dist/sql-wasm.wasm"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} portable.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Education",
+      "synopsis": "Bibliothèque numérique arabe, hors ligne",
+      "artifactName": "beyt-el-hikma-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sfellah",
+      "repo": "beytelhikma"
+    }
   }
 }

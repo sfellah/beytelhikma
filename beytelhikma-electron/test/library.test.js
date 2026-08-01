@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 import {
   AppDatabase,
   BookNotInstalledError,
+  USER_DB_SCHEMA_VERSION,
   all,
   resolveLibrarySource,
 } from '../src/main/app-database.js';
@@ -93,14 +95,21 @@ test('user.sqlite porte user_version, sinon sqflite refuse de l\'ouvrir', async 
   try {
     await database.initialize();
     const user = await database.user();
-    assert.equal(all(user, 'PRAGMA user_version')[0].user_version, 1);
+    assert.equal(
+      all(user, 'PRAGMA user_version')[0].user_version,
+      USER_DB_SCHEMA_VERSION,
+    );
   } finally {
     database.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('changer de bibliothèque purge le cache et conserve les données utilisateur', async () => {
+test('changer de bibliothèque jette le catalogue et garde les livres', async () => {
+  // Le catalogue appartient à la source : il part avec elle. Les livres, non —
+  // ils ont été téléchargés, parfois annotés. Purger `books/` était tenable
+  // quand la source était un dossier qu'on changeait à la main ; avec un
+  // catalogue qui se met à jour tout seul, ce serait tout retélécharger.
   const root = tempRoot();
   const otherLibrary = cloneLibrary(path.join(tempRoot(), 'autre'));
 
@@ -116,7 +125,7 @@ test('changer de bibliothèque purge le cache et conserve les données utilisate
 
     database = new AppDatabase({ librarySource: otherLibrary, storageRoot: root });
     await database.initialize();
-    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 0, 'copies jetées');
+    assert.equal(fs.readdirSync(path.join(root, 'books')).length, 1, 'les livres restent');
     assert.ok(!fs.existsSync(path.join(root, 'catalog.sqlite')), 'catalogue jeté');
     assert.ok(fs.existsSync(path.join(root, 'user.sqlite')), 'progression conservée');
 
@@ -142,7 +151,7 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
   repository0.createDownloadQueue();
   await repository0.reconcileLibrary();
   await install(repository0, 5);
-  assert.equal((await repository0.getLibrary()).length, 5);
+  assert.equal((await repository0.getLibrary()).total, 5);
   database0.close();
 
   // on remplace le catalogue par un fichier au même schéma mais vide
@@ -158,7 +167,7 @@ test('une édition absente du nouveau catalogue ne remonte pas en bibliothèque'
     await database.initialize();
     const repository = new BookRepository(database);
     // pas de warmUp : les 5 lignes de l'ancienne bibliothèque sont toujours là
-    assert.equal((await repository.getLibrary()).length, 0, 'aucun livre fantôme');
+    assert.equal((await repository.getLibrary()).total, 0, 'aucun livre fantôme');
   } finally {
     database.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -180,7 +189,7 @@ test('un catalogue republié de même taille est tout de même recopié', async 
   assert.ok(fs.existsSync(installed));
   database.close();
 
-  // `publish_minio.py` réécrit `download_url` : le contenu change, la taille
+  // `publish_minio.py` réécrit `object_key` : le contenu change, la taille
   // peut rester identique. Sans comparaison de date, la copie serait sautée.
   const before = fs.readFileSync(catalogPath);
   const patched = Buffer.from(before);
@@ -198,6 +207,103 @@ test('un catalogue republié de même taille est tout de même recopié', async 
 
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(path.dirname(source), { recursive: true, force: true });
+});
+
+/** Archive de graine bâtie depuis le catalogue d'exemple. */
+function grainePour(dossier) {
+  fs.mkdirSync(dossier, { recursive: true });
+  const archive = path.join(dossier, 'catalog.sqlite.zst');
+  const clair = fs.readFileSync(path.join(sampleLibrary, 'catalog.sqlite'));
+  fs.writeFileSync(archive, zlib.zstdCompressSync(clair));
+  return archive;
+}
+
+test('sans bibliothèque source, la graine fournit le catalogue', async () => {
+  // C'est le cas d'une application empaquetée : ni `dist/shamela` ni
+  // `assets/sample` n'existent, et aucun livre ne peut venir d'ailleurs que du
+  // bucket.
+  const root = tempRoot();
+  const graine = grainePour(path.join(tempRoot(), 'assets'));
+  const database = new AppDatabase({ librarySource: null, seedArchive: graine, storageRoot: root });
+  try {
+    await database.initialize();
+    assert.ok(fs.existsSync(path.join(root, 'catalog.sqlite')), 'graine décompressée');
+
+    const repository = new BookRepository(database);
+    assert.equal((await repository.getBooks({ limit: 50 })).length, 5);
+    assert.equal(database.librarySource, null, 'aucune source locale en production');
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('la graine ne remplace jamais un catalogue déjà installé', async () => {
+  // Une mise à jour d'application embarque une graine plus ancienne que le
+  // catalogue que l'utilisateur a téléchargé depuis le bucket. L'écraser ferait
+  // régresser son catalogue à l'installation d'une nouvelle version.
+  const root = tempRoot();
+  const graine = grainePour(path.join(tempRoot(), 'assets'));
+  fs.mkdirSync(root, { recursive: true });
+  const plusRecent = Buffer.from('catalogue plus récent que la graine');
+  fs.writeFileSync(path.join(root, 'catalog.sqlite'), plusRecent);
+
+  const database = new AppDatabase({ librarySource: null, seedArchive: graine, storageRoot: root });
+  try {
+    await database.initialize();
+    assert.deepEqual(fs.readFileSync(path.join(root, 'catalog.sqlite')), plusRecent);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ni source ni graine ni catalogue installé : erreur explicite', async () => {
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: null, storageRoot: root });
+  try {
+    await database.initialize();
+    await assert.rejects(() => database.catalog(), /catalogue/i);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('une réédition est signalée, jamais appliquée', async () => {
+  // Les ancres de surlignage sont posées sur le texte rendu : une réédition
+  // peut les déplacer. Ce doit être un choix de l'utilisateur, jamais un effet
+  // de bord d'une mise à jour de catalogue.
+  const root = tempRoot();
+  const database = new AppDatabase({ librarySource: sampleLibrary, storageRoot: root });
+  try {
+    await database.initialize();
+    const repository = new BookRepository(database);
+    repository.createDownloadQueue();
+    const [book] = await install(repository, 1);
+
+    const avant = await repository.getLibrary({ limit: 10 });
+    assert.equal(avant.rows[0].hasNewerRelease, false, 'rien à signaler tant que rien ne bouge');
+
+    // La release installée devient périmée : le catalogue en annonce une autre.
+    await database.writeUser((user) => {
+      user.run('UPDATE downloaded_books SET release_id = ? WHERE edition_id = ?', [
+        'rel-perimee-v0',
+        book.editionId,
+      ]);
+    });
+
+    const après = await repository.getLibrary({ limit: 10 });
+    const ligne = après.rows.find((row) => row.book.editionId === book.editionId);
+    assert.equal(ligne.hasNewerRelease, true);
+    assert.ok(
+      fs.existsSync(path.join(root, 'books', `${book.editionId}.sqlite`)),
+      'aucun fichier ne doit être supprimé',
+    );
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('un livre non installé ne se matérialise plus tout seul', async () => {

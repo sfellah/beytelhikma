@@ -78,8 +78,12 @@
 
 /* ------------------------------------------------- couverture générée */
 
-/* Les données d'exemple n'embarquent pas d'images : la couverture est
-   composée (dégradé déterministe + titre) comme dans l'application Flutter. */
+/* Aucun livre du corpus n'a d'image : `cover_url` est nulle partout. La
+   couverture est donc dessinée, et dessinée d'après ce que le catalogue sait —
+   la forme de l'objet donne la reliure, la famille de la catégorie donne la
+   teinte et le motif, et le siècle de l'auteur donne la patine. Les tables
+   vivent dans `src/shared/book-cover.js`, en miroir du fichier Dart. Voir
+   `docs/superpowers/specs/2026-07-31-couvertures-composees-design.md`. */
 .cover {
   position: relative;
   width: 100%;
@@ -88,34 +92,225 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   padding: var(--space-md);
   color: #f6f1e6;
   background: linear-gradient(160deg, var(--cover-from), var(--cover-to));
   box-shadow: var(--shadow-sm);
+
+  /* L'or du décor : les motifs et la rosace tracent en `currentColor`, une
+     seule déclaration règle donc toute la dorure d'une reliure. `cover()` la
+     pose en ligne, plus haute à mesure que l'auteur est ancien ; ceci n'est que
+     le repli, pour une couverture rendue hors de ce chemin. */
+  --cover-gilt: rgb(217 184 113 / 42%);
+
+  /* La même couverture sert de vignette de rayonnage (~90 px), de carte de
+     grille (~190 px) et de couverture de fiche (~345 px). Le titre suit donc la
+     largeur du conteneur, sinon il paraît écrasé sur l'une et perdu sur l'autre.
+     Les bornes du `clamp` sont ce qui reste lisible aux deux extrêmes. */
+  container-type: inline-size;
 }
 
-.cover::after {
-  content: '';
+/* Le moiré de fond. Les tuiles sont en `userSpaceOnUse`, donc en pixels CSS :
+   le motif garde la même échelle sur une vignette et sur une pleine page. */
+.cover__grain {
   position: absolute;
-  inset: 6px;
-  border: 1px solid rgb(217 184 113 / 45%);
-  border-radius: 2px;
+  inset: 0;
+  color: var(--cover-gilt);
   pointer-events: none;
 }
 
+.cover__grain svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cover-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .cover__title {
+  position: relative;
   font-family: var(--font-display);
-  font-size: 17px;
-  line-height: 24px;
+  font-size: clamp(13px, 9cqw, 26px);
+  line-height: 1.5;
   font-weight: 600;
   text-shadow: 0 1px 6px rgb(0 0 0 / 30%);
 }
 
 .cover__author {
+  position: relative;
   font-family: var(--font-label);
-  font-size: var(--text-label-sm);
+  font-size: clamp(9px, 5.5cqw, 15px);
   opacity: 0.8;
+}
+
+/* --- livre d'un tome, 121 à 400 pages : sobre ---------------------------- */
+
+.cover--book {
+  justify-content: space-between;
+}
+
+.cover--book::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid var(--cover-gilt);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* --- multi-tomes : manuscrit enluminé ------------------------------------ */
+
+.cover--compendium {
+  align-items: center;
+  text-align: center;
+}
+
+/* Deux filets concentriques, comme l'encadrement d'une page de garde. */
+.cover--compendium::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid var(--cover-gilt);
+  box-shadow: inset 0 0 0 4px rgb(217 184 113 / 18%);
+  pointer-events: none;
+}
+
+.cover__shamsa {
+  position: relative;
+  width: 46%;
+  max-width: 120px;
+  flex: none;
+  margin: 4% 0 6%;
+  color: rgb(217 184 113 / 78%);
+}
+
+.cover__cartouche {
+  position: relative;
+  padding: var(--space-sm) 0;
+  border-block: 1px solid rgb(217 184 113 / 55%);
+}
+
+.cover--compendium .cover__author {
+  margin-top: auto;
+}
+
+/* --- un tome de plus de 400 pages : caisson ottoman ---------------------- */
+
+/* Le motif ne couvre plus le fond : il remplit un panneau encadré, et le titre
+   descend dans un bandeau. C'est la géométrie qui porte l'identité, pas la
+   seule couleur. */
+.cover--tome {
+  justify-content: flex-end;
+  padding: var(--space-sm);
+}
+
+.cover--tome .cover__grain {
+  inset: 8px;
+  border: 1.5px solid rgb(217 184 113 / 60%);
+  box-shadow: 0 0 0 5px rgb(0 0 0 / 0%), inset 0 0 0 0 transparent;
+}
+
+.cover--tome::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgb(217 184 113 / 30%);
+  pointer-events: none;
+}
+
+.cover__band {
+  position: relative;
+  text-align: center;
+  padding: var(--space-sm);
+  background: rgb(0 0 0 / 42%);
+  border: 1px solid rgb(217 184 113 / 50%);
+  border-radius: 2px;
+}
+
+/* --- ce qui n'est pas un livre : imprimé moderne ------------------------- */
+
+/* Seule reliure à contraste inversé : papier clair, encre sombre, couleur de
+   famille reportée sur le dos. Le dos est en `inline-start` — à droite en RTL,
+   là où se relie un livre arabe, et à gauche si l'interface passe en LTR. */
+.cover--document {
+  padding: 0;
+  color: var(--on-surface);
+  background: #f3e9d7;
+}
+
+.cover__spine {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 18%;
+  min-width: 22px;
+  max-width: 42px;
+  background: linear-gradient(180deg, var(--cover-from), var(--cover-to));
+  border-inline-end: 1px solid rgb(217 184 113 / 40%);
+}
+
+.cover__spine .cover__grain {
+  color: rgb(217 184 113 / 34%);
+}
+
+.cover__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--space-md);
+  padding-inline-start: calc(18% + var(--space-md));
+}
+
+.cover__kicker {
+  font-family: var(--font-label);
+  font-size: clamp(9px, 5cqw, 14px);
+  color: var(--cover-to);
+  margin-bottom: var(--space-sm);
+}
+
+.cover--document .cover__title {
+  color: var(--on-surface);
+  text-shadow: none;
+}
+
+.cover--document .cover__author {
+  margin-top: auto;
+  color: var(--on-surface-variant);
+  opacity: 1;
+}
+
+/* --- métn de 120 pages ou moins : typographique -------------------------- */
+
+/* Un métn court n'a rien d'autre à montrer que son titre : il le montre en
+   grand. C'est aussi la mise en page la plus lisible en vignette. */
+.cover--treatise {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.cover--treatise .cover__grain {
+  opacity: 0.45;
+}
+
+/* Le titre est ici le seul sujet : il peut donc monter plus haut qu'ailleurs. */
+.cover--treatise .cover__title {
+  font-size: clamp(15px, 12cqw, 34px);
+  font-weight: 700;
+}
+
+.cover__rule {
+  position: relative;
+  width: 32px;
+  height: 1px;
+  margin: var(--space-sm) 0;
+  background: rgb(217 184 113 / 70%);
 }
 
 .cover__progress {
@@ -308,6 +503,9 @@
 
 /* -------------------------------------------- pastille de la navigation */
 
+/* La pastille est repeinte à chaque changement de file : elle *arrive*, donc
+   elle s'annonce. Sans ce sursaut, un travail qui démarre pendant qu'on lit
+   une autre page ne se remarque pas. */
 .nav-badge {
   min-width: 20px;
   padding: 0 6px;
@@ -316,6 +514,14 @@
   color: var(--surface-container-lowest);
   line-height: 20px;
   text-align: center;
+  animation: badge-in var(--motion-slow) var(--ease-out);
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
 }
 
 /* ------------------------------------------------------ titres section */
@@ -475,4 +681,188 @@
   border-radius: var(--radius);
   border: 1px solid var(--rule);
   background: var(--surface-container-lowest);
+}
+
+/* ------------------------------------------------- saisie d'une note */
+
+.modal__quote {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-inline-start: 3px solid var(--secondary);
+  background: var(--gold-veil);
+  border-radius: var(--radius);
+  color: var(--on-surface-variant);
+  font-family: var(--font-body);
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.modal__textarea {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  resize: vertical;
+}
+
+.modal__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Fiche des raccourcis : deux colonnes, la touche puis ce qu'elle fait. La
+   grille est en `start`/`end` — en arabe la touche se lit à droite. */
+.modal__panel--wide {
+  width: min(34rem, calc(100vw - 2 * var(--space-lg)));
+}
+
+.modal__shortcuts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 6px var(--space-md);
+  margin: 0;
+  max-height: min(72vh, 42rem);
+  overflow-y: auto;
+}
+
+.modal__shortcuts dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.modal__shortcuts dd {
+  margin: 0;
+  color: var(--on-surface-variant);
+}
+
+.modal__shortcuts kbd {
+  display: inline-block;
+  min-width: 1.75rem;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  line-height: 1.6;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--on-surface);
+}
+
+.modal__key-sep {
+  color: var(--outline);
+  font-size: var(--text-label-sm);
+}
+
+/* ------------------------------------------------------- valeur copiable */
+
+/* Un chemin absolu déborde de toute grille : il tient sur une ligne, se
+   sélectionne, et se copie d'un bouton. */
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.copy-field__value {
+  flex: 1;
+  min-width: 0;
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+  text-overflow: ellipsis;
+  cursor: text;
+}
+
+.copy-field__value:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.copy-field__button {
+  flex: none;
+}
+
+/* ------------------------------------------------------------ pagination */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--rule);
+}
+
+.pagination__steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.pagination__size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--outline);
+}
+
+.pagination__size select,
+.downloads__select {
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-label);
+  font-size: var(--text-label-sm);
+}
+
+/* ==================================================== pastilles de thème == */
+
+/* Le même contrôle sert au lecteur et aux réglages : trois pastilles, la
+   couleur du fond et celle de l'encre. Un seul rendu, dans
+   `components/theme-choices.js`. */
+/* Le `minmax` compte : dans le panneau du lecteur, `1fr` suffisait parce que la
+   colonne est large. Posées dans une ligne de réglage, où le contrôle ne prend
+   que sa place, trois `1fr` se réduisaient à la largeur du point — des capsules
+   de 24 px sur lesquelles on ne lit plus la couleur. */
+.theme-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  gap: var(--space-sm);
+}
+
+.theme-choices button {
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+}
+
+/* Le repli importe : `--reader-accent` n'existe que sous `.reader`, et sans
+   lui la déclaration entière serait invalide dans les réglages. */
+.theme-choices button.is-active {
+  border: 2px solid var(--reader-accent, var(--primary));
+}
+
+.theme-choices button > span {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
 }

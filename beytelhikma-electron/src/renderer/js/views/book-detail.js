@@ -1,6 +1,7 @@
 import { h } from '../dom.js';
-import { initial } from '../format.js';
-import { icon } from '../icons.js';
+import { initial, n } from '../format.js';
+import { t } from '../i18n.js';
+import { arrowBackward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
@@ -114,8 +115,8 @@ function breadcrumb(book) {
     h(
       'button',
       { onclick: () => navigate('/library') },
-      icon('arrowRight', { size: 18 }),
-      ' العودة للمكتبة',
+      arrowBackward({ size: 18 }),
+      t('detail.backToLibrary'),
     ),
     book.categoryLabel &&
       h('span', { class: 'muted' }, '/'),
@@ -134,7 +135,7 @@ function tags(book, detail) {
   const labels = [
     book.categoryLabel,
     detail.bookTypeLabel,
-    detail.volumes.length > 1 ? `${detail.volumes.length} أجزاء` : null,
+    detail.volumes.length > 1 ? t('detail.volumes', { count: detail.volumes.length }) : null,
   ].filter(Boolean);
   if (!labels.length) return null;
   return h(
@@ -158,25 +159,27 @@ function authorBadge(author) {
       h(
         'p',
         { class: 'label-sm muted' },
-        author.deathYearHijri ? `المؤلف • توفي سنة ${author.deathYearHijri} هـ` : 'المؤلف',
+        author.deathYearHijri
+          ? t('detail.authorDied', { year: author.deathYearHijri })
+          : t('detail.author'),
       ),
     ),
     h(
       'a',
       { class: 'detail__author-link', href: `#/author/${author.authorId}` },
-      'عرض أعماله',
+      t('detail.otherWorks'),
     ),
   );
 }
 
 function metadata(detail) {
   const rows = [
-    ['الناشر', detail.publisher],
-    ['الطبعة', detail.editionLabel],
-    ['سنة النشر', detail.publicationYear],
-    ['عدد الصفحات', detail.pageCount ? `${detail.pageCount} صفحة` : null],
-    ['عدد الأجزاء', detail.volumes.length > 1 ? detail.volumes.length : null],
-    ['اللغة', detail.summary.language === 'ar' ? 'العربية' : detail.summary.language],
+    [t('detail.publisher'), detail.publisher],
+    [t('detail.edition'), detail.editionLabel],
+    [t('detail.year'), detail.publicationYear],
+    [t('detail.pageCount'), detail.pageCount ? t('detail.pages', { count: detail.pageCount }) : null],
+    [t('detail.volumeCount'), detail.volumes.length > 1 ? n(detail.volumes.length) : null],
+    [t('detail.language'), detail.summary.language === 'ar' ? t('detail.arabic') : detail.summary.language],
   ].filter(([, value]) => value != null && value !== '');
 
   if (!rows.length) return null;
@@ -201,74 +204,131 @@ function buildTree(entries) {
   return roots;
 }
 
+/**
+ * Ce qu'un sommaire affiche d'une entrée : le numéro imprimé, et à défaut le
+ * rang de la page dans le livre. Jamais `pageId` — c'est l'identifiant source,
+ * global au corpus, il ne veut rien dire pour un lecteur.
+ */
+const tocPageLabel = (node) => {
+  const printed = node.printedPageNum ?? node.pageSequenceNum;
+  return printed == null ? '' : t('detail.page', { page: printed });
+};
+
+/** Chapitres montés d'un coup ; au-delà, on déplie à la demande. */
+const TOC_WINDOW = 60;
+
 function tocSection(entries, openReader) {
   const roots = buildTree(entries);
+  const list = h('div', { class: 'toc__list' });
+  const more = h('div', { class: 'toc__more' });
+  let shown = 0;
+
+  // Un sommaire du corpus Shamela peut porter des milliers d'entrées : les
+  // monter toutes coûtait autant de nœuds DOM pour une liste qu'on parcourt
+  // rarement jusqu'au bout.
+  const grow = () => {
+    const next = roots.slice(shown, shown + TOC_WINDOW);
+    list.append(...next.map((node) => tocChapter(node, openReader)));
+    shown += next.length;
+    more.replaceChildren(
+      shown < roots.length
+        ? h(
+            'button',
+            { class: 'button button--tonal', onclick: grow },
+            h(
+              'span',
+              {},
+              t('detail.showMore', { count: roots.length - shown }),
+            ),
+          )
+        : h('span', {}),
+    );
+  };
+  grow();
+
   return h(
     'section',
     { class: 'toc' },
-    h('h3', { class: 'title-md' }, icon('toc', { size: 20 }), 'فهرس المحتويات'),
     h(
+      'h3',
+      { class: 'title-md' },
+      icon('toc', { size: 20 }),
+      t('detail.toc'),
+      h('span', { class: 'label-sm muted' }, t('detail.chapters', { count: roots.length })),
+    ),
+    list,
+    more,
+  );
+}
+
+/**
+ * Un chapitre du sommaire. Les sous-entrées ne sont montées qu'à l'ouverture
+ * du `<details>` : un chapitre replié n'a pas à peser dans le document.
+ */
+function tocChapter(node, openReader) {
+  if (!node.children.length) {
+    return h(
       'div',
-      { class: 'toc__list' },
-      roots.map((node) =>
-        node.children.length
-          ? h(
-              'details',
-              { class: 'toc__chapter' },
-              h(
-                'summary',
-                {},
-                h(
-                  'span',
-                  { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                  icon('chevronLeft', { size: 18, className: 'icon--chevron' }),
-                  node.title,
-                ),
-                h(
-                  'span',
-                  {
-                    class: 'label-sm muted',
-                    title: 'فتح هذه الصفحة',
-                    onclick: (event) => {
-                      // Sans cela, le clic replierait aussi le chapitre.
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openReader(node.pageId);
-                    },
-                  },
-                  `ص ${node.pageId}`,
-                ),
-              ),
-              h(
-                'div',
-                { class: 'toc__children' },
-                node.children.map((child) =>
-                  h(
-                    'p',
-                    { class: 'toc__child', onclick: () => openReader(child.pageId) },
-                    h('span', {}, child.title),
-                    h('span', {}, String(child.pageId)),
-                  ),
-                ),
-              ),
-            )
-          : h(
-              'div',
-              { class: 'toc__chapter' },
-              h(
-                'div',
-                {
-                  class: 'toc__child',
-                  style: { padding: 'var(--space-md)' },
-                  onclick: () => openReader(node.pageId),
-                },
-                h('span', { class: 'label-md' }, node.title),
-                h('span', { class: 'label-sm muted' }, `ص ${node.pageId}`),
-              ),
+      { class: 'toc__chapter' },
+      h(
+        'div',
+        {
+          class: 'toc__child',
+          style: { padding: 'var(--space-md)' },
+          onclick: () => openReader(node.pageId),
+        },
+        h('span', { class: 'label-md' }, node.title),
+        h('span', { class: 'label-sm muted' }, tocPageLabel(node)),
+      ),
+    );
+  }
+
+  const children = h('div', { class: 'toc__children' });
+  const details = h(
+    'details',
+    {
+      class: 'toc__chapter',
+      ontoggle: () => {
+        if (!details.open || children.childElementCount) return;
+        children.append(
+          ...node.children.map((child) =>
+            h(
+              'p',
+              { class: 'toc__child', onclick: () => openReader(child.pageId) },
+              h('span', {}, child.title),
+              h('span', {}, tocPageLabel(child)),
             ),
+          ),
+        );
+      },
+    },
+    h(
+      'summary',
+      {},
+      h(
+        'span',
+        { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        icon('chevronLeft', { size: 18, className: 'icon--chevron' }),
+        node.title,
+      ),
+      h(
+        'span',
+        {
+          class: 'label-sm muted',
+          title: t('detail.openPage'),
+          onclick: (event) => {
+            // Sans cela, le clic replierait aussi le chapitre.
+            event.preventDefault();
+            event.stopPropagation();
+            openReader(node.pageId);
+          },
+        },
+        tocPageLabel(node),
       ),
     ),
+    children,
   );
+  return details;
 }
 
 function relatedSection(related) {
@@ -281,8 +341,8 @@ function relatedSection(related) {
       h(
         'div',
         {},
-        h('h2', { class: 'headline-lg' }, 'أعمال ذات صلة'),
-        h('p', { class: 'body-md' }, 'كتب أخرى من التخصص نفسه'),
+        h('h2', { class: 'headline-lg' }, t('detail.related')),
+        h('p', { class: 'body-md' }, t('detail.relatedHint')),
       ),
     ),
     h(

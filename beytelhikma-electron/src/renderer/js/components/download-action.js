@@ -1,14 +1,18 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { toast } from '../shell.js';
 
-/** Octets -> « 12,4 م.ب ». */
+/**
+ * Octets -> « ١٢.٤ م.ب » ou « 12.4 MB ». L'unité et les chiffres suivent la
+ * locale : la valeur part en nombre, c'est `translate` qui la met en forme.
+ */
 export function formatBytes(bytes) {
   if (!bytes) return '';
   const mega = bytes / (1024 * 1024);
-  if (mega >= 1) return `${mega.toFixed(1).replace('.', ',')} م.ب`;
-  return `${Math.max(1, Math.round(bytes / 1024))} ك.ب`;
+  if (mega >= 1) return t('format.megabytes', { value: Number(mega.toFixed(1)) });
+  return t('format.kilobytes', { value: Math.max(1, Math.round(bytes / 1024)) });
 }
 
 /** Statuts pendant lesquels la file travaille encore sur ce livre. */
@@ -67,9 +71,9 @@ export function downloadAction({ book, download, progress, onOpen, onDelete }) {
       'button',
       {
         class: 'button button--tonal',
-        onclick: () => run(() => repository.cancelDownload(book.editionId), 'تعذّر الإلغاء'),
+        onclick: () => run(() => repository.cancelDownload(book.editionId), t('download.cancelFailed')),
       },
-      h('span', {}, 'إلغاء'),
+      h('span', {}, t('download.cancel')),
     );
   }
 
@@ -77,40 +81,40 @@ export function downloadAction({ book, download, progress, onOpen, onDelete }) {
     const percent = Math.round((state.percent ?? 0) * 100);
     switch (state.status) {
       case 'queued':
-        return [h('p', { class: 'label-md muted' }, 'في الانتظار'), cancelButton()];
+        return [h('p', { class: 'label-md muted' }, t('download.queued')), cancelButton()];
       case 'downloading':
         return [
           h('div', { class: 'progress' }, h('span', { style: { width: `${percent}%` } })),
-          h('p', { class: 'label-sm muted' }, `${percent}٪`),
+          h('p', { class: 'label-sm muted' }, t('format.percent', { value: percent })),
           cancelButton(),
         ];
       case 'verifying':
-        return [h('p', { class: 'label-md muted' }, 'جارٍ التحقق')];
+        return [h('p', { class: 'label-md muted' }, t('download.verifying'))];
       case 'installed':
         return [
           h(
             'button',
             { class: 'button button--filled', onclick: onOpen },
             icon('bookOpen', { size: 20 }),
-            h('span', {}, progress ? 'متابعة القراءة' : 'ابدأ القراءة'),
+            h('span', {}, t(progress ? 'download.continue' : 'download.start')),
           ),
           h(
             'button',
             { class: 'button button--tonal', onclick: onDelete },
             icon('close', { size: 20 }),
-            h('span', {}, 'حذف'),
+            h('span', {}, t('action.delete')),
           ),
         ];
       case 'failed':
         return [
-          h('p', { class: 'label-md download-action__error' }, state.error ?? 'فشل التنزيل'),
+          h('p', { class: 'label-md download-action__error' }, state.error ?? t('download.failed')),
           h(
             'button',
             {
               class: 'button button--filled',
-              onclick: () => run(() => repository.retryDownload(book.editionId), 'فشل التنزيل'),
+              onclick: () => run(() => repository.retryDownload(book.editionId), t('download.failed')),
             },
-            h('span', {}, 'إعادة المحاولة'),
+            h('span', {}, t('download.retry')),
           ),
         ];
       default:
@@ -119,16 +123,23 @@ export function downloadAction({ book, download, progress, onOpen, onDelete }) {
             'button',
             {
               class: 'button button--filled',
-              onclick: () => run(() => repository.downloadBook(book.editionId), 'فشل التنزيل'),
+              onclick: () => run(() => repository.downloadBook(book.editionId), t('download.failed')),
             },
             icon('download', { size: 20 }),
             h(
               'span',
               {},
-              state.compressedSize ? `تحميل (${formatBytes(state.compressedSize)})` : 'تحميل',
+              state.compressedSize
+                ? t('download.actionSized', { size: formatBytes(state.compressedSize) })
+                : t('download.action'),
             ),
           ),
-          progress && h('p', { class: 'label-sm muted' }, `تتابع من الصفحة ${progress.sequenceNum}`),
+          progress &&
+            h(
+              'p',
+              { class: 'label-sm muted' },
+              t('download.resumeFrom', { page: progress.sequenceNum }),
+            ),
         ];
     }
   }

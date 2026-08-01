@@ -22,7 +22,9 @@ import hashlib
 import re
 import unicodedata
 
-SCHEMA_VERSION = 1
+# 2 : `book_releases.download_url` devient `object_key` et porte une clé
+# relative. Un client de schéma 1 ne sait pas lire un catalogue de schéma 2.
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------- normalisation
 
@@ -61,9 +63,8 @@ def strip_html(html: str) -> str:
     return text.strip()
 
 
-# Miroir de `_entities` dans beytelhikma/lib/utils/arabic_html_parser.dart :
-# le texte brut stocké en base doit correspondre à ce que les deux clients
-# affichent une fois le HTML décodé.
+# Le texte brut stocké en base doit correspondre à ce que le client affiche
+# une fois le HTML décodé (décodage des entités côté rendu Electron).
 ENTITIES = {
     "&nbsp;": " ",
     "&amp;": "&",
@@ -250,7 +251,12 @@ CREATE TABLE book_releases (
     schema_version    INTEGER NOT NULL,
     content_version   INTEGER NOT NULL,
     source_version    TEXT,
-    download_url      TEXT NOT NULL,
+    -- Clé **relative** à la base de distribution configurée côté client
+    -- (`books/<edition_id>/<content_version>/book.sqlite.zst`), écrite par
+    -- `publish_minio.py`. La présence de `://` marque un absolu : `asset://` et
+    -- `local://` désignent la bibliothèque source et gardent les jeux hors
+    -- ligne utilisables sans réseau ni publication.
+    object_key        TEXT NOT NULL,
     compressed_size   INTEGER,
     uncompressed_size INTEGER,
     sha256            TEXT NOT NULL,

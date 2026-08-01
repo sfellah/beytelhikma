@@ -1,2 +1,10 @@
 node_modules/
-build/
+
+# `build/` est le `buildResources` d'electron-builder : il porte `icon.ico`, un
+# asset de marque produit par `tools/gen_brand_assets.py`, pas un artefact. On
+# ne peut donc pas l'ignorer en bloc — git ne réinclut rien sous un dossier
+# exclu. Ce qui est artefact y est nommé un par un.
+build/screenshots/
+
+# Artefacts d'electron-builder.
+release/

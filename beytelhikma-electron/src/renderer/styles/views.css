@@ -370,7 +370,7 @@
 .era {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   padding-top: var(--space-md);
   border-top: 1px solid var(--rule-strong);
   transition: border-color 0.25s;
@@ -381,12 +381,14 @@
 }
 
 /* La barre porte l'information : combien de livres, relativement au siècle le
-   mieux fourni. Elle n'est pas décorative. */
+   mieux fourni. Elle n'est pas décorative. La vue la pose en racine du rapport
+   — un siècle à un livre reste lisible face à un siècle à trente-neuf. */
 .era__bar {
   display: block;
   height: 4px;
   width: var(--fill, 0%);
-  min-width: 12px;
+  min-width: 6px;
+  margin-bottom: var(--space-sm);
   border-radius: var(--radius-pill);
   background: var(--deep-emerald);
   transform-origin: 100% 50%;
@@ -397,8 +399,43 @@
   transform: scaleY(2);
 }
 
+/* Un siècle vide et la cellule non datée gardent la place de la barre : sans
+   elle les libellés remonteraient et l'axe cesserait de s'aligner. */
+.era__bar--none {
+  width: 100%;
+  min-width: 0;
+  height: 0;
+  border-top: 1px dashed var(--rule-strong);
+  background: none;
+}
+
+.era:hover .era__bar--none {
+  transform: none;
+}
+
 .era__name {
   color: var(--primary);
+}
+
+.era__count {
+  color: var(--on-surface-variant);
+}
+
+/* Un siècle sans livre se voit. Le masquer donnerait à la frise une continuité
+   que le catalogue n'a pas. */
+.era--empty {
+  opacity: 0.42;
+  border-top-style: dashed;
+  cursor: default;
+}
+
+.era--empty:hover {
+  border-color: var(--rule-strong);
+}
+
+.era--undated {
+  border-top-color: var(--antique-gold);
+  border-top-style: dashed;
 }
 
 /* ---------------------------------------------------------- nouveautés */
@@ -445,9 +482,12 @@ html:not([dir='rtl']) .scroller--at-start {
 
 /* -------------------------------------------------------- disciplines */
 
+/* Six tuiles doivent tomber en deux rangées de trois, jamais en cinq plus une
+   orpheline : `min(45%, …)` borne la colonne à la largeur disponible, ce qui
+   donne trois colonnes au large et deux à l'étroit. */
 .disciplines {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(45%, 300px), 1fr));
   gap: var(--space-md);
 }
 
@@ -456,10 +496,10 @@ html:not([dir='rtl']) .scroller--at-start {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg) var(--space-md);
-  min-height: 148px;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md) var(--space-md);
+  min-height: 208px;
   text-align: center;
   background: var(--surface-container-low);
   border: 1px solid var(--rule);
@@ -480,37 +520,79 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--primary);
 }
 
-.discipline--more {
-  background: transparent;
-  border-style: dashed;
+/* Trois couvertures réelles de la discipline, en éventail. Elles disent ce que
+   « ٣٩ كتابًا » ne dit pas : de quoi ces livres ont l'air. Purement décoratives
+   au sens du lecteur d'écran — le lien porte déjà le nom et le compte. */
+.discipline__stack {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
 }
 
+.discipline__mini {
+  display: block;
+  width: 46px;
+  margin-inline: -9px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Les rangs se posent en dur : `abs()` en CSS n'est pas acquis sur toutes les
+   versions de Chromium embarquées, et trois enfants ne valent pas ce pari. */
+.discipline__mini:first-child {
+  z-index: 1;
+  transform: rotate(-7deg) translateY(3px);
+}
+
+.discipline__mini:nth-child(2) {
+  z-index: 2;
+}
+
+.discipline__mini:last-child {
+  z-index: 1;
+  transform: rotate(7deg) translateY(3px);
+}
+
+.discipline:hover .discipline__mini:first-child {
+  transform: rotate(-13deg) translate(7px, -2px);
+}
+
+.discipline:hover .discipline__mini:last-child {
+  transform: rotate(13deg) translate(-7px, -2px);
+}
+
+/* La teinte est celle de la famille de couvertures, posée en ligne par la vue
+   depuis `COVER_FAMILIES`. L'anneau reprend le fond de la tuile : la bulle
+   mord sur l'éventail sans le trancher. */
 .discipline__bubble {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
+  margin-top: calc(var(--space-sm) * -1);
   border-radius: var(--radius-pill);
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  background: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 16%, transparent);
+  color: var(--tint-to, var(--deep-emerald));
+  box-shadow: 0 0 0 5px var(--surface-container-low);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
 }
 
 .discipline:hover .discipline__bubble {
   transform: scale(1.08);
+  box-shadow: 0 0 0 5px var(--surface-container-lowest);
 }
 
-.discipline__bubble--teal {
-  background: var(--teal-veil);
-  color: var(--slate-teal);
+/* Les neuf teintes sont des reliures : sombres par construction. Sur graphite
+   elles disparaîtraient — on éclaircit l'encre et on épaissit le voile. */
+:root[data-theme='night'] .discipline__bubble {
+  background: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 34%, transparent);
+  color: color-mix(in srgb, var(--tint-to, var(--deep-emerald)) 30%, #f6f1e6);
 }
 
-.discipline__bubble--gold {
-  background: var(--gold-veil);
-  color: var(--secondary);
-}
-
-.discipline__bubble--emerald {
-  background: var(--emerald-veil);
-  color: var(--deep-emerald);
+.disciplines__more {
+  margin-top: var(--space-md);
 }
 
 /* --------------------------------------------------- auteur en vedette */
@@ -1324,25 +1406,16 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-fg);
 }
 
-.reader--white {
-  --reader-bg: var(--surface-container-lowest);
-  --reader-fg: #131315;
-  --reader-muted: #404944;
-  --reader-rule: var(--outline-variant);
-}
-
-/* Nuit : le graphite de la palette, l'émeraude claire pour les repères. */
-.reader--night {
-  --reader-bg: #1a1c1a;
-  --reader-fg: #e6e3de;
-  --reader-muted: #b2b2ae;
-  --reader-rule: rgb(230 227 222 / 16%);
-  --reader-accent: var(--primary-fixed-dim);
-}
+/* Le lecteur ne porte plus d'ambiance : le thème est global, posé sur `<html>`
+   par `js/theme.js`, et les six variables ci-dessus dérivent déjà des jetons.
+   Les anciennes règles `.reader--white` et `.reader--night` disaient en dur ce
+   que `:root[data-theme=…]` dit maintenant pour toute l'application — et
+   `--reader-accent: var(--primary-fixed-dim)` de la nuit n'avait plus d'objet,
+   `--primary` valant cette teinte claire dans ce thème. */
 
 /* Trois grains de lecture : Amiri (naskh de bibliothèque), Noto Naskh (plus
    ouvert donc plus lisible en petit corps), IBM Plex Sans Arabic (écran). */
-.reader--font-serif {
+.reader--font-amiri {
   --reader-font: var(--font-body);
 }
 
@@ -1350,7 +1423,7 @@ html:not([dir='rtl']) .scroller--at-start {
   --reader-font: var(--font-naskh);
 }
 
-.reader--font-sans {
+.reader--font-plex {
   --reader-font: var(--font-label);
 }
 
@@ -1387,9 +1460,22 @@ html:not([dir='rtl']) .scroller--at-start {
   opacity: 0;
 }
 
-/* Maquette V2 : outils groupés au départ de la ligne, titre et fermeture à
-   l'autre bout — une seule hauteur de barre (56 px) en haut comme en bas. */
-.reader__bar,
+/* Trois zones, et le titre au milieu : la sortie au départ de la ligne (droite
+   en RTL), le nom du livre au centre, les outils à l'autre bout. Les deux
+   colonnes latérales sont des `1fr` égales — c'est ce qui met le titre au
+   milieu de la *barre* et non au milieu de ce qui reste. Une seule hauteur
+   (56 px) en haut comme en bas. */
+.reader__bar {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  height: 56px;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--space-md);
+}
+
 .reader__toolbar {
   display: flex;
   align-items: center;
@@ -1401,9 +1487,51 @@ html:not([dir='rtl']) .scroller--at-start {
   padding-inline: var(--space-md);
 }
 
+.reader__lead {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+}
+
+/* Sortie du lecteur : un libellé, pas une croix. Une croix ne dit pas où elle
+   ramène, et c'est le seul bouton de la barre dont on veut être certain avant
+   de cliquer. Le chevron pointe vers le début de ligne, comme tout retour. */
+.reader__back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-block: var(--space-sm);
+  padding-inline: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-pill);
+  color: var(--reader-muted);
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.reader__back .icon {
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.reader__back:hover {
+  background: color-mix(in srgb, var(--reader-fg) 8%, transparent);
+  color: var(--reader-fg);
+}
+
+/* Le chevron part vers là où le bouton ramène : à droite, en RTL. */
+.reader__back:hover .icon {
+  transform: translateX(3px);
+}
+
+.reader__back:active {
+  transform: scale(0.97);
+}
+
 .reader__tools {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: var(--space-xs);
   color: var(--reader-muted);
 }
@@ -1414,6 +1542,10 @@ html:not([dir='rtl']) .scroller--at-start {
   padding: var(--space-sm);
   border-radius: var(--radius-pill);
   color: inherit;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
 .reader__tool:hover {
@@ -1421,34 +1553,51 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-fg);
 }
 
+.reader__tool:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
 .reader__tool:disabled {
   opacity: 0.3;
   cursor: default;
   background: none;
+  transform: none;
 }
 
 .reader__titles {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  justify-self: center;
   min-width: 0;
   color: var(--reader-muted);
 }
 
+/* Le titre est ce qu'on lit : il porte donc la taille d'un titre, pas celle
+   d'un libellé d'outil. */
 .reader__titles h1 {
   font-family: var(--font-display);
-  font-size: var(--text-label-md);
-  line-height: var(--leading-label-md);
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
   font-weight: 700;
   color: var(--reader-accent);
 }
 
-/* Fenêtre étroite : le titre du livre reste en page, la barre garde ses outils
-   et la jauge récupère la place laissée par le pourcentage. */
+/* Fenêtre étroite : le titre reste — c'est lui qui dit où l'on est — mais il
+   redescend d'un cran et la sortie se réduit à son chevron. La jauge récupère
+   la place laissée par le pourcentage. */
 @media (max-width: 640px) {
-  .reader__titles h1,
-  .reader__percent {
+  .reader__percent,
+  .reader__back-label {
     display: none;
+  }
+
+  .reader__titles h1 {
+    font-size: var(--text-body-md);
+    line-height: var(--leading-label-md);
+  }
+
+  .reader__back {
+    padding: var(--space-sm);
   }
 
   .reader__bar,
@@ -1475,6 +1624,87 @@ html:not([dir='rtl']) .scroller--at-start {
   overflow-y: auto;
   padding: clamp(96px, 14vh, 160px) var(--space-gutter) 160px;
   cursor: text;
+  transition: padding-left var(--motion-slow) var(--ease-out);
+}
+
+/* Un panneau ouvert masquait un bord de la colonne de lecture. Sur une fenêtre
+   assez large, on lui rend la place plutôt que de lire par-dessous. Le décalage
+   est physique, comme l'ancrage du panneau. */
+@media (min-width: 1100px) {
+  .reader.has-panel .reader__scroll {
+    padding-left: calc(320px + var(--space-gutter));
+  }
+}
+
+/* Le fil des pages montées. En mode page il n'en porte qu'une ; en mode
+   tourné vers le défilement, une tranche glissante autour de la lecture. */
+.reader__flow {
+  display: flex;
+  flex-direction: column;
+}
+
+.reader__block {
+  position: relative;
+}
+
+/* Le seul moment que ce lecteur met en scène : la page qui se pose. Elle
+   arrive du bord vers lequel on va — à gauche quand on avance en RTL — et
+   l'encre se fixe en fin de course (le flou part, il n'arrive jamais). Le
+   déplacement est court : c'est une feuille qui retombe, pas un carrousel.
+   Le fil continu n'en veut pas — là, le mouvement, c'est le défilement. */
+.reader--page .reader__block.is-turned-next {
+  animation: page-turn-next var(--motion-slow) var(--ease-out) both;
+}
+
+.reader--page .reader__block.is-turned-previous {
+  animation: page-turn-previous var(--motion-slow) var(--ease-out) both;
+}
+
+@keyframes page-turn-next {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+    filter: blur(2px);
+  }
+}
+
+@keyframes page-turn-previous {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+    filter: blur(2px);
+  }
+}
+
+/* Le pied imprimé fait déjà filet : en fil continu il sépare deux pages, il
+   suffit de lui donner l'air. */
+.reader--scroll .reader__block + .reader__block {
+  margin-top: var(--space-xl);
+}
+
+.reader--scroll .reader__page-foot {
+  margin-top: var(--space-xl);
+}
+
+/* Signet de page : sans repère dans le texte, le bouton de la barre haute
+   avait l'air de ne rien faire. Il se pose juste en marge de la colonne de
+   lecture — 750 px centrés — et non au bord perdu de la fenêtre. */
+.reader__block-mark {
+  position: absolute;
+  top: -4px;
+  inset-inline-start: max(0px, calc(50% - 375px - 34px));
+  display: grid;
+  place-items: center;
+  color: var(--reader-accent);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.reader__block.is-bookmarked .reader__block-mark {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Entête de page : le titre du livre, presque effacé, puis un filet. */
@@ -1644,14 +1874,18 @@ html:not([dir='rtl']) .scroller--at-start {
   opacity: 0;
 }
 
-/* Les panneaux glissent depuis le bord gauche *visuel* : `transform` ignore le
-   sens d'écriture, on ancre donc volontairement en physique. */
+/* Les panneaux glissent depuis le bord *visuel* où la barre haute pose ses
+   outils : la feuille sort sous le doigt qui l'a appelée. Les outils ayant
+   cédé le départ de ligne à la sortie du lecteur, ce bord est maintenant le
+   gauche. `transform` ignore le sens d'écriture, on ancre donc volontairement
+   en physique. */
 .reader__panel {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 300px;
+  width: 320px;
+  max-width: 88vw;
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -1659,7 +1893,7 @@ html:not([dir='rtl']) .scroller--at-start {
   border-right: 1px solid var(--reader-rule);
   box-shadow: var(--shadow-lg);
   transform: translateX(-100%);
-  transition: transform 0.3s ease-in-out;
+  transition: transform var(--motion-slow) var(--ease-out);
 }
 
 .reader__panel.is-open {
@@ -1771,15 +2005,20 @@ html:not([dir='rtl']) .scroller--at-start {
   background: color-mix(in srgb, var(--reader-fg) 4%, transparent);
 }
 
+/* Les quatre teintes sont volontairement peu saturées : posées derrière du
+   texte elles doivent se voir, pas crier. Un liseré les détache du panneau. */
 .reader__highlights button {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-pill);
   border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+  transition: transform 0.12s ease, border-color 0.12s ease;
 }
 
 .reader__highlights button:hover {
   border-color: var(--reader-accent);
+  transform: scale(1.12);
 }
 
 .font-size-control {
@@ -1808,28 +2047,37 @@ html:not([dir='rtl']) .scroller--at-start {
   background: color-mix(in srgb, var(--reader-fg) 8%, transparent);
 }
 
-.theme-choices {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
+/* Les pastilles de thème sont parties dans `components.css` : le même contrôle
+   sert maintenant au lecteur et aux réglages. */
+
+/* Mode de lecture : page imprimée ou fil continu, deux boutons qui se lisent
+   comme des cartes — le libellé, puis ce que ça change. */
+.mode-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 
-.theme-choices button {
-  height: 48px;
-  display: grid;
-  place-items: center;
+.mode-choices button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--outline-variant);
+  border: 1px solid transparent;
+  color: var(--reader-muted);
+  text-align: start;
 }
 
-.theme-choices button.is-active {
-  border: 2px solid var(--reader-accent);
+.mode-choices button > span {
+  display: flex;
+  flex-direction: column;
 }
 
-.theme-choices button > span {
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-pill);
+.mode-choices button.is-active {
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+  border-color: var(--reader-rule);
+  color: var(--reader-fg);
 }
 
 .font-choices {
@@ -2137,9 +2385,13 @@ html:not([dir='rtl']) .scroller--at-start {
   line-height: 1.7;
 }
 
+/* Occurrence du terme cherché. Classée, et non `.reader__page mark` : ce
+   sélecteur-là l'emportait par spécificité sur `.reader__highlight` et
+   repeignait en jaune de recherche toutes les couleurs choisies à la main. */
 .reader__result mark,
-.reader__page mark {
-  background: color-mix(in srgb, #f2c744 55%, transparent);
+.reader__match {
+  background: color-mix(in srgb, var(--mark-color) var(--mark-strength, 55%), transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--reader-accent) 55%, transparent);
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
@@ -2235,6 +2487,13 @@ html:not([dir='rtl']) .scroller--at-start {
   justify-content: space-between;
   gap: var(--space-lg);
   flex-wrap: wrap;
+  padding-block: var(--space-sm);
+  border-top: 1px solid var(--rule);
+}
+
+/* La première ligne suit l'en-tête : elle n'a pas de filet à porter. */
+.settings__head + .settings__row {
+  border-top: 0;
 }
 
 .settings__row-text {
@@ -2242,16 +2501,127 @@ html:not([dir='rtl']) .scroller--at-start {
   flex: 1 1 14rem;
 }
 
-.settings__choices {
+/* En-tête de bloc : l'icône dans sa pastille est le repère qui manquait —
+   les six titres se ressemblaient tous, et rien ne distinguait les réglages
+   d'apparence de la zone de danger. */
+.settings__head {
   display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  padding-bottom: var(--space-xs);
 }
 
-.settings__choices .button.is-active {
+/* Six blocs de même rang : leur titre ne concurrence pas celui de l'écran.
+   C'est la pastille qui les distingue, pas la taille du texte. */
+.settings__head .headline-lg {
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
+}
+
+.settings__badge {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-lg);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.settings__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+}
+
+.settings__preview {
+  margin: 0;
+}
+
+/* Le nom de la police *est* l'échantillon : il se rend dans sa propre face, à
+   la taille où l'on peut la juger. À 13 px et 75 % d'opacité, on ne distinguait
+   pas un naskh d'un autre — c'est-à-dire qu'on ne choisissait rien. */
+.settings__specimen {
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+/* Les pastilles de thème partagent le cadre du contrôle segmenté : c'est le
+   même geste — un choix parmi trois — et deux grammaires côte à côte dans le
+   même bloc se lisaient comme deux mécaniques différentes. */
+.settings .theme-choices {
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface-container);
+}
+
+/* Zone de danger : son propre cadre, en fin d'écran. Ce qui est irréversible
+   ne doit pas se croiser en chemin vers autre chose. */
+.settings__group--danger {
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 5%, var(--surface-container-lowest));
+}
+
+.settings__group--danger .settings__badge {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+/* Contrôle segmenté : un cadre, N choix, un seul actif. Trois boutons
+   flottants ne se lisaient pas comme un ensemble, et rien ne disait qu'un
+   seul pouvait valoir à la fois. */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface-container);
+}
+
+.segmented__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 3px);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.segmented__item:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.segmented__item.is-active {
   background: var(--primary);
   color: var(--on-primary);
-  border-color: transparent;
+}
+
+.segmented__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: start;
+}
+
+.segmented__check {
+  display: none;
+}
+
+.segmented__item.is-active .segmented__check {
+  display: inline-flex;
 }
 
 .settings__slider {
@@ -2273,4 +2643,653 @@ html:not([dir='rtl']) .scroller--at-start {
   border-radius: var(--radius-pill);
   border: 1px solid var(--rule);
   background: var(--surface-container-lowest);
+}
+
+/* --------------------------------------------- gestion des téléchargements */
+
+.downloads__manage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.downloads__manage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.downloads__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.downloads__search-box,
+.notes__search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.authors__search-box .icon,
+.downloads__search-box .icon,
+.notes__search-box .icon {
+  position: absolute;
+  inset-inline-start: 12px;
+  color: var(--outline);
+  pointer-events: none;
+}
+
+.authors__search,
+.downloads__search,
+.notes__search {
+  width: 18rem;
+  max-width: 100%;
+  padding-block: 9px;
+  padding-inline: 38px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  outline: none;
+}
+
+.downloads__search:focus,
+.authors__search:focus,
+.notes__search:focus {
+  border-color: var(--primary);
+}
+
+.downloads__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--outline);
+}
+
+.downloads__bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
+  background: var(--emerald-veil);
+  border: 1px solid var(--rule);
+}
+
+.downloads__bulk-bar > .label-md {
+  margin-inline-end: auto;
+}
+
+/* La table déborde en largeur avant de déborder la fenêtre : elle défile dans
+   son propre cadre, jamais la page. */
+.books-table__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest);
+}
+
+.books-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+}
+
+.books-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-sm) var(--space-md);
+  text-align: start;
+  color: var(--outline);
+  font-size: var(--text-label-sm);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  background: var(--surface-container-low);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.books-table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.books-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.books-table tbody tr:hover {
+  background: var(--surface-container-low);
+}
+
+.books-table tbody tr.is-selected {
+  background: var(--emerald-veil);
+}
+
+.books-table__pick {
+  width: 40px;
+}
+
+.books-table__num {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.books-table__actions {
+  width: 96px;
+  white-space: nowrap;
+}
+
+.books-table__actions .button--icon.is-danger:hover {
+  color: var(--error);
+}
+
+.books-table__title {
+  display: block;
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  text-align: start;
+  cursor: pointer;
+}
+
+.books-table__title:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.books-table__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 8rem;
+}
+
+.books-table__badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: var(--text-label-sm);
+  white-space: nowrap;
+}
+
+.books-table__badge.is-installed {
+  background: var(--emerald-veil);
+  color: var(--primary);
+}
+
+.books-table__badge.is-pending {
+  background: var(--gold-veil);
+  color: var(--on-secondary-fixed-variant);
+}
+
+.books-table__badge.is-failed {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+/* Chemins de « عن التطبيق » : une seule colonne, la valeur prend la largeur. */
+.meta-grid--paths {
+  grid-template-columns: 1fr;
+}
+
+/* ---------------------------------------------------------- ملاحظاتي */
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.notes__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.notes__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.notes__tabs {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.notes__tabs .button.is-active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+}
+
+.notes__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--space-md);
+}
+
+.note-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest);
+}
+
+.note-card__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: start;
+  cursor: pointer;
+}
+
+.note-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--outline);
+}
+
+.note-card__quote {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border-inline-start: 3px solid var(--highlight-color, var(--secondary));
+  background: color-mix(in srgb, var(--highlight-color, var(--secondary)) 22%, transparent);
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+}
+
+.note-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* -------------------------------------------------- البحث في النصوص */
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.search__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.search__box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search__box .icon {
+  position: absolute;
+  inset-inline-start: 16px;
+  color: var(--outline);
+  pointer-events: none;
+}
+
+.search__field {
+  width: 100%;
+  padding-block: 13px;
+  padding-inline: 48px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-lowest);
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  outline: none;
+}
+
+.search__field:focus {
+  border-color: var(--primary);
+}
+
+.search__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.search__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.search__book {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest);
+}
+
+.search__book-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.search__book-title {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: var(--text-title-md);
+  text-align: start;
+  cursor: pointer;
+}
+
+.search__book-title:hover {
+  text-decoration: underline;
+}
+
+.search__hit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  padding: var(--space-sm);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: none;
+  text-align: start;
+  cursor: pointer;
+}
+
+.search__hit:hover {
+  background: var(--surface-container-low);
+}
+
+.search__snippet {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+}
+
+.search__snippet mark {
+  background: var(--gold-veil);
+  color: inherit;
+  border-radius: var(--radius);
+  padding: 0 2px;
+}
+
+/* -------------------------------------------- annotations du lecteur */
+
+/* Le surlignage teinte le fond sans toucher l'encre : le texte du livre garde
+   son contraste, quelle que soit la couleur choisie. L'ambiance nuit demande
+   moins d'opacité — une pastille claire sur fond sombre mangerait l'encre. */
+.reader__highlight {
+  background: color-mix(in srgb, var(--highlight-color, #d9b26a) var(--highlight-strength, 42%), transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.reader__highlight:hover {
+  background: color-mix(
+    in srgb,
+    var(--highlight-color, #d9b26a) calc(var(--highlight-strength, 42%) + 18%),
+    transparent
+  );
+}
+
+.reader__highlight.has-note {
+  border-bottom: 2px solid var(--highlight-color, #d9b26a);
+}
+
+/* Onglets du panneau : les compteurs suffisent, les libellés sont dans les
+   infobulles — la colonne fait 320 px, elle ne tient pas quatre mots. */
+.reader__annotation-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md) 0;
+}
+
+.reader__annotation-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: 6px var(--space-xs);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  color: var(--reader-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__annotation-tab:hover {
+  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
+}
+
+.reader__annotation-tab.is-active {
+  background: color-mix(in srgb, var(--reader-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--reader-accent) 35%, transparent);
+  color: var(--reader-accent);
+}
+
+.reader__annotations {
+  gap: var(--space-sm);
+}
+
+.reader__annotation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--reader-rule);
+  background: color-mix(in srgb, var(--reader-fg) 3%, transparent);
+}
+
+.reader__annotation:hover {
+  border-color: color-mix(in srgb, var(--reader-accent) 45%, transparent);
+}
+
+/* Entête d'entrée : de quoi il s'agit à gauche, la page rejetée au bout — la
+   même grammaire pour les trois types, une liste mêlée se lit d'un trait. */
+.reader__annotation-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--reader-muted);
+}
+
+.reader__annotation-page {
+  margin-inline-start: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__annotation-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--reader-fg) 20%, transparent);
+  flex: none;
+}
+
+.reader__annotation-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--reader-fg);
+  text-align: start;
+  cursor: pointer;
+  /* Une note peut être une seule « phrase » sans espace : sans coupure forcée
+     elle sortirait de la carte. */
+  overflow-wrap: anywhere;
+}
+
+/* Une citation peut faire tout un paragraphe : la liste en montre l'amorce. */
+.reader__annotation-quote {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border-inline-start: 3px solid var(--highlight-color, #d9b26a);
+  background: color-mix(in srgb, var(--highlight-color, #d9b26a) var(--quote-strength, 26%), transparent);
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  line-height: 1.9;
+}
+
+.reader__annotation-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--reader-muted);
+}
+
+.reader__tool.is-active {
+  color: var(--primary);
+  background: var(--emerald-veil);
+}
+
+
+/* ------------------------------------------------- listes paginées */
+
+/* Les barres d'outils et de pagination partagent la même assise : un écran
+   paginé se reconnaît d'un coup d'œil, quel que soit ce qu'il liste. */
+.authors__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.authors__search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.authors__index {
+  min-height: 120px;
+}
+
+.authors__pager,
+.library__pager {
+  margin-top: var(--space-lg);
+}
+
+/* Les siècles sans leurs chapelets de noms : la liste ne sert plus qu'à
+   entrer dans une époque, les auteurs se cherchent dans l'index. */
+.layers--compact .layer {
+  padding-block: var(--space-md);
+}
+
+.layers--compact .layer__label {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.layers--compact .layer:hover .layer__century {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* « Afficher plus » : un sommaire de plusieurs milliers d'entrées ne se monte
+   pas d'un bloc, il se déplie. */
+.toc__more,
+.reader__toc-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-sm);
+}
+
+.reader__toc-more {
+  padding: 0 var(--space-md) var(--space-md);
+}
+
+/* Une notice du corpus peut faire plusieurs milliers de mots : repliée, elle
+   laisse voir la suite de l'écran ; dépliée, elle se lit en entier. */
+.lead-card__bio-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.lead-card__bio.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lead-card__bio-toggle {
+  color: var(--deep-emerald);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.lead-card__bio-toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }

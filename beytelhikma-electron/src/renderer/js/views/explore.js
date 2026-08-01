@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { renderShell } from '../shell.js';
@@ -12,10 +13,10 @@ import { emptyView, errorView, loadingView } from '../components/states.js';
 const PAGE = 40;
 
 const SORTS = [
-  ['title', 'العنوان'],
-  ['recent', 'الأحدث'],
-  ['pages', 'عدد الصفحات'],
-  ['size', 'الحجم'],
+  ['title', 'explore.sort.title'],
+  ['recent', 'explore.sort.recent'],
+  ['pages', 'explore.sort.pages'],
+  ['size', 'explore.sort.size'],
 ];
 
 /** Facettes à valeurs multiples, dans l'ordre des puces de filtres actifs. */
@@ -165,22 +166,22 @@ export function exploreView(host, params) {
       type: 'search',
       class: 'explore__search',
       value: state.query.text,
-      placeholder: 'ابحث في العناوين والمؤلفين…',
+      placeholder: t('explore.search'),
       oninput: debounce((event) => update({ text: event.target.value }), 250),
     });
     return [
       h(
         'div',
         {},
-        h('h1', { class: 'display-lg' }, 'الاستكشاف'),
-        h('p', { class: 'body-md muted' }, `${state.total} نتيجة`),
+        h('h1', { class: 'display-lg' }, t('explore.title')),
+        h('p', { class: 'body-md muted' }, t('pagination.results', { total: state.total })),
       ),
       field,
       h(
         'select',
         { class: 'explore__sort', onchange: (event) => update({ sort: event.target.value }) },
         SORTS.map(([value, label]) =>
-          h('option', { value, selected: state.query.sort === value }, label),
+          h('option', { value, selected: state.query.sort === value }, t(label)),
         ),
       ),
     ];
@@ -202,7 +203,7 @@ export function exploreView(host, params) {
     if (state.query.status) {
       out.push({ key: 'status', value: null, label: labelOf('status', state.query.status) });
     }
-    if (state.query.years) out.push({ key: 'years', value: null, label: 'سنة النشر' });
+    if (state.query.years) out.push({ key: 'years', value: null, label: t('facet.year') });
     return out;
   }
 
@@ -230,7 +231,7 @@ export function exploreView(host, params) {
         h(
           'button',
           { class: 'button button--tonal', onclick: () => update({ ...EMPTY_QUERY }) },
-          'مسح الكل',
+          t('explore.clearAll'),
         ),
       );
     }
@@ -252,17 +253,24 @@ export function exploreView(host, params) {
         },
       },
       icon('check', { size: 18 }),
-      h('span', {}, 'تحديد'),
+      h('span', {}, t('explore.select')),
     );
   }
 
   function selectionBar() {
-    const weight = h('span', { class: 'label-md' }, `${state.selection.size} محدد`);
+    const weight = h(
+      'span',
+      { class: 'label-md' },
+      t('explore.selected', { count: state.selection.size }),
+    );
     // Le poids demande une requête : on l'affiche dès qu'elle répond, sans
     // bloquer le rendu de la barre.
     repository.getSelectionWeight([...state.selection]).then(({ count, bytes }) => {
       if (weight.isConnected) {
-        weight.textContent = `${count} محدد • ${formatBytes(bytes) || '0 ك.ب'}`;
+        weight.textContent = t('explore.selectedSize', {
+          count,
+          size: formatBytes(bytes) || t('format.zeroBytes'),
+        });
       }
     });
 
@@ -281,7 +289,7 @@ export function exploreView(host, params) {
             draw();
           },
         },
-        'تحديد كل الصفحة',
+        t('explore.selectPage'),
       ),
       h(
         'button',
@@ -291,9 +299,9 @@ export function exploreView(host, params) {
           onclick: () => downloadSelection(),
         },
         icon('download', { size: 18 }),
-        h('span', {}, 'تنزيل المحدد'),
+        h('span', {}, t('explore.downloadSelected')),
       ),
-      collectionPickerButton(() => [...state.selection], { label: 'أضف إلى مجموعة' }),
+      collectionPickerButton(() => [...state.selection], { label: t('explore.addToCollection') }),
       h(
         'button',
         {
@@ -304,7 +312,7 @@ export function exploreView(host, params) {
             draw();
           },
         },
-        'إلغاء',
+        t('action.cancel'),
       ),
     );
   }
@@ -313,9 +321,9 @@ export function exploreView(host, params) {
     const ids = [...state.selection];
     const { count, bytes } = await repository.getSelectionWeight(ids);
     const choice = await confirmDialog({
-      title: `تنزيل ${count} كتابًا؟`,
-      message: `الحجم الإجمالي ${formatBytes(bytes) || '0 ك.ب'}.`,
-      actions: [{ value: 'go', label: 'تنزيل', variant: 'filled' }],
+      title: t('explore.downloadTitle', { count }),
+      message: t('explore.downloadSize', { size: formatBytes(bytes) || t('format.zeroBytes') }),
+      actions: [{ value: 'go', label: t('explore.download'), variant: 'filled' }],
     });
     if (choice !== 'go') return;
     await repository.downloadSelection(ids);
@@ -335,11 +343,11 @@ export function exploreView(host, params) {
       return h(
         'div',
         { class: 'explore__results' },
-        emptyView('لا نتائج مطابقة'),
+        emptyView(t('explore.noResults')),
         h(
           'button',
           { class: 'button button--tonal', onclick: () => update({ ...EMPTY_QUERY }) },
-          'مسح المرشّحات',
+          t('explore.clearFilters'),
         ),
       );
     }
@@ -370,7 +378,7 @@ export function exploreView(host, params) {
           disabled: state.loading,
           onclick: () => load({ append: true }),
         },
-        state.loading ? 'جارٍ التحميل…' : 'عرض المزيد',
+        t(state.loading ? 'state.loading' : 'explore.more'),
       );
 
     return h('div', { class: 'explore__results' }, grid, more);

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Génère les bases SQLite d'exemple (catalog + book) conformes à DATAMODEL.md.
 
-Sortie : beytelhikma/assets/sample/
+Sortie : beytelhikma-electron/assets/sample/
     catalog.sqlite
     books/<edition_id>.sqlite
 
@@ -30,8 +30,13 @@ from _common import (
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(ROOT, "beytelhikma", "assets", "sample")
+OUT_DIR = os.path.join(ROOT, "beytelhikma-electron", "assets", "sample")
 BOOKS_DIR = os.path.join(OUT_DIR, "books")
+
+# Autres copies du jeu d'exemple à tenir synchrones. Vide depuis le retrait du
+# client Flutter ; le mécanisme reste, car deux copies recopiées à la main ont
+# déjà dérivé (un changement de schéma les avait laissées désaccordées).
+MIRROR_DIRS: list[str] = []
 
 CONTENT_VERSION = 1
 
@@ -611,7 +616,7 @@ def build_catalog(manifests: dict) -> None:
         )
         con.execute(
             """INSERT INTO book_releases (release_id, edition_id, schema_version, content_version,
-                                          source_version, download_url, compressed_size,
+                                          source_version, object_key, compressed_size,
                                           uncompressed_size, sha256, page_count, toc_count,
                                           fts_version, min_app_version, published_at, is_active)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
@@ -656,6 +661,23 @@ def build_catalog(manifests: dict) -> None:
     con.close()
 
 
+def mirror() -> None:
+    """Recopie le jeu produit dans les miroirs, à l'identique.
+
+    `shutil.copytree(dirs_exist_ok=True)` écrase mais ne supprime pas : un livre
+    retiré du jeu resterait dans le miroir. On repart donc d'un dossier vide.
+    """
+    import shutil
+
+    for target in MIRROR_DIRS:
+        parent = os.path.dirname(target)
+        if not os.path.isdir(parent):
+            continue  # implémentation absente de cette copie de travail
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(OUT_DIR, target)
+        print(f"miroir  -> {os.path.join(target, 'catalog.sqlite')}")
+
+
 def main() -> None:
     os.makedirs(BOOKS_DIR, exist_ok=True)
     manifests = {}
@@ -664,6 +686,7 @@ def main() -> None:
         print(f"book   {book['edition_id']:20s} {manifests[book['edition_id']]['page_count']} pages")
     build_catalog(manifests)
     print(f"catalog {len(BOOKS)} éditions -> {os.path.join(OUT_DIR, 'catalog.sqlite')}")
+    mirror()
 
 
 if __name__ == "__main__":

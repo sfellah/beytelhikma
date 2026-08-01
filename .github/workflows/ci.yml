@@ -1,0 +1,54 @@
+# La barrière de tous les jours : rien ne se fusionne sur une suite rouge.
+#
+# Les deux suites tournent en parallèle et sont indépendantes — une coquille
+# dans le site ne doit pas masquer une régression de l'application, ni
+# l'inverse.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: beytelhikma-electron/package-lock.json
+      # `npm ci` télécharge le binaire Electron, dont la suite n'a pas besoin :
+      # elle tourne sous `node --test` et n'ouvre aucune fenêtre.
+      - run: npm ci
+        working-directory: beytelhikma-electron
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm test
+        working-directory: beytelhikma-electron
+
+  site:
+    name: site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      # Le site n'a aucune dépendance : pas de `npm ci`, rien à installer.
+      # `--books` évite de télécharger la graine du catalogue pour un test de
+      # rendu ; le nombre réel est vérifié au moment de publier.
+      - run: node --test "test/**/*.test.js"
+        working-directory: site
+      - run: node build.mjs --books 8568 --allow-missing
+        working-directory: site

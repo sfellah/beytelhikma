@@ -13,6 +13,20 @@
     <link rel="stylesheet" href="styles/shell.css" />
     <link rel="stylesheet" href="styles/components.css" />
     <link rel="stylesheet" href="styles/views.css" />
+    <!-- Le thème se pose avant que `app.js` ne monte quoi que ce soit, depuis
+         un miroir `localStorage` lu en synchrone : `user.sqlite` arrive par IPC
+         après le premier rendu, et sans ce miroir ouvrir l'application en mode
+         nuit donnerait un éclair blanc. Module et non script inline : le CSP
+         ci-dessus est `script-src 'self'`. -->
+    <script type="module" src="js/theme.js"></script>
+    <!-- Même raison pour la langue : `dir` et `lang` se posent depuis un miroir
+         avant le premier rendu, sinon une interface anglaise s'ouvrirait en RTL
+         arabe puis basculerait, à chaque lancement. Les attributs ci-dessus sur
+         `<html>` ne sont donc que le défaut, corrigé avant peinture. -->
+    <script type="module" src="js/i18n.js"></script>
+    <!-- Et la police d'interface, pour la même raison : sans miroir, l'écran
+         s'ouvrirait dans la face par défaut puis sauterait à celle choisie. -->
+    <script type="module" src="js/app-font.js"></script>
   </head>
   <body>
     <div id="app"></div>

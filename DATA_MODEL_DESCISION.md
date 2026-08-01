@@ -361,7 +361,7 @@ CREATE TABLE book_releases (
     schema_version      INTEGER NOT NULL,
     content_version     INTEGER NOT NULL,
     source_version      TEXT,
-    download_url        TEXT NOT NULL,
+    object_key          TEXT NOT NULL,
     manifest_url        TEXT,
     compressed_size     INTEGER NOT NULL,
     uncompressed_size   INTEGER NOT NULL,
@@ -389,6 +389,38 @@ Cette table permet à l'application de connaître :
 - le hash attendu ;
 - la compatibilité avec l'application ;
 - la release active.
+
+### `object_key` : une clé, pas une URL
+
+La colonne s'appelait `download_url` et contenait une URL absolue. Elle liait le
+catalogue à l'hébergeur qui l'avait publié : servir les mêmes livres depuis un
+autre bucket imposait de republier le catalogue entier.
+
+Elle contient désormais une **clé relative** à une base configurée côté client :
+
+```text
+books/<edition_id>/<content_version>/book.sqlite.zst
+```
+
+L'application colle cette clé derrière son réglage `distribution.base_url`. Une
+seule règle décide, et elle est explicite : **la présence de `://` marque un
+absolu**.
+
+| Valeur | Effet |
+| --- | --- |
+| `books/sh-8/1/book.sqlite.zst` | téléchargée depuis la base configurée |
+| `https://autre-hote/x.zst` | téléchargée telle quelle, base ignorée |
+| `asset://books/x.sqlite` | copiée depuis les assets embarqués |
+| `local://books/x.sqlite` | copiée depuis la bibliothèque source locale |
+
+Les deux dernières formes gardent `assets/sample` et `dist/shamela` utilisables
+hors ligne, et permettent aux tests de tourner sans réseau. La deuxième rend la
+migration douce : un catalogue publié à l'ancienne continue de fonctionner.
+
+Ce changement porte `schema_version` du catalogue à **2**. Un client de schéma 1
+ne sait pas lire un catalogue de schéma 2 — c'est pourquoi le pointeur de
+distribution (`catalog/latest.json`) l'annonce, et qu'une application trop
+ancienne refuse d'installer avant de télécharger.
 
 ### Convention de versioning
 
@@ -1302,7 +1334,7 @@ erDiagram
         string edition_id FK
         int schema_version
         int content_version
-        string download_url
+        string object_key
         string sha256
         boolean is_active
     }

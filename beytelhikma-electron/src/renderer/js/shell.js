@@ -1,15 +1,30 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
+import { n, t } from './i18n.js';
 import { onDownloadsChanged, repository } from './repository.js';
 import { navigate } from './router.js';
 
+/**
+ * Navigation. `primary` marque les cinq entrées de la barre du bas : sur un
+ * écran étroit, sept onglets deviennent illisibles — le rail complet reste
+ * accessible dès que la fenêtre s'élargit.
+ */
 const NAV = [
-  { key: 'home', path: '/home', label: 'الرئيسية', icon: 'home' },
-  { key: 'library', path: '/library', label: 'مكتبتي', icon: 'bookOpen' },
-  { key: 'downloads', path: '/downloads', label: 'التنزيلات', icon: 'download' },
-  { key: 'explore', path: '/explore', label: 'استكشاف', icon: 'compass' },
-  { key: 'authors', path: '/authors', label: 'المؤلفون', icon: 'pen' },
+  { key: 'home', path: '/home', label: 'nav.home', icon: 'home', primary: true },
+  { key: 'library', path: '/library', label: 'nav.library', icon: 'bookOpen', primary: true },
+  { key: 'downloads', path: '/downloads', label: 'nav.downloads', icon: 'download', primary: true },
+  { key: 'explore', path: '/explore', label: 'nav.explore', icon: 'compass', primary: true },
+  { key: 'search', path: '/search', label: 'nav.search', icon: 'search' },
+  { key: 'notes', path: '/notes', label: 'nav.notes', icon: 'notes', primary: true },
+  { key: 'authors', path: '/authors', label: 'nav.authors', icon: 'pen' },
 ];
+
+/**
+ * Les réglages ferment le rail, séparés du reste : le rail liste ce qu'on lit,
+ * régler n'est pas une destination de lecture. Au pied de la colonne, c'est
+ * aussi la seule entrée qui ne bouge jamais de place.
+ */
+const SETTINGS = { key: 'settings', path: '/settings', label: 'nav.settings', icon: 'sliders' };
 
 /**
  * Nombre de travaux dans la file, tenu à jour pour la pastille de navigation.
@@ -35,7 +50,7 @@ function paintBadges() {
   for (const node of document.querySelectorAll('[data-nav="downloads"]')) {
     node.querySelector('.nav-badge')?.remove();
     if (activeDownloads > 0) {
-      node.append(h('span', { class: 'nav-badge label-sm' }, String(activeDownloads)));
+      node.append(h('span', { class: 'nav-badge label-sm' }, n(activeDownloads)));
     }
   }
 }
@@ -89,32 +104,33 @@ export function brandMark(size = 36) {
 
 function railItem({ key, path, label, icon: name }, active) {
   const current = key === active;
+  const text = t(label);
   return h(
     'a',
     {
       class: `rail__item${current ? ' is-active' : ''}`,
       href: `#${path}`,
-      title: label,
+      title: text,
       dataset: { nav: key },
       'aria-current': current ? 'page' : null,
     },
     h('span', { class: 'rail__item-icon' }, icon(name, { size: 22 })),
-    h('span', {}, label),
+    h('span', {}, text),
   );
 }
 
 function rail(active) {
   return h(
     'nav',
-    { class: 'rail', 'aria-label': 'التنقل الرئيسي' },
+    { class: 'rail', 'aria-label': t('nav.aria') },
     h(
       'div',
       { class: 'rail__brand' },
       h(
         'a',
-        { href: '#/home', title: 'بيت الحكمة' },
+        { href: '#/home', title: t('app.name') },
         brandMark(40),
-        h('span', { class: 'rail__wordmark' }, 'بيت الحكمة'),
+        h('span', { class: 'rail__wordmark' }, t('app.name')),
       ),
     ),
     h(
@@ -122,30 +138,34 @@ function rail(active) {
       { class: 'rail__list' },
       NAV.map((item) => railItem(item, active)),
     ),
-    h(
-      'div',
-      { class: 'rail__footer' },
-      railItem(
-        { key: 'settings', path: '/settings', label: 'الإعدادات', icon: 'sliders' },
-        active,
-      ),
-    ),
+    h('div', { class: 'rail__footer' }, railItem(SETTINGS, active)),
   );
 }
 
 /**
  * Barre supérieure : la marque, la recherche, les réglages. Pas de compte ni
  * de notifications — l'application est locale, il n'y a personne à notifier.
+ *
+ * Les réglages vivent au pied du rail. Le bouton de cette barre est masqué dès
+ * que le rail paraît (900 px) et ne sert donc qu'en fenêtre étroite, où il n'y
+ * a pas de rail et où la barre du bas est déjà pleine — cinq onglets, sept la
+ * rendraient illisible.
  */
 function topbar() {
+  // Deux destinations pour un même champ : `Entrée` cherche un livre dans le
+  // catalogue, `Ctrl+Entrée` (ou le bouton) cherche le terme dans le texte des
+  // livres installés. Chercher un titre et chercher un passage ne se mélangent
+  // pas dans une même liste de résultats.
+  const term = () => field.value.trim();
+  const go = (base) => navigate(`${base}${term() ? `?text=${encodeURIComponent(term())}` : ''}`);
+
   const field = h('input', {
     type: 'search',
-    'aria-label': 'البحث في المكتبة',
-    placeholder: 'البحث عن كتاب، مؤلف، طبعة…',
+    'aria-label': t('search.aria'),
+    placeholder: t('search.placeholder'),
     onkeydown: (event) => {
       if (event.key !== 'Enter') return;
-      const term = field.value.trim();
-      navigate(`/explore${term ? `?text=${encodeURIComponent(term)}` : ''}`);
+      go(event.ctrlKey || event.metaKey ? '/search' : '/explore');
     },
   });
   searchField = field;
@@ -157,13 +177,22 @@ function topbar() {
       'a',
       { class: 'topbar__brand', href: '#/home' },
       brandMark(34),
-      h('span', {}, 'بيت الحكمة'),
+      h('span', {}, t('app.name')),
     ),
     h(
       'div',
       { class: 'topbar__search' },
       icon('search', { size: 20 }),
       field,
+      h(
+        'button',
+        {
+          class: 'topbar__in-text label-sm',
+          title: t('search.inTextTitle'),
+          onclick: () => go('/search'),
+        },
+        t('search.inText'),
+      ),
       h('kbd', { class: 'topbar__hint label-sm' }, 'Ctrl K'),
     ),
     h(
@@ -174,8 +203,8 @@ function topbar() {
         {
           class: 'topbar__icon-button',
           href: '#/settings',
-          title: 'الإعدادات',
-          'aria-label': 'الإعدادات',
+          title: t('nav.settings'),
+          'aria-label': t('nav.settings'),
         },
         icon('sliders', { size: 22 }),
       ),
@@ -187,7 +216,7 @@ function bottomNav(active) {
   return h(
     'nav',
     { class: 'bottom-nav' },
-    NAV.map((item) =>
+    NAV.filter((item) => item.primary).map((item) =>
       h(
         'a',
         {
@@ -196,34 +225,47 @@ function bottomNav(active) {
           dataset: { nav: item.key },
         },
         h('span', { class: 'bottom-nav__bubble' }, icon(item.icon, { size: 22 })),
-        h('span', {}, item.label),
+        h('span', {}, t(item.label)),
       ),
     ),
   );
 }
 
-/** Message éphémère : les écrans non implémentés le disent au lieu de rien. */
+/**
+ * Message éphémère : les écrans non implémentés le disent au lieu de rien.
+ * Le retrait passe par `is-leaving` puis un délai : arracher le nœud du DOM
+ * laissait le message disparaître d'un coup alors qu'il était arrivé en
+ * douceur — la sortie est simplement plus courte que l'entrée.
+ */
 export function toast(message) {
   const existing = document.querySelector('.toast');
   existing?.remove();
   const node = h('div', { class: 'toast label-md' }, message);
   document.body.append(node);
-  setTimeout(() => node.remove(), 2600);
+  setTimeout(() => {
+    node.classList.add('is-leaving');
+    setTimeout(() => node.remove(), 160);
+  }, 2600);
 }
 
-/** Vue des sections encore hors périmètre (استكشاف، المؤلفون، الإعدادات). */
-export function placeholderView(title, message, activeKey) {
+/**
+ * Vue des sections encore hors périmètre. Reçoit des **clés**, pas des textes :
+ * elle est construite à l'import de `app.js`, donc un texte traduit à cet
+ * endroit resterait dans la langue du démarrage. La traduction se fait au
+ * montage, à chaque montage.
+ */
+export function placeholderView(titleKey, messageKey, activeKey) {
   return (host) => {
     const content = renderShell(host, { active: activeKey });
     content.append(
       h(
         'section',
         {},
-        h('h1', { class: 'display-lg', style: { color: 'var(--deep-emerald)' } }, title),
+        h('h1', { class: 'display-lg', style: { color: 'var(--deep-emerald)' } }, t(titleKey)),
         h(
           'p',
           { class: 'body-lg muted', style: { marginTop: 'var(--space-md)' } },
-          message,
+          t(messageKey),
         ),
         h(
           'button',
@@ -232,7 +274,7 @@ export function placeholderView(title, message, activeKey) {
             style: { marginTop: 'var(--space-xl)' },
             onclick: () => navigate('/home'),
           },
-          'العودة للرئيسية',
+          t('shell.backHome'),
         ),
       ),
     );

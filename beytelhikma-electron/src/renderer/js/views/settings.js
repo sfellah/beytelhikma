@@ -1,27 +1,29 @@
+import { DEFAULT_READER_FONT, fontsForScript, resolveFont } from '../../../shared/fonts.js';
+import { currentAppFont, interfaceScript, setAppFont } from '../app-font.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
+import { currentLocale, LOCALES, n, setLocale, t } from '../i18n.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
+import { copyField } from '../components/copy-field.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
+import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
-
-const THEMES = [
-  ['paper', 'ورقي'],
-  ['sepia', 'بني'],
-  ['night', 'ليلي'],
-];
-
-const FONTS = [
-  ['serif', 'نسخي'],
-  ['sans', 'حديث'],
-];
+import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
+import { themeChoices } from '../components/theme-choices.js';
 
 const MIN_FONT = 16;
 const MAX_FONT = 34;
 
-/** Réglages : lecture, stockage, serveur, informations. */
+/**
+ * Réglages.
+ *
+ * Six blocs, dans cet ordre : ce qu'on règle souvent d'abord, ce qui détruit
+ * en dernier. « حذف كل الكتب » vivait au milieu de l'écran, entre deux boutons
+ * « فتح » anodins — on pouvait l'atteindre en passant.
+ */
 export function settingsView(host) {
   const content = renderShell(host, { active: 'settings' });
 
@@ -38,30 +40,50 @@ export function settingsView(host) {
     return h(
       'section',
       { class: 'settings' },
-      h('h1', { class: 'display-lg' }, 'الإعدادات'),
-      readingSection(prefs),
-      storageSection(usage, refresh),
+      h('h1', { class: 'display-lg' }, t('settings.title')),
+      languageSection(),
+      fontsSection(prefs, refresh),
+      librarySection(usage),
       serverSection(prefs, refresh),
       aboutSection(about, usage),
+      dangerSection(usage, refresh),
     );
   }
 
   return null;
 }
 
-function group(title, description, ...rows) {
+/**
+ * Un bloc. L'icône en tête n'est pas décorative : les six titres se
+ * ressemblaient tous, et rien ne distinguait « المظهر » de « منطقة الخطر ».
+ */
+function group(name, title, description, ...rows) {
   return h(
     'section',
-    { class: 'settings__group' },
+    { class: `settings__group settings__group--${name}` },
     h(
       'div',
-      {},
-      h('h2', { class: 'headline-lg' }, title),
-      description && h('p', { class: 'body-md muted' }, description),
+      { class: 'settings__head' },
+      h('span', { class: 'settings__badge' }, icon(SECTION_ICONS[name], { size: 20 })),
+      h(
+        'div',
+        {},
+        h('h2', { class: 'headline-lg' }, title),
+        description && h('p', { class: 'body-md muted' }, description),
+      ),
     ),
     ...rows,
   );
 }
+
+const SECTION_ICONS = {
+  language: 'translate',
+  fonts: 'type',
+  library: 'bank',
+  server: 'globe',
+  about: 'help',
+  danger: 'trash',
+};
 
 function row(label, control, hint = null) {
   return h(
@@ -77,71 +99,329 @@ function row(label, control, hint = null) {
   );
 }
 
+/** Action visible : icône **et** libellé, jamais un mot seul comme « حفظ ». */
+function action(iconName, label, onclick, variant = 'tonal') {
+  return h(
+    'button',
+    { class: `button button--${variant}`, onclick },
+    icon(iconName, { size: 18 }),
+    h('span', {}, label),
+  );
+}
+
 /**
- * Les trois clés sont celles qu'écrit déjà le lecteur : les régler ici change
- * le point de départ des prochaines ouvertures, pas plus.
+ * Langue et apparence.
+ *
+ * L'aperçu de chiffres est le seul endroit où se voit que la forme des
+ * chiffres suit la langue — il n'y a pas de réglage de chiffres, et il ne doit
+ * pas y en avoir : `٤٢` est une propriété de l'arabe, pas un goût.
+ *
+ * Le thème n'a pas de valeur à recevoir : `themeChoices` lit celui qui est posé
+ * sur `<html>`, seule vérité affichable — les réglages peuvent avoir été
+ * chargés avant que `syncTheme` n'ait répondu.
  */
-function readingSection(prefs) {
+function languageSection() {
+
+  const choices = segmented({
+    ariaLabel: t('settings.language.title'),
+    value: currentLocale(),
+    options: LOCALES.map((locale) => ({ value: locale.key, label: locale.label })),
+    onPick: (key) => setLocale(key),
+  });
+
+  // Contrat de la campagne de captures, comme `data-tool` l'est pour la barre
+  // du lecteur : le libellé change avec la langue, pas l'attribut.
+  for (const [index, button] of [...choices.children].entries()) {
+    button.dataset.localeChoice = LOCALES[index].key;
+  }
+
+  return group(
+    'language',
+    t('settings.language.title'),
+    t('settings.language.hint'),
+    // L'aperçu de chiffres est l'indice de la ligne, pas une note flottante
+    // sous le contrôle : c'est ce que ce réglage change, dit à sa place.
+    row(
+      t('settings.language.title'),
+      choices,
+      t('settings.language.preview', { page: 42, total: 350 }),
+    ),
+    row(t('settings.theme'), themeChoices().node, t('settings.themeHint')),
+  );
+}
+
+/**
+ * Deux polices, deux domaines.
+ *
+ * Celle de l'interface suit la locale : les faces latines n'apparaissent qu'en
+ * anglais, les arabes qu'en arabe. Proposer EB Garamond à une interface arabe
+ * serait un choix sans effet visible.
+ *
+ * Chaque aperçu est rendu **dans sa propre face** — c'est la seule façon
+ * honnête de choisir une police, et la seule qui vaudra encore pour celles
+ * qu'on ajoutera depuis Google Fonts, dont on ne connaît que le nom.
+ */
+function fontsSection(prefs, refresh) {
+  const script = interfaceScript();
+
+  /**
+   * Le nom de la police **est** son échantillon : « أميري » composé en Amiri
+   * montre exactement ce qu'on choisit. Une phrase de démonstration répétée
+   * sous chaque option n'apprenait rien de plus — c'est la forme de la lettre
+   * qui distingue, pas le texte — et allongeait les segments jusqu'à les
+   * rendre illisibles à 13 px.
+   *
+   * Une police ajoutée porte son propre nom : il vient de la feuille de Google
+   * et n'a pas de clé de catalogue.
+   */
+  const options = (list) =>
+    list.map((font) => ({
+      value: font.key,
+      label: h(
+        'span',
+        {
+          class: 'settings__specimen',
+          style: { fontFamily: font.stack },
+          // Le tracé est le nom, mais il n'est pas *dit* : ce que la synthèse
+          // vocale annonce reste le libellé traduit.
+          'aria-label': font.user ? font.family : t(font.label),
+        },
+        font.specimen ?? font.family,
+      ),
+    }));
+
   const size = Number(prefs['reader.fontSize'] ?? 22);
-  const value = h('span', { class: 'label-md' }, String(size));
+  const value = h('span', { class: 'label-md' }, n(size));
   const slider = h('input', {
     type: 'range',
     min: MIN_FONT,
     max: MAX_FONT,
     value: String(size),
     oninput: (event) => {
-      value.textContent = event.target.value;
+      value.textContent = n(event.target.value);
     },
     onchange: (event) => setSetting('reader.fontSize', event.target.value),
   });
 
-  const choices = (key, options, current) =>
-    h(
-      'div',
-      { class: 'settings__choices' },
-      options.map(([id, label]) => {
-        const button = h(
-          'button',
-          {
-            class: `button button--tonal${current === id ? ' is-active' : ''}`,
-            onclick: () => {
-              setSetting(key, id);
-              for (const sibling of button.parentElement.children) {
-                sibling.classList.toggle('is-active', sibling === button);
-              }
-            },
-          },
-          label,
-        );
-        return button;
-      }),
-    );
-
   return group(
-    'القراءة',
-    'تُطبَّق عند فتح كتاب جديد.',
-    row('حجم الخط', h('div', { class: 'settings__slider' }, slider, value)),
-    row('المظهر', choices('reader.theme', THEMES, prefs['reader.theme'] ?? 'paper')),
-    row('نوع الخط', choices('reader.font', FONTS, prefs['reader.font'] ?? 'serif')),
+    'fonts',
+    t('settings.fonts'),
+    t('settings.fontsHint'),
+    row(
+      t('settings.interfaceFont'),
+      segmented({
+        ariaLabel: t('settings.interfaceFont'),
+        value: currentAppFont(script),
+        options: options(familiesFor(script, fontsForScript(script))),
+        onPick: (key) => setAppFont(key, script),
+      }),
+      t('settings.interfaceFontHint'),
+    ),
+    row(
+      t('settings.readerFont'),
+      segmented({
+        ariaLabel: t('settings.readerFont'),
+        // Le livre est arabe : seules les faces arabes sont proposées, quelle
+        // que soit la langue de l'interface.
+        value: resolveAnyFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
+        options: options(familiesFor('arab', fontsForScript('arab'))),
+        onPick: (key) => setSetting('reader.font', key),
+      }),
+      t('settings.readerFontHint'),
+    ),
+    row(t('settings.fontSize'), h('div', { class: 'settings__slider' }, slider, value)),
+    addFontRow(refresh),
   );
 }
 
-function storageSection(usage, refresh) {
+/**
+ * Ajouter une police, c'est **l'installer**, pas la lier.
+ *
+ * Le processus principal lit la feuille une fois, dépose les `woff2` dans
+ * `userData/fonts/` et n'y revient jamais. Ouvrir la CSP vers Google ferait
+ * perdre ses polices à un lecteur hors ligne et émettrait une requête vers un
+ * tiers à chaque lancement.
+ */
+function addFontRow(refresh) {
+  const field = h('input', {
+    type: 'url',
+    class: 'settings__field',
+    dir: 'ltr',
+    placeholder: 'https://fonts.googleapis.com/css2?family=Vibes&display=swap',
+  });
+
+  const bouton = action(
+    'plusSquare',
+    t('settings.addFont'),
+    async (event) => {
+      const url = field.value.trim();
+      if (!url) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const font = await repository.installFont(url);
+        await syncUserFonts();
+        field.value = '';
+        toast(t('settings.fontAdded', { family: font.family }));
+        refresh();
+      } catch (error) {
+        toast(error?.message ?? t('settings.fontFailed'));
+      } finally {
+        button.disabled = false;
+      }
+    },
+    'filled',
+  );
+
+  return row(
+    t('settings.addFont'),
+    h('div', { class: 'settings__inline' }, field, bouton),
+    t('settings.addFontHint'),
+  );
+}
+
+function librarySection(usage) {
   return group(
-    'التخزين',
-    `${usage.bookCount} كتابًا على هذا الجهاز • ${formatBytes(usage.bytes) || '0 ك.ب'}`,
+    'library',
+    t('settings.storage'),
+    t('settings.storageHint', {
+      count: usage.bookCount,
+      size: formatBytes(usage.bytes) || t('format.zeroBytes'),
+    }),
     row(
-      'قائمة التنزيل',
-      h(
-        'button',
-        { class: 'button button--tonal', onclick: () => navigate('/downloads') },
-        icon('download', { size: 18 }),
-        h('span', {}, 'فتح'),
-      ),
-      'التنزيلات الجارية والمتعثّرة',
+      t('settings.downloadsRow'),
+      action('download', t('settings.open'), () => navigate('/downloads')),
+      t('settings.downloadsHint'),
     ),
     row(
-      'حذف كل الكتب',
+      t('notes.title'),
+      action('notes', t('settings.open'), () => navigate('/notes')),
+      t('settings.notesHint'),
+    ),
+  );
+}
+
+/**
+ * `distribution.base_url` préfixe les clés du catalogue.
+ *
+ * Le catalogue ne porte plus d'hôte : changer cette seule valeur suffit à
+ * servir la même bibliothèque depuis un autre bucket, sans rien retélécharger
+ * de ce qui est déjà installé. Le réglage s'applique à la file sans redémarrage.
+ */
+function serverSection(prefs, refresh) {
+  const field = h('input', {
+    type: 'url',
+    class: 'settings__field',
+    dir: 'ltr',
+    value: prefs['distribution.base_url'] ?? '',
+    placeholder: 'https://beytelhima-library.s3.eu-west-1.amazonaws.com',
+  });
+
+  const état = h('span', { class: 'label-sm muted' }, t('settings.catalogUnchecked'));
+
+  return group(
+    'server',
+    t('settings.source'),
+    t('settings.sourceHint'),
+    row(
+      t('settings.sourceUrl'),
+      h(
+        'div',
+        { class: 'settings__inline' },
+        field,
+        action(
+          'check',
+          t('action.save'),
+          async () => {
+            await repository.setDownloadBaseUrl(field.value);
+            toast(t('settings.sourceSaved'));
+            refresh();
+          },
+          'filled',
+        ),
+      ),
+      t('settings.sourceApplied'),
+    ),
+    row(
+      t('settings.catalog'),
+      h(
+        'div',
+        { class: 'settings__inline' },
+        état,
+        action('download', t('settings.checkUpdates'), async (event) => {
+          const bouton = event.currentTarget;
+          bouton.disabled = true;
+          état.textContent = t('settings.catalogChecking');
+          try {
+            const verdict = await repository.checkCatalogUpdate();
+            if (verdict.action !== 'offer') {
+              état.textContent = t('settings.catalogUpToDate');
+              return;
+            }
+            état.textContent = t('settings.catalogDownloading');
+            const { catalogVersion } = await repository.installCatalogUpdate();
+            toast(t('settings.catalogUpdated', { version: catalogVersion }));
+            refresh();
+          } finally {
+            bouton.disabled = false;
+          }
+        }),
+      ),
+      t('settings.catalogHint'),
+    ),
+  );
+}
+
+/**
+ * Les deux premières lignes portent des chemins absolus : ils débordaient de la
+ * grille. Ils passent par `copyField`, qui les tient sur une ligne et les rend
+ * copiables — c'est ce qu'on en fait quand on rapporte un problème.
+ */
+function aboutSection(about, usage) {
+  const paths = [
+    [t('settings.librarySource'), about.librarySource],
+    [t('settings.dataFolder'), about.storageRoot],
+  ];
+  const facts = [
+    [t('settings.editionCount'), n(about.editionCount)],
+    [t('settings.categoryCount'), n(about.categoryCount)],
+    // Le numéro de schéma se rapporte : il reste en chiffres latins, comme les
+    // chemins et les URL de la grille au-dessus.
+    [t('settings.schemaVersion'), String(about.schemaVersion)],
+    [t('settings.usedSpace'), formatBytes(usage.bytes) || t('format.zeroBytes')],
+  ];
+
+  return group(
+    'about',
+    t('settings.about'),
+    null,
+    h(
+      'dl',
+      { class: 'meta-grid meta-grid--paths' },
+      paths.map(([label, value]) =>
+        h('div', {}, h('dt', {}, label), h('dd', {}, copyField(value, { label }))),
+      ),
+    ),
+    h(
+      'dl',
+      { class: 'meta-grid' },
+      facts.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))),
+    ),
+  );
+}
+
+/**
+ * Zone de danger, en fin d'écran et dans son propre cadre.
+ *
+ * Ce qui est irréversible ne doit pas se croiser en chemin vers autre chose.
+ */
+function dangerSection(usage, refresh) {
+  return group(
+    'danger',
+    t('settings.dangerZone'),
+    t('settings.dangerHint'),
+    row(
+      t('settings.deleteAll'),
       h(
         'button',
         {
@@ -149,79 +429,52 @@ function storageSection(usage, refresh) {
           disabled: usage.bookCount === 0,
           onclick: async () => {
             const choice = await confirmDialog({
-              title: 'حذف كل الكتب؟',
-              message: `سيُحرَّر ${formatBytes(usage.bytes)}. مواضع القراءة والمجموعات تبقى كما هي.`,
-              actions: [{ value: 'go', label: 'حذف الكل', variant: 'danger' }],
+              title: t('settings.deleteAllTitle'),
+              message: t('settings.deleteAllMessage', { size: formatBytes(usage.bytes) }),
+              actions: [{ value: 'go', label: t('settings.deleteAllAction'), variant: 'danger' }],
             });
             if (choice !== 'go') return;
             const removed = await repository.deleteAllBooks();
-            toast(`حُذف ${removed} كتابًا`);
+            toast(t('settings.deleted', { count: removed }));
             refresh();
           },
         },
-        'حذف',
+        icon('trash', { size: 18 }),
+        h('span', {}, t('action.delete')),
       ),
-      'تُحفظ مواضع القراءة، ويمكن إعادة التنزيل لاحقًا',
+      t('settings.deleteAllHint'),
     ),
-  );
-}
-
-/**
- * `minio.base_url` remplace l'origine des `download_url` du catalogue. Le
- * réglage s'applique immédiatement à la file, sans redémarrage.
- */
-function serverSection(prefs, refresh) {
-  const field = h('input', {
-    type: 'url',
-    class: 'settings__field',
-    value: prefs['minio.base_url'] ?? '',
-    placeholder: 'http://127.0.0.1:9000/beytelhikma',
-  });
-
-  return group(
-    'الخادم',
-    'اتركه فارغًا لاتّباع الروابط المسجّلة في الفهرس.',
-    row(
-      'عنوان الخادم',
-      h(
-        'div',
-        { class: 'settings__inline' },
-        field,
+    // Les polices ajoutées vivent dans `userData/fonts/` : aucune
+    // réinstallation ne les nettoie, il faut un moyen de les reprendre.
+    userFonts().length > 0 &&
+      row(
+        t('settings.removeFonts'),
         h(
-          'button',
-          {
-            class: 'button button--filled',
-            onclick: async () => {
-              await repository.setDownloadBaseUrl(field.value);
-              toast('حُفظ عنوان الخادم');
-              refresh();
-            },
-          },
-          'حفظ',
+          'div',
+          { class: 'settings__choices' },
+          userFonts().map((font) =>
+            h(
+              'button',
+              {
+                class: 'button button--danger',
+                onclick: async () => {
+                  const choice = await confirmDialog({
+                    title: t('settings.removeFontTitle', { family: font.family }),
+                    message: t('settings.removeFontMessage'),
+                    actions: [{ value: 'go', label: t('action.delete'), variant: 'danger' }],
+                  });
+                  if (choice !== 'go') return;
+                  await repository.removeFont(font.key);
+                  await syncUserFonts();
+                  refresh();
+                },
+              },
+              icon('trash', { size: 16 }),
+              h('span', {}, font.family),
+            ),
+          ),
         ),
+        t('settings.removeFontsHint'),
       ),
-      'يُطبَّق فورًا على التنزيلات التالية',
-    ),
-  );
-}
-
-function aboutSection(about, usage) {
-  const rows = [
-    ['مصدر المكتبة', about.librarySource],
-    ['مجلد البيانات', about.storageRoot],
-    ['عدد الطبعات في الفهرس', String(about.editionCount)],
-    ['عدد التخصصات', String(about.categoryCount)],
-    ['إصدار قاعدة المستخدم', String(about.schemaVersion)],
-    ['المساحة المستخدمة', formatBytes(usage.bytes) || '0 ك.ب'],
-  ];
-
-  return group(
-    'عن التطبيق',
-    null,
-    h(
-      'dl',
-      { class: 'meta-grid' },
-      rows.map(([label, value]) => h('div', {}, h('dt', {}, label), h('dd', {}, value))),
-    ),
   );
 }

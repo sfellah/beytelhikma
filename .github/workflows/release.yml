@@ -1,0 +1,158 @@
+# La chaîne de publication de l'application, déclenchée par un tag `v*`.
+#
+#   git tag v0.3.0 && git push --tags
+#
+# Quatre étapes dans cet ordre : on vérifie, on construit, on publie, on relit
+# sans identifiants. La dernière est la seule qui prouve que ce qui est en ligne
+# est atteignable par quelqu'un d'autre que nous — le projet applique déjà cette
+# règle à la publication du bucket, elle vaut pour les binaires.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag à publier (ex. v0.3.0)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  guard:
+    name: vérifications préalables
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # Un tag qui ne correspond pas à `package.json` produirait un installeur
+      # nommé d'une version et publié sous une autre. La divergence ne se verrait
+      # qu'après téléchargement.
+      - id: version
+        name: le tag correspond à la version du paquet
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./beytelhikma-electron/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Le tag $TAG ne correspond pas à la version $version de package.json."
+            exit 1
+          fi
+
+      # Les notes existent dans les trois langues, sinon la page `/releases`
+      # afficherait un trou dans une langue et pas dans les autres.
+      - name: les notes existent dans les trois langues
+        run: node site/release-notes.mjs "${{ steps.version.outputs.version }}" > /dev/null
+
+      - name: la suite de l'application est verte
+        run: |
+          npm ci --prefix beytelhikma-electron
+          npm test --prefix beytelhikma-electron
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: la suite du site est verte
+        run: node --test "test/**/*.test.js"
+        working-directory: site
+
+  build:
+    name: ${{ matrix.os }}
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+          - os: ubuntu-latest
+            target: --linux
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: beytelhikma-electron/package-lock.json
+
+      - run: npm ci
+        working-directory: beytelhikma-electron
+
+      # La graine est téléchargée depuis le bucket, jamais copiée d'un `dist/`
+      # local : l'installeur ne peut donc pas promettre un catalogue que le
+      # bucket n'a pas. `fetch-seed` s'arrête sans rien écrire si la source est
+      # injoignable — le build échoue franchement plutôt que d'embarquer une
+      # graine périmée.
+      - run: npm run seed
+        working-directory: beytelhikma-electron
+
+      - name: empaqueter et téléverser
+        run: npx --no-install electron-builder ${{ matrix.target }} --publish always
+        working-directory: beytelhikma-electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: publier la Release
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # Le corps de la Release vient des CHANGELOG, jamais l'inverse : c'est ce
+      # qui garantit que la page du site et la Release disent la même chose.
+      - name: rédiger le corps depuis les CHANGELOG
+        run: node site/release-notes.mjs "${{ needs.guard.outputs.version }}" > notes.md
+
+      - name: sortir du brouillon
+        run: gh release edit "$TAG" --notes-file notes.md --draft=false --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    name: relecture anonyme
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    steps:
+      # Sans identifiants, exprès. Une publication qui réussit derrière un jeton
+      # et échoue sans lui est un échec qui ne se voit qu'en production.
+      - name: le manifeste de mise à jour est lisible sans jeton
+        if: ${{ !github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${{ github.repository }}/releases/download/$TAG"
+          curl -fsSL --retry 5 --retry-delay 5 -o latest.yml "$base/latest.yml"
+          grep -q '^version:' latest.yml
+          curl -fsSL --retry 5 --retry-delay 5 -o latest-linux.yml "$base/latest-linux.yml"
+
+      - name: dépôt privé — relecture anonyme impossible
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "::warning::Le dépôt est privé : les artefacts ne sont pas téléchargeables sans jeton."
+          echo "::warning::Cette vérification ne prouvera rien tant que le dépôt ne sera pas public."
+
+  site:
+    name: publier le site
+    needs: publish
+    uses: ./.github/workflows/site.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

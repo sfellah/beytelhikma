@@ -3,14 +3,21 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const METHODS = [
+  'installFont',
+  'listFonts',
+  'removeFont',
   'getCategories',
+  'getTopCategories',
   'getRecentBooks',
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',
   'getFeaturedAuthor',
   'getAuthors',
+  'getAuthorStats',
+  'getBooksIn',
   'getEras',
+  'getUndatedCount',
   'getBooksByCentury',
   'getBooksByAuthor',
   'getToc',
@@ -45,7 +52,21 @@ const METHODS = [
   'getCollectionBooks',
   'deleteAllBooks',
   'setDownloadBaseUrl',
+  'checkCatalogUpdate',
+  'installCatalogUpdate',
+  'declineCatalogUpdate',
   'getAbout',
+  'getBookAnnotations',
+  'getAnnotations',
+  'saveHighlight',
+  'deleteHighlight',
+  'saveNote',
+  'deleteNote',
+  'toggleBookmark',
+  'deleteBookmark',
+  'searchLibrary',
+  'getManagedBooks',
+  'deleteBooks',
 ];
 
 const repository = {};

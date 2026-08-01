@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { n, t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 
@@ -33,17 +34,17 @@ export function pickCollection() {
                 'button',
                 { class: 'picker__item', onclick: () => settle(entry.id) },
                 h('span', { class: 'truncate' }, entry.name),
-                h('span', { class: 'label-sm muted' }, `${entry.bookCount}`),
+                h('span', { class: 'label-sm muted' }, n(entry.bookCount)),
               ),
             )
-          : [h('p', { class: 'label-md muted' }, 'لا توجد مجموعات بعد.')]),
+          : [h('p', { class: 'label-md muted' }, t('collection.none'))]),
       );
     }
 
     const field = h('input', {
       type: 'text',
       class: 'picker__field',
-      placeholder: 'مجموعة جديدة…',
+      placeholder: t('collection.new'),
       onkeydown: (event) => {
         if (event.key === 'Enter') create();
       },
@@ -67,7 +68,7 @@ export function pickCollection() {
       h(
         'div',
         { class: 'modal__panel', role: 'dialog', 'aria-modal': 'true' },
-        h('h3', { class: 'title-md' }, 'إضافة إلى مجموعة'),
+        h('h3', { class: 'title-md' }, t('collection.add')),
         list,
         h(
           'div',
@@ -78,7 +79,7 @@ export function pickCollection() {
         h(
           'div',
           { class: 'modal__actions' },
-          h('button', { class: 'button button--tonal', onclick: () => settle(null) }, 'إلغاء'),
+          h('button', { class: 'button button--tonal', onclick: () => settle(null) }, t('action.cancel')),
         ),
       ),
     );

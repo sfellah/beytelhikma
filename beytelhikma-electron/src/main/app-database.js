@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import zlib from 'node:zlib';
 import initSqlJs from 'sql.js';
 
 const require = createRequire(import.meta.url);
@@ -14,7 +15,7 @@ function engine() {
   return enginePromise;
 }
 
-export const USER_DB_SCHEMA_VERSION = 1;
+export const USER_DB_SCHEMA_VERSION = 3;
 
 /**
  * Au-delà de cette taille, `new SQL.Database(buffer)` charge le livre entier en
@@ -23,6 +24,80 @@ export const USER_DB_SCHEMA_VERSION = 1;
  * planter sans explication.
  */
 const BOOK_SIZE_WARNING = 128 * 1024 * 1024;
+
+/**
+ * Annotations personnelles (`DATAMODEL.md`, §4). Trois tables plutôt qu'une :
+ * une note peut exister sans surlignage (note de page), un surlignage sans note,
+ * et une note peut commenter un surlignage — `notes.highlight_id` porte ce lien.
+ *
+ * `start_offset` / `end_offset` comptent les caractères du **texte rendu** de la
+ * page. `selected_text`, `prefix_text` et `suffix_text` permettent de retrouver
+ * le passage si le rendu bouge : les décalages seuls seraient trop fragiles.
+ */
+const ANNOTATION_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS bookmarks (
+     bookmark_id TEXT PRIMARY KEY,
+     edition_id  TEXT NOT NULL,
+     page_id     INTEGER NOT NULL,
+     text_offset INTEGER,
+     label       TEXT,
+     created_at  TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS highlights (
+     highlight_id  TEXT PRIMARY KEY,
+     edition_id    TEXT NOT NULL,
+     page_id       INTEGER NOT NULL,
+     start_offset  INTEGER NOT NULL DEFAULT 0,
+     end_offset    INTEGER NOT NULL DEFAULT 0,
+     selected_text TEXT NOT NULL,
+     prefix_text   TEXT,
+     suffix_text   TEXT,
+     color         TEXT NOT NULL,
+     created_at    TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS notes (
+     note_id      TEXT PRIMARY KEY,
+     edition_id   TEXT NOT NULL,
+     page_id      INTEGER,
+     highlight_id TEXT,
+     content      TEXT NOT NULL,
+     created_at   TEXT NOT NULL,
+     updated_at   TEXT NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_bookmarks_edition  ON bookmarks (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_highlights_edition ON highlights (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_edition      ON notes (edition_id, page_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notes_highlight    ON notes (highlight_id)`,
+];
+
+/**
+ * Migrations de `user.sqlite`, indexées par la version qu'elles produisent.
+ * Une base fraîche part de `USER_SCHEMA` et saute directement à la version
+ * courante ; une base existante rejoue les paliers manquants.
+ */
+/**
+ * Polices ajoutées par l'utilisateur depuis Google Fonts. Les fichiers vivent
+ * dans `userData/fonts/<key>/` ; la table ne porte que de quoi les redéclarer.
+ *
+ * `faces` est du JSON — poids, sous-ensemble, fichier, `unicode-range` — parce
+ * qu'une police a autant de faces qu'elle a de poids et de sous-ensembles, et
+ * qu'aucune requête ne les interroge séparément.
+ */
+const USER_FONTS_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS user_fonts (
+     key          TEXT PRIMARY KEY,
+     family       TEXT NOT NULL,
+     scripts      TEXT NOT NULL,
+     source_url   TEXT NOT NULL,
+     installed_at TEXT NOT NULL,
+     faces        TEXT NOT NULL
+   )`,
+];
+
+const USER_MIGRATIONS = {
+  2: ANNOTATION_SCHEMA,
+  3: USER_FONTS_SCHEMA,
+};
 
 const USER_SCHEMA = [
   `CREATE TABLE downloaded_books (
@@ -57,12 +132,14 @@ const USER_SCHEMA = [
      key   TEXT PRIMARY KEY,
      value TEXT NOT NULL
    )`,
+  ...ANNOTATION_SCHEMA,
+  ...USER_FONTS_SCHEMA,
   `CREATE TABLE user_info (schema_version INTEGER NOT NULL)`,
   `INSERT INTO user_info (schema_version) VALUES (${USER_DB_SCHEMA_VERSION})`,
-  // sqflite, côté Flutter, se fie à `user_version` pour décider s'il doit créer
-  // le schéma. Sans cette ligne il lit 0, rejoue ses `CREATE TABLE` sur des
-  // tables déjà présentes et refuse d'ouvrir la base : les deux clients ne
-  // peuvent alors pas partager une même racine de bibliothèque.
+  // `user_version` reste posé : c'est le contrat qu'un autre client (l'ex-port
+  // Flutter s'y fiait via sqflite) lirait pour décider s'il doit créer le
+  // schéma. Sans lui, un client tiers lit 0, rejoue ses `CREATE TABLE` et
+  // refuse d'ouvrir la base — impossible de partager une racine de bibliothèque.
   `PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`,
 ];
 
@@ -119,14 +196,21 @@ export function resolveLibrarySource(projectRoot) {
  */
 export class AppDatabase {
   #source;
+  #seedArchive;
   #root;
   #catalog = null;
   #user = null;
   #books = new Map();
 
-  constructor({ librarySource, storageRoot }) {
-    if (!librarySource) throw new Error('librarySource est requis');
+  /**
+   * [librarySource] est un dossier de développement, absent d'une application
+   * empaquetée : [seedArchive] prend alors le relais pour le seul catalogue.
+   * Sans source, aucun livre ne peut venir d'ailleurs que du bucket — ce qui
+   * est exactement le comportement voulu en production.
+   */
+  constructor({ librarySource = null, seedArchive = null, storageRoot }) {
     this.#source = librarySource;
+    this.#seedArchive = seedArchive;
     this.#root = storageRoot;
   }
 
@@ -141,7 +225,30 @@ export class AppDatabase {
   async initialize() {
     fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
     this.#syncInstalledLibrary();
+    this.#plantSeed();
     await engine();
+  }
+
+  /**
+   * Décompresse la graine embarquée, **si et seulement si** aucun catalogue
+   * n'est installé.
+   *
+   * La graine est figée à la date du build. Le catalogue installé, lui, a pu
+   * être mis à jour depuis le bucket. L'écraser ferait régresser le catalogue
+   * de l'utilisateur à chaque installation d'une nouvelle version de
+   * l'application — une mise à jour qui retire des livres.
+   */
+  #plantSeed() {
+    if (!this.#seedArchive) return;
+    const cible = path.join(this.#root, 'catalog.sqlite');
+    if (fs.existsSync(cible)) return;
+    if (!fs.existsSync(this.#seedArchive)) return;
+
+    // Écriture de côté puis renommage : une coupure ne laisse jamais un
+    // catalogue tronqué qui serait pris pour valide au démarrage suivant.
+    const staged = `${cible}.seed`;
+    fs.writeFileSync(staged, zlib.zstdDecompressSync(fs.readFileSync(this.#seedArchive)));
+    fs.renameSync(staged, cible);
   }
 
   /**
@@ -153,6 +260,10 @@ export class AppDatabase {
    * simplement ignorées à la lecture.
    */
   #syncInstalledLibrary() {
+    // Sans source locale — application empaquetée — il n'y a pas de changement
+    // de source à détecter : le catalogue vient de la graine puis du bucket.
+    if (!this.#source) return;
+
     const marker = path.join(this.#root, 'library.json');
     const current = { source: path.resolve(this.#source) };
 
@@ -164,8 +275,18 @@ export class AppDatabase {
     }
 
     if (previous?.source !== current.source) {
+      // Le catalogue part : il appartient à l'ancienne source. Les livres, non.
+      //
+      // Cette méthode purgeait aussi `books/`. C'était correct quand la source
+      // était un dossier de développement qu'on changeait à la main. Avec un
+      // catalogue qui se met à jour tout seul depuis le bucket, ce serait
+      // retélécharger la bibliothèque entière à chaque rafraîchissement.
+      //
+      // La réconciliation se fait désormais par édition, à la lecture, en
+      // comparant `downloaded_books.release_id` au `release_id` actif
+      // (`BookRepository.#joinWithCatalog`). Aucun fichier de livre n'est
+      // supprimé ici. Jamais.
       fs.rmSync(path.join(this.#root, 'catalog.sqlite'), { force: true });
-      fs.rmSync(path.join(this.#root, 'books'), { recursive: true, force: true });
       fs.mkdirSync(path.join(this.#root, 'books'), { recursive: true });
       fs.writeFileSync(
         marker,
@@ -179,11 +300,20 @@ export class AppDatabase {
    * pas encore, si sa taille diffère, ou s'il est plus récent.
    *
    * La date compte autant que la taille : `tools/publish_minio.py` réécrit les
-   * `download_url` du catalogue sans forcément en changer la taille. Sans ce
+   * `object_key` du catalogue sans forcément en changer la taille. Sans ce
    * critère, l'application resterait sur l'ancien catalogue et continuerait de
    * chercher les livres en `local://`.
    */
   #materialize(relativePath, targetPath) {
+    // Application empaquetée : il n'y a pas de source à recopier, le fichier
+    // installé est la seule vérité.
+    if (!this.#source) {
+      if (fs.existsSync(targetPath)) return targetPath;
+      throw new Error(
+        `catalogue absent : ni bibliothèque source, ni graine embarquée, ni ${relativePath} installé`,
+      );
+    }
+
     const source = path.join(this.#source, relativePath);
     if (!fs.existsSync(source)) {
       if (fs.existsSync(targetPath)) return targetPath;
@@ -217,6 +347,19 @@ export class AppDatabase {
   }
 
   /**
+   * Referme le catalogue en mémoire et le rouvre depuis le disque.
+   *
+   * sql.js charge le fichier entier en mémoire : sans cette fermeture, l'ancien
+   * catalogue resterait servi jusqu'au redémarrage et l'échange n'aurait
+   * visiblement aucun effet.
+   */
+  async reloadCatalog() {
+    this.#catalog?.close();
+    this.#catalog = null;
+    return this.catalog();
+  }
+
+  /**
    * Ouvre un livre **installé**. Contrairement au catalogue, aucun fichier n'est
    * copié ici : c'est `download-manager.js` qui installe les livres.
    */
@@ -228,6 +371,11 @@ export class AppDatabase {
     const db = await this.#open(file);
     this.#books.set(editionId, db);
     return db;
+  }
+
+  /** Le livre est-il déjà chargé en mémoire ? */
+  isBookOpen(editionId) {
+    return this.#books.has(editionId);
   }
 
   /** Ferme un livre et le retire du cache : préalable à sa suppression. */
@@ -255,12 +403,35 @@ export class AppDatabase {
     const file = path.join(this.#root, 'user.sqlite');
     if (fs.existsSync(file)) {
       this.#user = new SQL.Database(fs.readFileSync(file));
+      if (this.#migrateUser()) this.#persistUser();
     } else {
       this.#user = new SQL.Database();
       for (const statement of USER_SCHEMA) this.#user.run(statement);
       this.#persistUser();
     }
     return this.#user;
+  }
+
+  /**
+   * Rejoue les paliers manquants sur une base existante. `user_version` fait
+   * foi : c'est le PRAGMA standard SQLite, celui que tout autre client lirait,
+   * et il doit porter la même valeur après migration.
+   */
+  #migrateUser() {
+    const db = this.#user;
+    const version = all(db, 'PRAGMA user_version')[0]?.user_version ?? 0;
+    if (version >= USER_DB_SCHEMA_VERSION) return false;
+
+    for (let step = version + 1; step <= USER_DB_SCHEMA_VERSION; step += 1) {
+      for (const statement of USER_MIGRATIONS[step] ?? []) db.run(statement);
+    }
+    db.run(`PRAGMA user_version = ${USER_DB_SCHEMA_VERSION}`);
+    // `user_info` est propre à cette implémentation : une base créée par un
+    // autre client ne l'a pas, et son absence ne doit pas casser la migration.
+    if (first(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='user_info'")) {
+      db.run('UPDATE user_info SET schema_version = ?', [USER_DB_SCHEMA_VERSION]);
+    }
+    return true;
   }
 
   /** Réécrit `user.sqlite` sur disque : sql.js ne connaît que la mémoire. */

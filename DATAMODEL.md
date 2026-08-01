@@ -135,7 +135,7 @@ C’est la table la plus importante pour le téléchargement.
 | `schema_version`    | INTEGER | Version du schéma SQLite |
 | `content_version`   | INTEGER | Version du contenu       |
 | `source_version`    | TEXT    | Version Shamela          |
-| `download_url`      | TEXT    | URL CDN/S3               |
+| `object_key`        | TEXT    | Clé relative à la base configurée ; `://` = absolu |
 | `compressed_size`   | INTEGER | Taille téléchargement    |
 | `uncompressed_size` | INTEGER | Taille installée         |
 | `sha256`            | TEXT    | Vérification intégrité   |
@@ -146,17 +146,52 @@ C’est la table la plus importante pour le téléchargement.
 | `published_at`      | TEXT    | Date de publication      |
 | `is_active`         | BOOLEAN | Release actuelle         |
 
-Exemple de chemin S3 :
+### `object_key` ne contient jamais d'hôte
+
+La colonne porte une clé **relative** à l'URL de base configurée côté client
+(`distribution.base_url`). Une seule règle : **la présence de `://` marque un
+absolu** — `asset://` et `local://` désignent alors la bibliothèque source, ce
+qui garde `assets/sample` et `dist/shamela` utilisables sans réseau.
+
+C'est ce qui rend un même catalogue servable depuis AWS, un MinIO local ou un
+CDN sans le republier. `tools/publish_minio.py` est le seul composant à connaître
+la disposition du bucket ; le client se contente de concaténer.
+
+Disposition réelle du bucket :
 
 ```text
-catalog/v12/catalog.sqlite.zst
+catalog/latest.json                             <- pointeur, Cache-Control: no-cache
+catalog/<catalog_version>/catalog.sqlite.zst    <- immutable
 
 books/
-  7f93.../
-    1/
+  <edition_id>/
+    <content_version>/
+      book.sqlite.zst
       manifest.json
-      book-package.zip
 ```
+
+Tout est immutable sauf `latest.json` : la version étant dans le chemin, aucune
+autre clé ne change jamais de contenu. Le pointeur, lui, est le seul objet qui
+bouge sous une clé fixe — le mettre en cache un an tuerait la mise à jour en
+silence.
+
+Le pointeur :
+
+```json
+{
+  "catalog_version": 1,
+  "schema_version": 2,
+  "generated_at": "2026-07-31T15:37:57Z",
+  "edition_count": 397,
+  "object_key": "catalog/1/catalog.sqlite.zst",
+  "sha256": "8d7f9e66…",
+  "compressed_size": 381781,
+  "uncompressed_size": 2068480
+}
+```
+
+Il porte `schema_version` pour qu'une application trop ancienne refuse
+d'installer **avant** de télécharger, plutôt que de casser après.
 
 Les URLs doivent être **immutables** : une nouvelle version crée un nouveau chemin.
 

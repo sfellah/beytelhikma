@@ -1,10 +1,3 @@
-# Dart / Flutter
-**/.dart_tool/
-**/build/
-**/.flutter-plugins
-**/.flutter-plugins-dependencies
-**/generated_plugin_registrant.dart
-
 # IDE
 .idea/
 *.iml
@@ -14,12 +7,31 @@
 Thumbs.db
 .DS_Store
 
-# Local config
-**/android/local.properties
-
 # Python (outils d'import)
 __pycache__/
 *.py[cod]
 
 # Sortie de tools/import_shamela.py (plusieurs centaines de Mo, régénérable)
 /dist/
+
+# Graine de catalogue embarquée : artefact de build, récupérée du bucket par
+# `scripts/fetch-seed.mjs`. La versionner mettrait plusieurs Mo de binaire dans
+# l'historique à chaque publication. Le jeu d'exemple, lui, reste versionné.
+beytelhikma-electron/assets/catalog.sqlite.zst
+beytelhikma-electron/assets/catalog-seed.json
+
+# Artefacts d'electron-builder
+beytelhikma-electron/release/
+
+# Site : le rendu et les données relevées depuis l'API GitHub sont des
+# artefacts. Les sources (gabarits, locales, captures curées) sont versionnées.
+site/dist/
+site/data/
+
+# Maquettes jetables du compagnon visuel de brainstorming
+.superpowers/
+
+# Identifiants du bucket de distribution. Jamais dans le dépôt.
+.env
+.env.*
+!.env.example

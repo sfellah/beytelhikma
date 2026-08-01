@@ -1,11 +1,11 @@
 {
   "edition_id": "ed-ihya-01",
   "title_ar": "إحياء علوم الدين",
-  "schema_version": 1,
+  "schema_version": 2,
   "content_version": 1,
   "page_count": 4,
   "toc_count": 3,
   "content_hash": "bca1927083a57c78f841a2077c5d6856f90f35232d1292d8687cfc4c094895af",
-  "sha256": "ee290b631832deec08cde9af74ffe4a772e67c0a35e090776583f2f3149ab769",
+  "sha256": "38581607cafc81469420d30a45fe2a6dcbaf65e7f26363b24dbb1e06e2587f8c",
   "size": 57344
 }
