@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { n } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -49,7 +50,7 @@ class SearchScreen {
     const field = h('input', {
       type: 'search',
       class: 'search__field',
-      placeholder: 'ابحث في نصوص كتبك المنزَّلة…',
+      placeholder: t('search.field'),
       value: this.#term,
       oninput: (event) => {
         clearTimeout(this.#timer);
@@ -71,7 +72,7 @@ class SearchScreen {
         h(
           'div',
           { class: 'search__header' },
-          h('h1', { class: 'display-lg' }, 'البحث في النصوص'),
+          h('h1', { class: 'display-lg' }, t('search.title')),
           h(
             'button',
             {
@@ -82,7 +83,7 @@ class SearchScreen {
                 ),
             },
             icon('compass', { size: 18 }),
-            h('span', {}, 'البحث في الفهرس'),
+            h('span', {}, t('search.inCatalog')),
           ),
         ),
         h('div', { class: 'search__box' }, icon('search', { size: 20 }), field),
@@ -95,15 +96,15 @@ class SearchScreen {
 
   #idle() {
     this.#token += 1; // annule un balayage encore en vol
-    this.#nodes.status.textContent = 'اكتب كلمتين على الأقل.';
+    this.#nodes.status.textContent = t('search.tooShort');
     this.#nodes.results.replaceChildren();
   }
 
   async #run() {
     const token = ++this.#token;
     const term = this.#term.trim();
-    this.#nodes.status.textContent = 'جارٍ البحث في الكتب المنزَّلة…';
-    this.#nodes.results.replaceChildren(loadingView('قد يستغرق فتح الكتب بضع ثوانٍ…'));
+    this.#nodes.status.textContent = t('search.running');
+    this.#nodes.results.replaceChildren(loadingView(t('search.slow')));
 
     try {
       const [texts, annotations] = await Promise.all([
@@ -118,7 +119,7 @@ class SearchScreen {
       if (texts.results.length) {
         sections.push(
           this.#section(
-            'في نصوص الكتب',
+            t('search.inBooks'),
             texts.results.map((entry) => this.#bookGroup(entry, term)),
           ),
         );
@@ -126,7 +127,7 @@ class SearchScreen {
       if (annotations.items.length) {
         sections.push(
           this.#section(
-            'في ملاحظاتي',
+            t('search.inNotes'),
             annotations.items.map((item) => this.#annotationRow(item)),
           ),
         );
@@ -136,9 +137,7 @@ class SearchScreen {
         sections.length
           ? h('div', {}, sections)
           : emptyView(
-              texts.installed
-                ? 'لا نتائج في الكتب المنزَّلة'
-                : 'لا كتب منزَّلة بعد — نزِّل كتابًا لتبحث في نصّه',
+              t(texts.installed ? 'search.noneInBooks' : 'search.noBooks'),
             ),
       );
     } catch (error) {
@@ -151,11 +150,13 @@ class SearchScreen {
   /** Ce qui a été balayé, et surtout ce qui ne l'a pas été. */
   #summary(texts, annotationCount) {
     const parts = [
-      `${n(texts.total)} موضعًا في ${n(texts.results.length)} كتابًا`,
+      t('search.summary.hits', { total: texts.total, books: texts.results.length }),
     ];
-    if (annotationCount) parts.push(`${n(annotationCount)} في الملاحظات`);
-    parts.push(`فُحص ${n(texts.scanned)} من ${n(texts.installed)} كتابًا منزَّلًا`);
-    if (texts.skipped) parts.push(`لم يُفحص ${n(texts.skipped)} كتابًا`);
+    if (annotationCount) parts.push(t('search.summary.notes', { count: annotationCount }));
+    parts.push(
+      t('search.summary.scanned', { scanned: texts.scanned, installed: texts.installed }),
+    );
+    if (texts.skipped) parts.push(t('search.summary.skipped', { count: texts.skipped }));
     return parts.join(' • ');
   }
 
@@ -183,7 +184,7 @@ class SearchScreen {
         h(
           'span',
           { class: 'label-sm muted' },
-          `${n(entry.matchCount)} موضعًا`,
+          t('search.matches', { count: entry.matchCount }),
         ),
       ),
       entry.pages.map((hit) =>
@@ -203,7 +204,7 @@ class SearchScreen {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${n(hit.printedPageNum ?? hit.sequenceNum)}`,
+            t('search.page', { page: hit.printedPageNum ?? hit.sequenceNum }),
           ),
         ),
       ),

@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { n } from '../format.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -9,10 +10,10 @@ import { pagination, PAGE_SIZES } from '../components/pagination.js';
 import { emptyView, errorView, loadingView } from '../components/states.js';
 
 const KINDS = [
-  { value: 'all', label: 'الكل', icon: 'notes' },
-  { value: 'note', label: 'الملاحظات', icon: 'noteAdd' },
-  { value: 'highlight', label: 'التظليلات', icon: 'highlight' },
-  { value: 'bookmark', label: 'العلامات', icon: 'bookmark' },
+  { value: 'all', label: 'notes.filter.all', icon: 'notes' },
+  { value: 'note', label: 'notes.filter.note', icon: 'noteAdd' },
+  { value: 'highlight', label: 'notes.filter.highlight', icon: 'highlight' },
+  { value: 'bookmark', label: 'notes.filter.bookmark', icon: 'bookmark' },
 ];
 
 /**
@@ -57,7 +58,7 @@ class NotesScreen {
     const search = h('input', {
       type: 'search',
       class: 'notes__search',
-      placeholder: 'ابحث في ملاحظاتي…',
+      placeholder: t('notes.search'),
       value: this.#query.text,
       oninput: (event) => {
         clearTimeout(this.#timer);
@@ -78,7 +79,7 @@ class NotesScreen {
         h(
           'div',
           { class: 'notes__header' },
-          h('h1', { class: 'display-lg' }, 'ملاحظاتي'),
+          h('h1', { class: 'display-lg' }, t('notes.title')),
           count,
         ),
         h(
@@ -109,7 +110,7 @@ class NotesScreen {
             },
           },
           icon(entry.icon, { size: 18 }),
-          h('span', {}, `${entry.label} (${n(sizeOf(entry.value))})`),
+          h('span', {}, `${t(entry.label)} (${n(sizeOf(entry.value))})`),
         ),
       ),
     );
@@ -128,14 +129,14 @@ class NotesScreen {
 
       this.#drawTabs(data.counts);
       this.#nodes.count.textContent = this.#query.text
-        ? `${n(data.total)} نتيجة لـ « ${this.#query.text} »`
-        : `${n(data.total)} عنصرًا`;
+        ? t('notes.countFor', { total: data.total, text: this.#query.text })
+        : t('notes.count', { total: data.total });
 
       this.#nodes.list.replaceChildren(
         data.items.length
           ? h('div', { class: 'notes__items' }, data.items.map((item) => this.#card(item)))
           : emptyView(
-              this.#query.text ? 'لا نتائج لهذا البحث' : 'لا ملاحظات بعد — ظلِّل نصًّا أثناء القراءة',
+              t(this.#query.text ? 'notes.noResults' : 'notes.empty'),
             ),
       );
 
@@ -214,9 +215,9 @@ class NotesScreen {
 
     if (item.kind === 'note') {
       return [
-        button('noteAdd', 'تعديل', async () => {
+        button('noteAdd', t('notes.edit'), async () => {
           const content = await noteDialog({
-            title: 'تعديل الملاحظة',
+            title: t('notes.editTitle'),
             quote: item.highlight?.selectedText ?? null,
             value: item.content,
             canDelete: true,
@@ -233,20 +234,20 @@ class NotesScreen {
             }),
           );
         }),
-        button('trash', 'حذف', () => this.#delete(item)),
+        button('trash', t('action.delete'), () => this.#delete(item)),
       ];
     }
-    return [button('trash', 'حذف', () => this.#delete(item))];
+    return [button('trash', t('action.delete'), () => this.#delete(item))];
   }
 
   async #delete(item) {
     const choice = await confirmDialog({
-      title: 'حذف هذا العنصر؟',
+      title: t('notes.deleteTitle'),
       message:
         item.kind === 'highlight'
-          ? 'التظليل والملاحظة المرتبطة به سيُحذفان.'
-          : 'لا يمكن التراجع عن هذا الحذف.',
-      actions: [{ value: 'go', label: 'حذف', variant: 'danger' }],
+          ? t('notes.deleteHighlight')
+          : t('notes.deleteFinal'),
+      actions: [{ value: 'go', label: t('action.delete'), variant: 'danger' }],
     });
     if (choice !== 'go') return;
 
@@ -261,7 +262,7 @@ class NotesScreen {
     try {
       await action();
     } catch (error) {
-      toast(error?.message ?? 'تعذّر تنفيذ العملية');
+      toast(error?.message ?? t('notes.actionFailed'));
     }
     if (this.#host.isConnected) this.#refresh();
   }

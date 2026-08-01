@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -25,8 +26,8 @@ export function collectionsStrip(onChanged) {
         h(
           'div',
           {},
-          h('h2', { class: 'headline-lg' }, 'المجموعات'),
-          h('p', { class: 'body-md muted' }, 'رتّب كتبك كما تشاء'),
+          h('h2', { class: 'headline-lg' }, t('collections.title')),
+          h('p', { class: 'body-md muted' }, t('collections.subtitle')),
         ),
       ),
       h(
@@ -44,7 +45,10 @@ export function collectionsStrip(onChanged) {
             h(
               'span',
               { class: 'label-sm muted' },
-              `${entry.bookCount} كتاب • ${entry.installedCount} مُنزَّل`,
+              t('collections.counts', {
+                books: entry.bookCount,
+                installed: entry.installedCount,
+              }),
             ),
           ),
         ),
@@ -53,7 +57,7 @@ export function collectionsStrip(onChanged) {
           {
             class: 'collection-card collection-card--new',
             onclick: async () => {
-              const name = await askName('مجموعة جديدة');
+              const name = await askName(t('collections.newTitle'));
               if (!name) return;
               await repository.createCollection(name);
               await refresh();
@@ -61,7 +65,7 @@ export function collectionsStrip(onChanged) {
             },
           },
           h('span', { class: 'collection-card__icon' }, icon('plusSquare', { size: 22 })),
-          h('span', { class: 'collection-card__name' }, 'مجموعة جديدة'),
+          h('span', { class: 'collection-card__name' }, t('collections.newTitle')),
         ),
       ),
     );
@@ -118,9 +122,9 @@ function askName(title, initial = '') {
               class: 'button button--filled',
               onclick: () => settle(field.value.trim() || null),
             },
-            'حفظ',
+            t('action.save'),
           ),
-          h('button', { class: 'button button--tonal', onclick: () => settle(null) }, 'إلغاء'),
+          h('button', { class: 'button button--tonal', onclick: () => settle(null) }, t('action.cancel')),
         ),
       ),
     );
@@ -151,10 +155,10 @@ export function collectionDetailView(host, params) {
     page: await repository.getCollectionBooks(id, query),
   });
 
-  const refresh = () => asyncView(content, load, render, { empty: 'هذه المجموعة فارغة' });
+  const refresh = () => asyncView(content, load, render, { empty: t('collections.empty') });
 
   function render({ collection, page }) {
-    if (!collection) return emptyView('لم نجد هذه المجموعة');
+    if (!collection) return emptyView(t('collections.notFound'));
 
     const books = page.rows;
     const missing = page.missing;
@@ -172,7 +176,10 @@ export function collectionDetailView(host, params) {
           h(
             'p',
             { class: 'body-md muted' },
-            `${collection.bookCount} كتاب • ${collection.installedCount} مُنزَّل`,
+            t('collections.counts', {
+              books: collection.bookCount,
+              installed: collection.installedCount,
+            }),
           ),
         ),
         h(
@@ -185,25 +192,25 @@ export function collectionDetailView(host, params) {
                 class: 'button button--filled',
                 onclick: async () => {
                   await repository.downloadSelection(missing);
-                  toast(`أُضيف ${missing.length} كتابًا إلى قائمة التنزيل`);
+                  toast(t('collections.queued', { count: missing.length }));
                   refresh();
                 },
               },
               icon('download', { size: 18 }),
-              h('span', {}, `تنزيل الباقي (${missing.length})`),
+              h('span', {}, t('collections.downloadRest', { count: missing.length })),
             ),
           h(
             'button',
             {
               class: 'button button--tonal',
               onclick: async () => {
-                const name = await askName('إعادة تسمية', collection.name);
+                const name = await askName(t('collections.rename'), collection.name);
                 if (!name) return;
                 await repository.renameCollection(id, name);
                 refresh();
               },
             },
-            'إعادة تسمية',
+            t('collections.rename'),
           ),
           h(
             'button',
@@ -211,16 +218,16 @@ export function collectionDetailView(host, params) {
               class: 'button button--tonal',
               onclick: async () => {
                 const choice = await confirmDialog({
-                  title: `حذف مجموعة «${collection.name}»؟`,
-                  message: 'تُحذف المجموعة وحدها؛ الكتب تبقى في مكتبتك.',
-                  actions: [{ value: 'go', label: 'حذف المجموعة', variant: 'danger' }],
+                  title: t('collections.deleteTitle', { name: collection.name }),
+                  message: t('collections.deleteMessage'),
+                  actions: [{ value: 'go', label: t('collections.deleteAction'), variant: 'danger' }],
                 });
                 if (choice !== 'go') return;
                 await repository.deleteCollection(id);
                 navigate('/library');
               },
             },
-            'حذف',
+            t('action.delete'),
           ),
         ),
       ),
@@ -234,7 +241,7 @@ export function collectionDetailView(host, params) {
               }),
             ),
           )
-        : emptyView('هذه المجموعة فارغة'),
+        : emptyView(t('collections.empty')),
       page.total > query.limit &&
         pagination({
           total: page.total,
