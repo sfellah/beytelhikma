@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 
 const CLASSES = {
   filled: 'button button--filled',
@@ -52,7 +53,7 @@ export function confirmDialog({ title, message, actions }) {
           'div',
           { class: 'modal__actions' },
           buttons,
-          h('button', { class: CLASSES.tonal, onclick: () => settle(null) }, 'إلغاء'),
+          h('button', { class: CLASSES.tonal, onclick: () => settle(null) }, t('action.cancel')),
         ),
       ),
     );
@@ -80,7 +81,7 @@ export function shortcutsDialog({ title, shortcuts }) {
     if (event.key === 'Escape') settle();
   };
 
-  const close = h('button', { class: CLASSES.tonal, onclick: () => settle() }, 'إغلاق');
+  const close = h('button', { class: CLASSES.tonal, onclick: () => settle() }, t('action.close'));
 
   const backdrop = h(
     'div',
@@ -144,7 +145,7 @@ export function noteDialog({ title, quote = null, value = '', canDelete = false 
     const field = h('textarea', {
       class: 'modal__textarea',
       rows: 5,
-      placeholder: 'اكتب ملاحظتك…',
+      placeholder: t('note.placeholder'),
       oninput: () => {
         save.disabled = !field.value.trim();
       },
@@ -165,7 +166,7 @@ export function noteDialog({ title, quote = null, value = '', canDelete = false 
         disabled: !value.trim(),
         onclick: () => settle(field.value.trim()),
       },
-      'حفظ',
+      t('action.save'),
     );
 
     const backdrop = h(
@@ -187,8 +188,8 @@ export function noteDialog({ title, quote = null, value = '', canDelete = false 
           { class: 'modal__actions' },
           save,
           canDelete &&
-            h('button', { class: CLASSES.danger, onclick: () => settle('') }, 'حذف'),
-          h('button', { class: CLASSES.tonal, onclick: () => settle(null) }, 'إلغاء'),
+            h('button', { class: CLASSES.danger, onclick: () => settle('') }, t('action.delete')),
+          h('button', { class: CLASSES.tonal, onclick: () => settle(null) }, t('action.cancel')),
         ),
       ),
     );

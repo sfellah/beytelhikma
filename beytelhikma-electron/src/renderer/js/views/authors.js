@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber, initial, ordinal } from '../format.js';
+import { initial, n, ordinal } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { renderShell } from '../shell.js';
@@ -71,9 +71,9 @@ function headerSection(stats) {
       'p',
       { class: 'body-lg authors__lede' },
       firstCentury && lastCentury
-        ? `${arabicNumber(authorCount)} مؤلفًا، ${arabicNumber(bookCount)} كتابًا،` +
+        ? `${n(authorCount)} مؤلفًا، ${n(bookCount)} كتابًا،` +
           ` من ${ordinal(firstCentury)} إلى ${ordinal(lastCentury)} الهجري.`
-        : `${arabicNumber(authorCount)} مؤلفًا، ${arabicNumber(bookCount)} كتابًا في الفهرس.`,
+        : `${n(authorCount)} مؤلفًا، ${n(bookCount)} كتابًا في الفهرس.`,
     ),
   );
 }
@@ -249,7 +249,7 @@ function centuriesSection(eras) {
             'a',
             { class: 'layer__label', href: `#/era/${era.century}` },
             h('span', { class: 'title-md layer__century' }, ordinal(era.century)),
-            h('span', { class: 'label-sm muted' }, `${arabicNumber(era.bookCount)} كتاب`),
+            h('span', { class: 'label-sm muted' }, `${n(era.bookCount)} كتاب`),
           ),
         ),
       ),
@@ -281,8 +281,8 @@ function indexSection() {
       if (mine !== token || !body.isConnected) return;
 
       subtitle.textContent = state.text
-        ? `${arabicNumber(total)} مؤلفًا يطابق « ${state.text} »`
-        : `${arabicNumber(total)} مؤلفًا في الفهرس`;
+        ? `${n(total)} مؤلفًا يطابق « ${state.text} »`
+        : `${n(total)} مؤلفًا في الفهرس`;
 
       body.replaceChildren(
         rows.length

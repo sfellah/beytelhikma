@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber } from '../format.js';
+import { n } from '../format.js';
 import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -198,8 +198,8 @@ class DownloadsScreen {
       if (token !== this.#token || !this.#host.isConnected) return;
 
       this.#nodes.summary.textContent =
-        `${arabicNumber(usage.bookCount)} كتابًا على هذا الجهاز • ${formatBytes(usage.bytes) || '٠ ك.ب'}` +
-        (jobs.length ? ` • ${arabicNumber(jobs.length)} في الطابور` : '');
+        `${n(usage.bookCount)} كتابًا على هذا الجهاز • ${formatBytes(usage.bytes) || '٠ ك.ب'}` +
+        (jobs.length ? ` • ${n(jobs.length)} في الطابور` : '');
 
       this.#drawQueue(jobs);
       this.#drawTable(listing);
@@ -291,7 +291,7 @@ class DownloadsScreen {
           h(
             'p',
             { class: 'label-sm muted' },
-            `${arabicNumber(percent)}٪ • ${formatBytes(job.receivedBytes)} / ${formatBytes(job.totalBytes)}`,
+            `${n(percent)}٪ • ${formatBytes(job.receivedBytes)} / ${formatBytes(job.totalBytes)}`,
           ),
       ),
       failed
@@ -381,7 +381,7 @@ class DownloadsScreen {
           'div',
           { class: 'books-table__status' },
           h('div', { class: 'progress' }, h('span', { style: { width: `${percent}%` } })),
-          h('span', { class: 'label-sm muted' }, `${arabicNumber(percent)}٪`),
+          h('span', { class: 'label-sm muted' }, `${n(percent)}٪`),
         )
       : h(
           'span',
@@ -427,7 +427,7 @@ class DownloadsScreen {
       h(
         'td',
         { class: 'books-table__num label-sm' },
-        row.pageCount ? arabicNumber(row.pageCount) : '—',
+        row.pageCount ? n(row.pageCount) : '—',
       ),
       h('td', { class: 'books-table__num label-sm' }, size ? formatBytes(size) : '—'),
       h('td', {}, statusCell),
@@ -495,7 +495,7 @@ class DownloadsScreen {
         h(
           'span',
           { class: 'label-md' },
-          `${arabicNumber(selected.length)} محدَّد`,
+          `${n(selected.length)} محدَّد`,
         ),
         missing.length > 0 &&
           h(
@@ -507,11 +507,11 @@ class DownloadsScreen {
                   const queued = await repository.downloadSelection(
                     missing.map((row) => row.editionId),
                   );
-                  toast(`أُضيف ${arabicNumber(queued)} كتابًا إلى الطابور`);
+                  toast(`أُضيف ${n(queued)} كتابًا إلى الطابور`);
                 }),
             },
             icon('download', { size: 18 }),
-            h('span', {}, `تنزيل (${arabicNumber(missing.length)})`),
+            h('span', {}, `تنزيل (${n(missing.length)})`),
           ),
         installed.length > 0 &&
           h(
@@ -521,7 +521,7 @@ class DownloadsScreen {
               onclick: () => this.#confirmDelete(installed),
             },
             icon('trash', { size: 18 }),
-            h('span', {}, `حذف (${arabicNumber(installed.length)})`),
+            h('span', {}, `حذف (${n(installed.length)})`),
           ),
         h(
           'button',
@@ -541,7 +541,7 @@ class DownloadsScreen {
   async #confirmDelete(rows) {
     const bytes = rows.reduce((total, row) => total + (row.localBytes || 0), 0);
     const choice = await confirmDialog({
-      title: rows.length === 1 ? 'حذف هذا الكتاب؟' : `حذف ${arabicNumber(rows.length)} كتابًا؟`,
+      title: rows.length === 1 ? 'حذف هذا الكتاب؟' : `حذف ${n(rows.length)} كتابًا؟`,
       message:
         `سيُحرَّر ${formatBytes(bytes) || '٠ ك.ب'}. ` +
         'مواضع القراءة والملاحظات تبقى كما هي، ويمكن إعادة التنزيل لاحقًا.',
@@ -552,7 +552,7 @@ class DownloadsScreen {
     await this.#run(async () => {
       const removed = await repository.deleteBooks(rows.map((row) => row.editionId));
       for (const row of rows) this.#selection.delete(row.editionId);
-      toast(`حُذف ${arabicNumber(removed)} كتابًا`);
+      toast(`حُذف ${n(removed)} كتابًا`);
     });
   }
 

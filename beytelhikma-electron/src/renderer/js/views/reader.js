@@ -1,7 +1,7 @@
 import { describeSelection, paintHighlights } from '../annotations.js';
 import { renderBookHtml } from '../content-html.js';
 import { h } from '../dom.js';
-import { arabicNumber } from '../format.js';
+import { n } from '../format.js';
 import { icon } from '../icons.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
@@ -522,7 +522,7 @@ class Reader {
               'span',
               { class: 'label-sm muted' },
               // jamais `pageId` : c'est l'identifiant source, global au corpus
-              `ص ${arabicNumber(entry.printedPageNum ?? entry.pageSequenceNum ?? '')}`,
+              `ص ${n(entry.printedPageNum ?? entry.pageSequenceNum ?? '')}`,
             ),
           ),
         ),
@@ -533,7 +533,7 @@ class Reader {
           ? h(
               'button',
               { class: 'button button--tonal', onclick: grow },
-              h('span', {}, `عرض المزيد (${arabicNumber(matches.length - shown)})`),
+              h('span', {}, `عرض المزيد (${n(matches.length - shown)})`),
             )
           : h('span', {}),
       );
@@ -702,7 +702,7 @@ class Reader {
             },
           },
           icon(kind.icon, { size: 16 }),
-          h('span', { class: 'label-sm' }, arabicNumber(counts[kind.value] ?? 0)),
+          h('span', { class: 'label-sm' }, n(counts[kind.value] ?? 0)),
         ),
       ),
     );
@@ -807,14 +807,14 @@ class Reader {
     this.#tocByPage ??= new Map(this.#toc.map((entry) => [entry.pageId, entry]));
     const entry = this.#tocByPage.get(pageId);
     const printed = entry?.printedPageNum ?? entry?.pageSequenceNum;
-    if (printed != null) return `ص ${arabicNumber(printed)}`;
+    if (printed != null) return `ص ${n(printed)}`;
 
     if (this.#pagesById?.size !== this.#pages.size) {
       this.#pagesById = new Map([...this.#pages.values()].map((item) => [item.pageId, item]));
     }
     const cached = this.#pagesById.get(pageId);
     const number = cached?.printedPageNum ?? cached?.sequenceNum;
-    return number == null ? '' : `ص ${arabicNumber(number)}`;
+    return number == null ? '' : `ص ${n(number)}`;
   }
 
   // ----------------------------------------------------------- annotations
@@ -975,7 +975,7 @@ class Reader {
       const result = await repository.toggleBookmark({
         editionId: this.#editionId,
         pageId: page.pageId,
-        label: this.#chapterFor(page) ?? `ص ${arabicNumber(page.printedPageNum ?? page.sequenceNum)}`,
+        label: this.#chapterFor(page) ?? `ص ${n(page.printedPageNum ?? page.sequenceNum)}`,
       });
       this.#annotations.bookmarks = result.added
         ? [...this.#annotations.bookmarks, result.bookmark]
@@ -1070,7 +1070,7 @@ class Reader {
     this.#highlight = arabicSearchPattern(trimmed);
     const total = found.chapters.length + found.pages.length;
     summary.textContent = total
-      ? `${arabicNumber(total)} نتيجة`
+      ? `${n(total)} نتيجة`
       : 'لا نتائج في هذا الكتاب.';
 
     // Les chapitres d'abord : trouver un titre vaut mieux qu'une occurrence
@@ -1084,7 +1084,7 @@ class Reader {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${arabicNumber(entry.printedPageNum ?? entry.sequenceNum)}`,
+            `ص ${n(entry.printedPageNum ?? entry.sequenceNum)}`,
           ),
         ),
       ),
@@ -1102,7 +1102,7 @@ class Reader {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${arabicNumber(entry.printedPageNum ?? entry.sequenceNum)}`,
+            `ص ${n(entry.printedPageNum ?? entry.sequenceNum)}`,
           ),
         ),
       ),
@@ -1257,8 +1257,8 @@ class Reader {
     // les mélange donc jamais dans un même « N sur M ».
     const printed = page.printedPageNum ?? page.sequenceNum;
     foot.textContent =
-      `صفحة ${arabicNumber(index + 1)} من ${arabicNumber(this.#pageCount)}` +
-      ` · المطبوعة ${arabicNumber(printed)}`;
+      `صفحة ${n(index + 1)} من ${n(this.#pageCount)}` +
+      ` · المطبوعة ${n(printed)}`;
 
     root.classList.toggle('is-bookmarked', this.#isBookmarked(page.pageId));
     this.#paintBlock(block);
@@ -1429,9 +1429,9 @@ class Reader {
 
     this.#nodes.slider.value = String(index + 1);
     this.#nodes.pagerLabel.textContent =
-      `${arabicNumber(index + 1)} / ${arabicNumber(this.#pageCount)}`;
+      `${n(index + 1)} / ${n(this.#pageCount)}`;
     const done = Math.round(this.#percent() * 100);
-    this.#nodes.percent.textContent = `${arabicNumber(done)}٪`;
+    this.#nodes.percent.textContent = `${n(done)}٪`;
     // Le rail n'a pas de remplissage natif une fois `appearance: none` posé :
     // c'est un dégradé, mis à jour ici, qui joue ce rôle.
     this.#nodes.root.style.setProperty('--reader-fill', `${done}%`);

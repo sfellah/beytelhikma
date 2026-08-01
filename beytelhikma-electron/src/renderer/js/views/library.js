@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber, ordinal } from '../format.js';
+import { n, ordinal } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -151,7 +151,7 @@ class LibraryScreen {
               this.#refresh();
             },
           },
-          h('span', {}, `${item.label} (${arabicNumber(counts[item.key] ?? 0)})`),
+          h('span', {}, `${item.label} (${n(counts[item.key] ?? 0)})`),
         ),
       ),
     );
@@ -165,7 +165,7 @@ class LibraryScreen {
 
       this.#drawCounts(counts);
       this.#nodes.lede.textContent = counts.all
-        ? `${arabicNumber(counts.all)} كتابًا في مكتبتك، ${arabicNumber(counts.reading)} قيد القراءة.`
+        ? `${n(counts.all)} كتابًا في مكتبتك، ${n(counts.reading)} قيد القراءة.`
         : 'مكتبتك فارغة بعد.';
 
       this.#nodes.grid.replaceChildren(
@@ -277,7 +277,7 @@ class ScopeScreen {
   }
 
   #subtitle(total) {
-    const count = `${arabicNumber(total)} كتاب`;
+    const count = `${n(total)} كتاب`;
     if (this.#scope === 'era') return `${count} لمؤلفين توفّوا في هذا القرن`;
     if (this.#scope === 'undated') return `${count} لا تُعرف سنة وفاة مؤلفها`;
     if (this.#scope === 'category') return `${count} في هذا التخصص`;

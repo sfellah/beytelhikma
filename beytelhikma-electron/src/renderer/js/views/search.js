@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber } from '../format.js';
+import { n } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -151,11 +151,11 @@ class SearchScreen {
   /** Ce qui a été balayé, et surtout ce qui ne l'a pas été. */
   #summary(texts, annotationCount) {
     const parts = [
-      `${arabicNumber(texts.total)} موضعًا في ${arabicNumber(texts.results.length)} كتابًا`,
+      `${n(texts.total)} موضعًا في ${n(texts.results.length)} كتابًا`,
     ];
-    if (annotationCount) parts.push(`${arabicNumber(annotationCount)} في الملاحظات`);
-    parts.push(`فُحص ${arabicNumber(texts.scanned)} من ${arabicNumber(texts.installed)} كتابًا منزَّلًا`);
-    if (texts.skipped) parts.push(`لم يُفحص ${arabicNumber(texts.skipped)} كتابًا`);
+    if (annotationCount) parts.push(`${n(annotationCount)} في الملاحظات`);
+    parts.push(`فُحص ${n(texts.scanned)} من ${n(texts.installed)} كتابًا منزَّلًا`);
+    if (texts.skipped) parts.push(`لم يُفحص ${n(texts.skipped)} كتابًا`);
     return parts.join(' • ');
   }
 
@@ -183,7 +183,7 @@ class SearchScreen {
         h(
           'span',
           { class: 'label-sm muted' },
-          `${arabicNumber(entry.matchCount)} موضعًا`,
+          `${n(entry.matchCount)} موضعًا`,
         ),
       ),
       entry.pages.map((hit) =>
@@ -203,7 +203,7 @@ class SearchScreen {
           h(
             'span',
             { class: 'label-sm muted' },
-            `ص ${arabicNumber(hit.printedPageNum ?? hit.sequenceNum)}`,
+            `ص ${n(hit.printedPageNum ?? hit.sequenceNum)}`,
           ),
         ),
       ),

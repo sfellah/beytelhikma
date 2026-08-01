@@ -1,25 +1,28 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 
 /**
  * Les quatre états que chaque vue doit traiter explicitement :
  * `loading / success / empty / error`.
  */
-export function loadingView(message = 'جارٍ التحميل…') {
+export function loadingView(message = null) {
+  const text = message ?? t('state.loading');
   return h(
     'div',
     { class: 'state' },
     h('div', { class: 'spinner' }),
-    h('p', { class: 'label-md' }, message),
+    h('p', { class: 'label-md' }, text),
   );
 }
 
-export function emptyView(message = 'لا يوجد محتوى بعد') {
+export function emptyView(message = null) {
+  const text = message ?? t('state.empty');
   return h(
     'div',
     { class: 'state' },
     icon('bookOpen', { size: 32 }),
-    h('p', { class: 'state__title' }, message),
+    h('p', { class: 'state__title' }, text),
   );
 }
 
@@ -28,13 +31,13 @@ export function errorView(error, onRetry) {
     'div',
     { class: 'state' },
     icon('close', { size: 30 }),
-    h('p', { class: 'state__title' }, 'تعذّر تحميل المحتوى'),
+    h('p', { class: 'state__title' }, t('state.error')),
     h('p', { class: 'label-md muted' }, error?.message ?? String(error)),
     onRetry &&
       h(
         'button',
         { class: 'button button--tonal', onclick: onRetry },
-        'إعادة المحاولة',
+        t('state.retry'),
       ),
   );
 }
@@ -49,7 +52,7 @@ export async function asyncView(host, load, render, { empty } = {}) {
     const data = await load();
     const node = render(data);
     host.replaceChildren(
-      node ?? emptyView(empty ?? 'لا يوجد محتوى بعد'),
+      node ?? emptyView(empty),
     );
   } catch (error) {
     host.replaceChildren(

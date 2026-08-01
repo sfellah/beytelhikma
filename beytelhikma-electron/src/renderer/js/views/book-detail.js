@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber, initial } from '../format.js';
+import { initial, n } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -208,7 +208,7 @@ function buildTree(entries) {
  */
 const tocPageLabel = (node) => {
   const printed = node.printedPageNum ?? node.pageSequenceNum;
-  return printed == null ? '' : `ص ${arabicNumber(printed)}`;
+  return printed == null ? '' : `ص ${n(printed)}`;
 };
 
 /** Chapitres montés d'un coup ; au-delà, on déplie à la demande. */
@@ -235,7 +235,7 @@ function tocSection(entries, openReader) {
             h(
               'span',
               {},
-              `عرض المزيد (${arabicNumber(roots.length - shown)})`,
+              `عرض المزيد (${n(roots.length - shown)})`,
             ),
           )
         : h('span', {}),
@@ -251,7 +251,7 @@ function tocSection(entries, openReader) {
       { class: 'title-md' },
       icon('toc', { size: 20 }),
       'فهرس المحتويات',
-      h('span', { class: 'label-sm muted' }, `${arabicNumber(roots.length)} فصلًا`),
+      h('span', { class: 'label-sm muted' }, `${n(roots.length)} فصلًا`),
     ),
     list,
     more,

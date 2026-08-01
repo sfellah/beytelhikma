@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { arabicNumber } from '../format.js';
+import { n } from '../format.js';
 import { icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -109,7 +109,7 @@ class NotesScreen {
             },
           },
           icon(entry.icon, { size: 18 }),
-          h('span', {}, `${entry.label} (${arabicNumber(sizeOf(entry.value))})`),
+          h('span', {}, `${entry.label} (${n(sizeOf(entry.value))})`),
         ),
       ),
     );
@@ -128,8 +128,8 @@ class NotesScreen {
 
       this.#drawTabs(data.counts);
       this.#nodes.count.textContent = this.#query.text
-        ? `${arabicNumber(data.total)} نتيجة لـ « ${this.#query.text} »`
-        : `${arabicNumber(data.total)} عنصرًا`;
+        ? `${n(data.total)} نتيجة لـ « ${this.#query.text} »`
+        : `${n(data.total)} عنصرًا`;
 
       this.#nodes.list.replaceChildren(
         data.items.length

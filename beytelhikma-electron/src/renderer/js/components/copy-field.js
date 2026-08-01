@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { toast } from '../shell.js';
 
@@ -21,7 +22,7 @@ export function copyField(value, { label = null } = {}) {
     dir: 'ltr',
     value: text,
     title: text,
-    'aria-label': label ?? 'قيمة قابلة للنسخ',
+    'aria-label': label ?? t('copy.aria'),
     onfocus: (event) => event.target.select(),
   });
 
@@ -30,16 +31,16 @@ export function copyField(value, { label = null } = {}) {
     {
       class: 'button--icon copy-field__button',
       type: 'button',
-      title: 'نسخ',
-      'aria-label': 'نسخ',
+      title: t('copy.action'),
+      'aria-label': t('copy.action'),
       onclick: async () => {
         try {
           await navigator.clipboard.writeText(text);
-          toast('نُسخ إلى الحافظة');
+          toast(t('copy.done'));
         } catch {
           // Le presse-papiers peut être refusé : la sélection reste un recours.
           field.select();
-          toast('تعذّر النسخ — النص محدَّد');
+          toast(t('copy.failed'));
         }
       },
     },

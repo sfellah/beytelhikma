@@ -1,6 +1,6 @@
 import { COVER_FAMILIES, coverFamily } from '../../../shared/book-cover.js';
 import { h } from '../dom.js';
-import { arabicNumber, excerpt, initial, ordinal, percent } from '../format.js';
+import { excerpt, initial, n, ordinal, percent } from '../format.js';
 import { categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -391,7 +391,7 @@ function disciplinesSection({ rows, total }) {
       h(
         'a',
         { class: 'link-action label-md disciplines__more', href: '#/explore' },
-        h('span', {}, `تصفّح ${arabicNumber(total)} فنًّا`),
+        h('span', {}, `تصفّح ${n(total)} فنًّا`),
         icon('arrowLeft', { size: 18 }),
       ),
   );
@@ -425,7 +425,7 @@ function disciplineTile(category) {
     h(
       'span',
       { class: 'label-sm muted discipline__count' },
-      `${arabicNumber(category.bookCount)} كتابًا · ${arabicNumber(Math.round(category.share * 100))}٪`,
+      `${n(category.bookCount)} كتابًا · ${n(Math.round(category.share * 100))}٪`,
     ),
   );
 }
@@ -474,7 +474,7 @@ function erasSection(eras, undated) {
  */
 function eraCell({ century, bookCount }, max) {
   const empty = bookCount === 0;
-  const span = `${arabicNumber((century - 1) * 100 + 1)}–${arabicNumber(century * 100)} هـ`;
+  const span = `${n((century - 1) * 100 + 1)}–${n(century * 100)} هـ`;
   const body = [
     h('span', {
       class: empty ? 'era__bar era__bar--none' : 'era__bar',
@@ -485,7 +485,7 @@ function eraCell({ century, bookCount }, max) {
     h(
       'span',
       { class: 'label-sm era__count' },
-      empty ? 'لا شيء بعد' : `${arabicNumber(bookCount)} كتابًا`,
+      empty ? 'لا شيء بعد' : `${n(bookCount)} كتابًا`,
     ),
   ];
 
@@ -513,7 +513,7 @@ function undatedCell(undated) {
       h('span', { class: 'era__bar era__bar--none' }),
       h('span', { class: 'title-md era__name' }, 'غير مؤرّخ'),
       h('span', { class: 'label-sm muted era__span' }, 'لا تُعرف سنة الوفاة'),
-      h('span', { class: 'label-sm era__count' }, `${arabicNumber(undated)} كتابًا`),
+      h('span', { class: 'label-sm era__count' }, `${n(undated)} كتابًا`),
     ),
   );
 }
