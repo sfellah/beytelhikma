@@ -6,6 +6,15 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.3.1] — 2026-08-01
+
+### fixed
+- Sous interface anglaise, le lecteur pointait à l'envers : le bouton de sortie et les deux chevrons de pagination désignaient le contraire de ce qu'ils faisaient. Ils suivent maintenant la direction de l'interface.
+- La jauge de lecture se remplissait par le mauvais bord en anglais : la poignée avançait à droite, la couleur montait par la gauche.
+- Les flèches du clavier feuilletaient à contresens en anglais, et la fiche des raccourcis annonçait la mauvaise touche.
+- Le texte des livres porte désormais sa direction : une page arabe reste écrite de droite à gauche même sous interface anglaise, avec sa justification, ses titres de chapitre, son sommaire et ses résultats de recherche.
+- L'animation de tournage de page et le chevron du sommaire d'une fiche livre s'orientaient d'après l'arabe seul.
+
 ## [0.3.0] — 2026-08-01
 
 ### added

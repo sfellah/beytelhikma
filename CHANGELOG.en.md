@@ -6,6 +6,15 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.3.1] — 2026-08-01
+
+### fixed
+- Under an English interface the reader pointed the wrong way: the exit button and both paging chevrons showed the opposite of what they did. They now follow the direction of the interface.
+- The reading gauge filled from the wrong edge in English: the handle moved right while the colour rose from the left.
+- Arrow keys turned pages backwards in English, and the shortcuts card named the wrong key.
+- Book text now carries its own direction: an Arabic page stays right-to-left under an English interface — justification, chapter headings, table of contents and search results alike.
+- The page-turn animation and the chapter chevron on a book's page were oriented for Arabic only.
+
 ## [0.3.0] — 2026-08-01
 
 ### added

@@ -1,6 +1,6 @@
 {
   "name": "beytelhikma-electron",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Beyt El Hikma — bibliothèque numérique arabe, portage Electron",
   "private": true,
   "type": "module",
