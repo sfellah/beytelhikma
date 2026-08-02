@@ -102,6 +102,22 @@
   --space-xxl: 64px;
   --container-max: 1200px;
 
+  /* Marges système. Sur un téléphone récent la fenêtre occupe *tout* l'écran —
+     Android 15 impose le bord à bord — et la barre d'état se pose par-dessus.
+     Mesuré sur l'appareil : 42px en haut, 16px en bas. Une barre collée à
+     `top: 0` passe donc sous l'heure et le réseau.
+
+     Ce sont les seules mesures que le système dicte : `env()` vaut 0 partout
+     ailleurs, sur le bureau comme dans les tests, et les règles qui s'en
+     servent n'ont donc pas de variante à tenir. Les valeurs latérales servent
+     au paysage sur un écran à encoche ; elles sont **physiques** — gauche et
+     droite, jamais début et fin — parce que l'encoche ne change pas de côté
+     quand l'interface bascule en RTL. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
   /* Formes : « Softly Structured ». Contrôles 8px, grands conteneurs 16px. */
   --radius: 4px;
   --radius-lg: 8px;

@@ -30,7 +30,8 @@
   inset-inline-start: 0;
   width: var(--rail-width);
   z-index: 40;
-  padding: var(--space-lg) var(--space-md);
+  padding: calc(var(--space-lg) + var(--safe-top)) var(--space-md)
+    calc(var(--space-lg) + var(--safe-bottom));
   flex-direction: column;
   gap: var(--space-xs);
   background: var(--surface-container-low);
@@ -140,6 +141,11 @@
 
 /* --------------------------------------------------------------- topbar */
 
+/* La barre haute est *collée* en haut de la fenêtre, et sur un téléphone la
+   fenêtre commence sous la barre d'état du système : elle passait donc sous
+   l'heure et le réseau. Le retrait est ajouté au rembourrage plutôt que posé en
+   `top`, sinon le fond translucide s'arrêterait au bord de la barre système et
+   laisserait une bande de contenu défiler à découvert au-dessus. */
 .topbar {
   position: sticky;
   top: 0;
@@ -148,7 +154,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  padding: var(--space-sm) var(--space-gutter);
+  padding: calc(var(--space-sm) + var(--safe-top)) calc(var(--space-gutter) + var(--safe-right))
+    var(--space-sm) calc(var(--space-gutter) + var(--safe-left));
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-md);
@@ -281,7 +288,9 @@
   width: 100%;
   max-width: var(--container-max);
   margin-inline: auto;
-  padding: var(--space-md) var(--space-gutter) 96px;
+  /* Les 96px du bas dégagent la barre d'onglets ; celle-ci ayant grandi du
+     retrait système, la réserve suit, sinon la dernière ligne finit dessous. */
+  padding: var(--space-md) var(--space-gutter) calc(96px + var(--safe-bottom));
 }
 
 /* ---------------------------------------------------------- bottom nav */
@@ -294,7 +303,10 @@
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: var(--space-sm) var(--space-md);
+  /* En bas, la barre de gestes d'Android : sans ce retrait, la dernière rangée
+     d'onglets tombe dessous et le geste de retour les traverse. */
+  padding: var(--space-sm) calc(var(--space-md) + var(--safe-right))
+    calc(var(--space-sm) + var(--safe-bottom)) calc(var(--space-md) + var(--safe-left));
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--outline-variant);
@@ -357,7 +369,7 @@
 .toast {
   position: fixed;
   inset-inline: 0;
-  bottom: 96px;
+  bottom: calc(96px + var(--safe-bottom));
   z-index: 100;
   width: max-content;
   max-width: 80vw;
@@ -403,8 +415,11 @@
     padding: var(--space-xl) var(--space-gutter) var(--space-xxl);
   }
 
+  /* Le retrait système est reconduit : une tablette dépasse 900px et garde sa
+     barre d'état. L'oublier ici rendrait le défaut invisible au développement
+     et présent sur l'appareil, ce qui est le pire des deux. */
   .topbar {
-    padding: var(--space-md) var(--space-gutter);
+    padding: calc(var(--space-md) + var(--safe-top)) var(--space-gutter) var(--space-md);
   }
 
   .topbar__brand {

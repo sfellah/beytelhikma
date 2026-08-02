@@ -217,7 +217,23 @@ async function shootAnnotationState(window, editionId, outDir, problems) {
  * on bascule, on capture, puis on le remet — sans quoi toutes les captures
  * suivantes, et sa prochaine lecture, se feraient dans un mode qu'il n'a pas
  * choisi.
+ *
+ * Le mode se pose depuis `/settings` : c'est là qu'il vit désormais, et passer
+ * par l'écran plutôt que par la base garde le cache de réglages du renderer
+ * honnête — une écriture directe le laisserait mentir jusqu'à la fin de la
+ * session. Le lecteur lit le réglage à l'ouverture : il faut donc régler
+ * **avant** d'entrer dans le livre.
  */
+async function poserMode(contents, mode) {
+  await contents.executeJavaScript(`location.hash = '#/settings'`);
+  if (!(await waitForSelector(contents, '[data-reading-mode]'))) return false;
+  await contents.executeJavaScript(
+    `document.querySelector('[data-reading-mode=${JSON.stringify(mode)}]').click()`,
+  );
+  await wait(200);
+  return true;
+}
+
 async function shootScrollMode(window, editionId, outDir, problems) {
   const contents = window.webContents;
   const before = await contents.executeJavaScript(
@@ -225,8 +241,10 @@ async function shootScrollMode(window, editionId, outDir, problems) {
   );
 
   try {
-    await contents.executeJavaScript(`location.hash = '#/home'`);
-    await waitForSelector(contents, '.home');
+    if (!(await poserMode(contents, 'scroll'))) {
+      problems.push("reader-scroll : le réglage « نمط القراءة » est introuvable dans /settings");
+      return;
+    }
     await contents.executeJavaScript(
       `location.hash = ${JSON.stringify(`#/reader/${editionId}`)}`,
     );
@@ -234,13 +252,6 @@ async function shootScrollMode(window, editionId, outDir, problems) {
       problems.push("reader-scroll : le lecteur n'est jamais monté");
       return;
     }
-    await wait(400);
-    await contents.executeJavaScript(`(() => {
-      ${tool('settings')};
-      // Deuxième bouton de « نمط القراءة » : le fil continu.
-      document.querySelectorAll('.mode-choices button')[1].click();
-      document.querySelector('.reader__settings .reader__tool').click();
-    })()`);
     // Le fil se remplit page par page : il lui faut plus qu'une frame.
     await wait(1200);
     await contents.executeJavaScript(
@@ -253,17 +264,7 @@ async function shootScrollMode(window, editionId, outDir, problems) {
   } catch (error) {
     problems.push(`reader-scroll : ${error?.message ?? error}`);
   } finally {
-    // Remis par l'interface, pas seulement en base : le renderer garde les
-    // réglages en cache, une écriture directe le laisserait mentir jusqu'à la
-    // fin de la session.
-    await contents
-      .executeJavaScript(`(() => {
-        const index = ${JSON.stringify(before)} === 'scroll' ? 1 : 0;
-        ${tool('settings')};
-        document.querySelectorAll('.mode-choices button')[index].click();
-        document.querySelector('.reader__settings .reader__tool').click();
-      })()`)
-      .catch(() => {});
+    await poserMode(contents, before === 'scroll' ? 'scroll' : 'page').catch(() => {});
     await contents.executeJavaScript(
       `window.beytelhikma.repository.saveSetting('reader.mode', ${JSON.stringify(before)})`,
     );

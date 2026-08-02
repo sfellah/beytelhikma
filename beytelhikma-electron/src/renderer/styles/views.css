@@ -1671,10 +1671,19 @@ html:not([dir='rtl']) .scroller--at-start {
   background: color-mix(in srgb, var(--reader-bg) 90%, transparent);
   backdrop-filter: blur(14px);
   transition: transform 0.3s ease, opacity 0.3s ease;
+  /* Les côtés servent au paysage sur écran à encoche. Physiques et non
+     logiques : l'encoche ne change pas de bord quand l'interface bascule. */
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
+/* Le voile monte jusqu'au bord de la fenêtre et *inclut* la barre d'état — il
+   est rembourré, pas décalé. Un `top` égal au retrait aurait laissé le texte
+   défiler à découvert dans la bande du système, sous l'heure et le réseau. Le
+   repli reste entier : `translateY(-100%)` porte sur la boîte rembourrée. */
 .reader__header {
   top: 0;
+  padding-top: var(--safe-top);
   border-bottom: 1px solid var(--reader-rule);
 }
 
@@ -1685,6 +1694,7 @@ html:not([dir='rtl']) .scroller--at-start {
 
 .reader__footer {
   bottom: 0;
+  padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--reader-rule);
 }
 
@@ -1858,10 +1868,15 @@ html:not([dir='rtl']) .scroller--at-start {
   }
 }
 
+/* Les réserves haute et basse dégagent les deux voiles ; ceux-ci ayant grandi
+   des retraits système, elles suivent — sinon la première ligne du livre se
+   lirait sous la barre d'état. */
 .reader__scroll {
   flex: 1;
   overflow-y: auto;
-  padding: clamp(96px, 14vh, 160px) var(--space-gutter) 160px;
+  padding: calc(clamp(96px, 14vh, 160px) + var(--safe-top))
+    calc(var(--space-gutter) + var(--safe-right)) calc(160px + var(--safe-bottom))
+    calc(var(--space-gutter) + var(--safe-left));
   cursor: text;
   transition: padding-left var(--motion-slow) var(--ease-out);
 }
@@ -1871,7 +1886,7 @@ html:not([dir='rtl']) .scroller--at-start {
    est physique, comme l'ancrage du panneau. */
 @media (min-width: 1100px) {
   .reader.has-panel .reader__scroll {
-    padding-left: calc(320px + var(--space-gutter));
+    padding-left: calc(320px + var(--space-gutter) + var(--safe-left));
   }
 }
 
@@ -2138,7 +2153,7 @@ html:not([dir='rtl']) .scroller--at-start {
    puis s'efface d'elle-même. */
 .reader__hint {
   position: absolute;
-  bottom: 88px;
+  bottom: calc(88px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 15;
@@ -2169,6 +2184,11 @@ html:not([dir='rtl']) .scroller--at-start {
   z-index: 30;
   display: flex;
   flex-direction: column;
+  /* La feuille couvre toute la hauteur : son titre passait sous la barre
+     d'état, et le bas de sa liste sous la barre de gestes. */
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
   background: var(--reader-bg);
   border-right: 1px solid var(--reader-rule);
   box-shadow: var(--shadow-lg);
@@ -2330,35 +2350,10 @@ html:not([dir='rtl']) .scroller--at-start {
 /* Les pastilles de thème sont parties dans `components.css` : le même contrôle
    sert maintenant au lecteur et aux réglages. */
 
-/* Mode de lecture : page imprimée ou fil continu, deux boutons qui se lisent
-   comme des cartes — le libellé, puis ce que ça change. */
-.mode-choices {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.mode-choices button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-lg);
-  border: 1px solid transparent;
-  color: var(--reader-muted);
-  text-align: start;
-}
-
-.mode-choices button > span {
-  display: flex;
-  flex-direction: column;
-}
-
-.mode-choices button.is-active {
-  background: color-mix(in srgb, var(--reader-fg) 6%, transparent);
-  border-color: var(--reader-rule);
-  color: var(--reader-fg);
-}
+/* Le mode de lecture est parti dans `/settings`, où il prend la forme des
+   autres réglages — un contrôle segmenté. Ses deux cartes n'ont plus de lieu :
+   elles tenaient leurs teintes de `--reader-*`, qui n'existent que sous
+   `.reader`, et les garder ici aurait laissé des règles peignant du vide. */
 
 .font-choices {
   display: flex;

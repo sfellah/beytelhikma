@@ -5,6 +5,7 @@ import { h } from '../dom.js';
 import { n } from '../format.js';
 import { t } from '../i18n.js';
 import { chevronBackward, chevronForward, icon, isRtl } from '../icons.js';
+import { canGoFullscreen } from '../platform.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
@@ -12,6 +13,11 @@ import { confirmDialog, noteDialog, shortcutsDialog } from '../components/modal.
 import { errorView, loadingView } from '../components/states.js';
 import { themeChoices } from '../components/theme-choices.js';
 import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
+import {
+  DEFAULT_READING_MODE,
+  READING_MODES,
+  resolveReadingMode,
+} from '../../../shared/reading-modes.js';
 
 /**
  * Direction du **contenu**, qui n'est pas celle de l'interface : le corpus est
@@ -43,16 +49,6 @@ const TOC_WINDOW = 80;
 // qu'était née la police orpheline. Le livre est arabe, donc seules les faces
 // arabes sont proposées.
 const FONTS = fontsForScript('arab');
-
-/**
- * Deux façons de parcourir un livre : la page imprimée, une par écran — c'est
- * le défaut, et c'est ce que le corpus décrit — ou le fil continu, où les pages
- * s'enchaînent et où le pied de page ne fait plus que séparer.
- */
-const MODES = [
-  { key: 'page', label: 'reader.mode.page', hint: 'reader.mode.pageHint', icon: 'book' },
-  { key: 'scroll', label: 'reader.mode.scroll', hint: 'reader.mode.scrollHint', icon: 'rows' },
-];
 
 /**
  * Palette « Serene Heritage » : les quatre teintes sortent des jetons du
@@ -97,7 +93,9 @@ const SHORTCUTS = [
   { keys: ['N'], label: 'reader.shortcut.notes' },
   { keys: ['C'], label: 'reader.shortcut.toc' },
   { keys: ['V'], label: 'reader.shortcut.mode' },
-  { keys: ['F11'], label: 'reader.shortcut.fullscreen' },
+  // Le plein écran n'existe pas partout : la fiche ne l'annonce que là où il
+  // est offert. Une ligne pour une touche absente est une promesse en trop.
+  { keys: ['F11'], label: 'reader.shortcut.fullscreen', needs: 'fullscreen' },
   { keys: ['؟'], label: 'reader.shortcut.thisList' },
   { keys: ['Esc'], label: 'reader.shortcut.escape' },
 ];
@@ -124,7 +122,7 @@ class Reader {
   #toc = [];
   #title = '';
   /** Le thème n'est plus une préférence de lecture : il est global (`theme.js`). */
-  #prefs = { size: 22, font: DEFAULT_READER_FONT, mode: 'page' };
+  #prefs = { size: 22, font: DEFAULT_READER_FONT, mode: DEFAULT_READING_MODE };
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
@@ -163,6 +161,12 @@ class Reader {
   #closeShortcuts = null;
   #keyHandler = (event) => this.#onKey(event);
   #fullscreenHandler = () => this.#syncFullscreen();
+  /**
+   * Le plein écran est-il offert ? Constaté une fois à l'ouverture, pas relu à
+   * chaque geste : ce n'est pas un réglage, et la réponse ne change pas sous
+   * les doigts de celui qui lit.
+   */
+  #fullscreen = canGoFullscreen();
 
   constructor(host, editionId, requestedPageId) {
     this.#host = host;
@@ -197,9 +201,7 @@ class Reader {
       this.#prefs = {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
         font: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
-        mode: MODES.some((mode) => mode.key === prefs['reader.mode'])
-          ? prefs['reader.mode']
-          : 'page',
+        mode: resolveReadingMode(prefs['reader.mode']),
       };
 
       let index = (saved?.sequenceNum ?? 1) - 1;
@@ -212,7 +214,7 @@ class Reader {
       this.#build();
       await this.#show(this.#index, { save: false });
       document.addEventListener('keydown', this.#keyHandler);
-      document.addEventListener('fullscreenchange', this.#fullscreenHandler);
+      if (this.#fullscreen) document.addEventListener('fullscreenchange', this.#fullscreenHandler);
       this.#hintTimer = setTimeout(() => this.#hideHint(), HINT_DELAY);
     } catch (error) {
       // Livre supprimé pendant la lecture : la fiche, pas un écran d'erreur.
@@ -268,9 +270,12 @@ class Reader {
         typeof name === 'function' ? name({ size: 20 }) : icon(name, { size: 20 }),
       );
 
-    const fullscreenButton = tool('fullscreen', 'fullscreen', t('reader.fullscreen'), () =>
-      this.#toggleFullscreen(),
-    );
+    // Sur un téléphone la fenêtre occupe déjà tout l'écran : le bouton
+    // répondrait sans que rien ne bouge. Il n'est donc pas désactivé, il est
+    // absent — un outil grisé demande encore pourquoi.
+    const fullscreenButton = this.#fullscreen
+      ? tool('fullscreen', 'fullscreen', t('reader.fullscreen'), () => this.#toggleFullscreen())
+      : null;
     const bookmarkButton = tool('bookmark', 'bookmark', t('reader.bookmarkTool'), () =>
       this.#toggleBookmark(),
     );
@@ -425,24 +430,6 @@ class Reader {
     // seule page. C'est ici qu'on en a le plus besoin — en lecture, le soir.
     const themes = themeChoices();
 
-    const modeButtons = MODES.map((mode) =>
-      h(
-        'button',
-        {
-          class: mode.key === this.#prefs.mode ? 'is-active' : '',
-          title: t(mode.hint),
-          onclick: () => this.#setMode(mode.key),
-        },
-        icon(mode.icon, { size: 18 }),
-        h(
-          'span',
-          {},
-          h('span', { class: 'label-md' }, t(mode.label)),
-          h('span', { class: 'label-sm muted' }, t(mode.hint)),
-        ),
-      ),
-    );
-
     const fontButtons = FONTS.map((font) =>
       h(
         'button',
@@ -455,7 +442,7 @@ class Reader {
       ),
     );
 
-    Object.assign(refs, { sizeValue, sizeSlider, fontButtons, modeButtons });
+    Object.assign(refs, { sizeValue, sizeSlider, fontButtons });
 
     return h(
       'aside',
@@ -474,15 +461,12 @@ class Reader {
           icon('close', { size: 20 }),
         ),
       ),
+      // Ce panneau ne porte que ce qui se règle **en lisant** : la taille de la
+      // lettre, l'ambiance, la face. Le mode de lecture est parti dans
+      // `/settings` — on le pose une fois, il n'a rien à faire ici.
       h(
         'div',
         { class: 'reader__panel-body' },
-        h(
-          'div',
-          {},
-          h('label', { class: 'label-md' }, t('reader.modeLabel')),
-          h('div', { class: 'mode-choices' }, modeButtons),
-        ),
         h(
           'div',
           {},
@@ -1557,16 +1541,19 @@ class Reader {
     setSetting('reader.font', key);
   }
 
-  /** Bascule page ↔ fil continu : le fil est remonté depuis la page courante. */
+  /**
+   * Bascule page ↔ fil continu : le fil est remonté depuis la page courante.
+   *
+   * Il n'y a plus de bouton dans le panneau — le réglage vit dans `/settings` —
+   * mais la touche `V` reste : elle ne coûte rien, elle est documentée par la
+   * fiche « ؟ », et elle écrit le même réglage que l'écran.
+   */
   #setMode(key) {
-    if (!MODES.some((mode) => mode.key === key) || key === this.#prefs.mode) return;
+    if (resolveReadingMode(key) !== key || key === this.#prefs.mode) return;
     this.#prefs.mode = key;
-    for (const mode of MODES) {
+    for (const mode of READING_MODES) {
       this.#nodes.root.classList.toggle(`reader--${mode.key}`, mode.key === key);
     }
-    this.#nodes.modeButtons?.forEach((button, index) =>
-      button.classList.toggle('is-active', MODES[index].key === key),
-    );
     setSetting('reader.mode', key);
 
     // Le fil est reconstruit autour de la page lue : ni la position ni la
@@ -1623,7 +1610,9 @@ class Reader {
       // Les touches passent aussi par `t()` : « ← » n'a pas de clé et ressort
       // tel quel, tandis que « عجلة الفأرة » en a une et se traduit. Une seule
       // règle, plutôt qu'une liste d'exceptions à tenir.
-      shortcuts: SHORTCUTS.map((entry) => ({
+      shortcuts: SHORTCUTS.filter(
+        (entry) => entry.needs !== 'fullscreen' || this.#fullscreen,
+      ).map((entry) => ({
         ...entry,
         keys: entry.keys.map((key) => {
           if (key === KEY_FORWARD) return isRtl() ? '←' : '→';
@@ -1636,6 +1625,7 @@ class Reader {
   }
 
   #toggleFullscreen() {
+    if (!this.#fullscreen) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else document.documentElement.requestFullscreen().catch(() => {});
   }
@@ -1716,7 +1706,9 @@ class Reader {
       else back();
       return;
     }
-    if (event.key === 'F11') {
+    // Là où le plein écran n'est pas offert, la touche n'est pas non plus
+    // interceptée : mieux vaut la laisser au système que l'avaler pour rien.
+    if (event.key === 'F11' && this.#fullscreen) {
       event.preventDefault();
       this.#toggleFullscreen();
       return;

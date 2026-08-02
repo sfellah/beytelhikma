@@ -13,6 +13,7 @@ import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
+import { READING_MODES, resolveReadingMode } from '../../../shared/reading-modes.js';
 
 const MIN_FONT = 16;
 const MAX_FONT = 34;
@@ -20,7 +21,7 @@ const MAX_FONT = 34;
 /**
  * Réglages.
  *
- * Six blocs, dans cet ordre : ce qu'on règle souvent d'abord, ce qui détruit
+ * Sept blocs, dans cet ordre : ce qu'on règle souvent d'abord, ce qui détruit
  * en dernier. « حذف كل الكتب » vivait au milieu de l'écran, entre deux boutons
  * « فتح » anodins — on pouvait l'atteindre en passant.
  */
@@ -42,6 +43,7 @@ export function settingsView(host) {
       { class: 'settings' },
       h('h1', { class: 'display-lg' }, t('settings.title')),
       languageSection(),
+      readingSection(prefs),
       fontsSection(prefs, refresh),
       librarySection(usage),
       serverSection(prefs, refresh),
@@ -78,6 +80,7 @@ function group(name, title, description, ...rows) {
 
 const SECTION_ICONS = {
   language: 'translate',
+  reading: 'bookOpen',
   fonts: 'type',
   library: 'bank',
   server: 'globe',
@@ -147,6 +150,41 @@ function languageSection() {
       t('settings.language.preview', { page: 42, total: 350 }),
     ),
     row(t('settings.theme'), themeChoices().node, t('settings.themeHint')),
+  );
+}
+
+/**
+ * Comment on parcourt un livre — page imprimée, ou fil continu.
+ *
+ * Ce choix se faisait dans le panneau du lecteur, entre la taille de la lettre
+ * et l'ambiance. Il n'y avait pas sa place : les trois autres réglages de ce
+ * panneau se touchent **en lisant**, celui-ci se pose une fois. Sur un
+ * téléphone il tenait en plus le haut d'une feuille déjà à l'étroit.
+ *
+ * Il est ici, avec la langue et les polices, et il vaut pour tous les livres —
+ * `reader.mode` n'a jamais été un réglage par livre. La touche `V` du lecteur
+ * écrit le même réglage : deux portes, une seule valeur.
+ */
+function readingSection(prefs) {
+  const choices = segmented({
+    ariaLabel: t('reader.modeLabel'),
+    value: resolveReadingMode(prefs['reader.mode']),
+    options: READING_MODES.map((mode) => ({ value: mode.key, label: t(mode.label) })),
+    onPick: (key) => setSetting('reader.mode', key),
+  });
+
+  // Contrat de la campagne de captures, comme `data-tool` pour la barre du
+  // lecteur et `data-locale-choice` juste au-dessus : le libellé suit la
+  // langue, l'attribut ne bouge pas.
+  for (const [index, button] of [...choices.children].entries()) {
+    button.dataset.readingMode = READING_MODES[index].key;
+  }
+
+  return group(
+    'reading',
+    t('settings.reading'),
+    t('settings.readingHint'),
+    row(t('reader.modeLabel'), choices, t('settings.readingModeHint')),
   );
 }
 
