@@ -17,7 +17,8 @@ import { BookRepository } from '../src/main/book-repository.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sampleLibrary = path.join(projectRoot, 'assets', 'sample');
-const shamelaLibrary = path.join(projectRoot, '..', 'dist', 'shamela');
+// `dist/` est à la racine du dépôt, deux crans au-dessus de `apps/desktop`.
+const shamelaLibrary = path.join(projectRoot, '..', '..', 'dist', 'shamela');
 const hasShamela = fs.existsSync(path.join(shamelaLibrary, 'catalog.sqlite'));
 
 function tempRoot() {
@@ -59,6 +60,30 @@ test('resolveLibrarySource ignore un chemin sans catalogue', () => {
   } finally {
     if (previous === undefined) delete process.env.BEYTELHIKMA_LIBRARY;
     else process.env.BEYTELHIKMA_LIBRARY = previous;
+  }
+});
+
+test('la bibliothèque importée se trouve depuis n’importe quelle profondeur', () => {
+  // Le défaut vécu : l'application est passée de `beytelhikma-electron/` à
+  // `apps/desktop/`, et le `..` écrit en dur a désigné `apps/dist/shamela`.
+  // Rien ne casse — on retombe sur les cinq livres d'exemple, et l'on croit
+  // avoir importé le corpus.
+  const racine = fs.mkdtempSync(path.join(os.tmpdir(), 'beytelhikma-depot-'));
+  const corpus = path.join(racine, 'dist', 'shamela');
+  fs.mkdirSync(corpus, { recursive: true });
+  fs.writeFileSync(path.join(corpus, 'catalog.sqlite'), '');
+
+  const previous = process.env.BEYTELHIKMA_LIBRARY;
+  delete process.env.BEYTELHIKMA_LIBRARY;
+  try {
+    for (const profondeur of [[], ['apps'], ['apps', 'desktop'], ['a', 'b', 'c']]) {
+      const app = path.join(racine, ...profondeur);
+      fs.mkdirSync(app, { recursive: true });
+      assert.equal(resolveLibrarySource(app), path.resolve(corpus), profondeur.join('/') || '.');
+    }
+  } finally {
+    if (previous !== undefined) process.env.BEYTELHIKMA_LIBRARY = previous;
+    fs.rmSync(racine, { recursive: true, force: true });
   }
 });
 

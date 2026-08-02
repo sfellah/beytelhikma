@@ -2356,8 +2356,13 @@ export class BookRepository {
    * Ne lève jamais pour cause de réseau : `fetchPointer` rend `null` et
    * `decideUpdate` en tire une décision silencieuse. Une application hors ligne
    * a déjà tout ce qu'il lui faut pour explorer.
+   *
+   * `ignoreDeclined` existe parce qu'un refus fait taire une **proposition**,
+   * pas une question posée. Qui clique « vérifier les mises à jour » repose la
+   * question : lui répondre par le silence d'un refus passé afficherait
+   * « catalogue à jour » alors qu'une version plus récente attend.
    */
-  checkCatalogUpdate() {
+  checkCatalogUpdate({ ignoreDeclined = false } = {}) {
     return this.#guard('vérification du catalogue', async () => {
       const settings = await this.getSettings();
       const pointer = await fetchPointer(settings['distribution.base_url'] ?? null, {});
@@ -2368,7 +2373,7 @@ export class BookRepository {
       return decideUpdate({
         pointer,
         localVersion: info?.catalog_version ?? 0,
-        declinedVersion: declined,
+        declinedVersion: ignoreDeclined ? null : declined,
       });
     });
   }
@@ -2382,7 +2387,9 @@ export class BookRepository {
    */
   installCatalogUpdate() {
     return this.#guard('mise à jour du catalogue', async () => {
-      const verdict = await this.checkCatalogUpdate();
+      // Le clic *est* l'acceptation : un refus antérieur ne peut pas faire
+      // échouer l'installation qu'on vient de demander.
+      const verdict = await this.checkCatalogUpdate({ ignoreDeclined: true });
       if (verdict.action !== 'offer') return { catalogVersion: null };
 
       const settings = await this.getSettings();

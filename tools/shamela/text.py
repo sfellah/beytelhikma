@@ -41,6 +41,19 @@ def escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def escape_attr(value: str) -> str:
+    """Valeur d'attribut — les guillemets compris.
+
+    `escape` seul suffit pour du texte, jamais pour un attribut : une valeur qui
+    porte un `"` referme l'attribut et le reste passe pour du balisage. Les
+    identifiants de titre viennent du corpus Shamela, c'est-à-dire d'une source
+    qu'on ne contrôle pas, et le HTML produit est monté tel quel dans la page du
+    lecteur. Un seul guillemet dans un `id` y injecterait donc des attributs
+    arbitraires.
+    """
+    return escape(value).replace('"', "&quot;").replace("'", "&#39;")
+
+
 def flatten_table(segment: str) -> str:
     """`<table>` -> un `<p>` par ligne, cellules jointes.
 
@@ -116,7 +129,7 @@ def convert_segment(segment: str, images) -> tuple[str, dict[str, int]]:
 
     if whole_title:
         inner = html.replace(_TITLE_START, "", 1).replace(_TITLE_END, "", 1).strip()
-        anchor = f' id="{escape(title_id)}"' if title_id else ""
+        anchor = f' id="{escape_attr(title_id)}"' if title_id else ""
         return (f'<h2 class="title"{anchor}>{inner}</h2>' if inner else ""), stats
 
     html = html.replace(_TITLE_START, '<span class="title">').replace(_TITLE_END, "</span>")

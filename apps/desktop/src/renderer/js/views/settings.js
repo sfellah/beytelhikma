@@ -467,6 +467,21 @@ function librarySection(usage) {
 }
 
 /**
+ * Ce que chaque raison de `decideUpdate` doit dire à qui a cliqué.
+ *
+ * `upToDate` est la seule qui parle du catalogue ; les autres parlent de la
+ * source. Les confondre — ce que faisait un `if (action !== 'offer')` nu —
+ * annonçait « à jour » à une application hors ligne, c'est-à-dire une
+ * vérification qui n'a jamais eu lieu.
+ */
+const VERDICT_MESSAGES = {
+  upToDate: 'settings.catalogUpToDate',
+  noPointer: 'settings.catalogUnreachable',
+  malformed: 'settings.catalogUnreadable',
+  schemaTooNew: 'settings.catalogTooNew',
+};
+
+/**
  * `distribution.base_url` préfixe les clés du catalogue.
  *
  * Le catalogue ne porte plus d'hôte : changer cette seule valeur suffit à
@@ -526,13 +541,26 @@ function serverSection(prefs, refresh) {
           bouton.disabled = true;
           état.textContent = t('settings.catalogChecking');
           try {
-            const verdict = await repository.checkCatalogUpdate();
+            // `ignoreDeclined` : le refus fait taire une proposition, pas une
+            // question posée. Qui clique ici repose la question.
+            const verdict = await repository.checkCatalogUpdate({ ignoreDeclined: true });
             if (verdict.action !== 'offer') {
-              état.textContent = t('settings.catalogUpToDate');
+              // Le verdict porte sa raison, et les raisons ne se valent pas :
+              // annoncer « à jour » à une application hors ligne lui ferait
+              // croire qu'elle a vu le serveur. C'est la seule des trois
+              // réponses sur laquelle on puisse compter.
+              état.textContent = t(VERDICT_MESSAGES[verdict.reason] ?? 'settings.catalogUnreachable');
               return;
             }
             état.textContent = t('settings.catalogDownloading');
             const { catalogVersion } = await repository.installCatalogUpdate();
+            // Une version nulle veut dire que le pointeur a bougé entre la
+            // proposition et le clic : rien n'a été installé, et l'annoncer
+            // « mis à jour vers null » serait pire que de ne rien dire.
+            if (catalogVersion == null) {
+              état.textContent = t('settings.catalogUpToDate');
+              return;
+            }
             toast(t('settings.catalogUpdated', { version: catalogVersion }));
             refresh();
           } catch (error) {

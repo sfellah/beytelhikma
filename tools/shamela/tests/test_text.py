@@ -37,6 +37,17 @@ class TitleSpanTest(unittest.TestCase):
                     '<h2 class="title" id="toc-9">عنوان</h2>',
                 )
 
+    def test_un_id_du_corpus_ne_peut_pas_sortir_de_son_attribut(self):
+        # L'`id` vient du corpus, c'est-à-dire d'une source qu'on ne contrôle
+        # pas, et le HTML produit est monté tel quel dans la page du lecteur.
+        # Sans échappement des guillemets, l'attribut se referme et tout ce qui
+        # suit passe pour du balisage.
+        html = convert('<span data-type=\'title\' id=\'a" onclick="x\'>عنوان</span>')
+        self.assertEqual(
+            html, '<h2 class="title" id="a&quot; onclick=&quot;x">عنوان</h2>'
+        )
+        self.assertNotIn('onclick="', html)
+
     def test_titre_sans_id_ne_produit_pas_d_ancre(self):
         self.assertEqual(convert("<span data-type='title'>عنوان</span>"),
                          '<h2 class="title">عنوان</h2>')

@@ -15,6 +15,7 @@ const read = (relative) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
 
 const reader = read('../src/renderer/js/views/reader.js');
+const home = read('../src/renderer/js/views/home.js');
 const bookDetail = read('../src/renderer/js/views/book-detail.js');
 const pagination = read('../src/renderer/js/components/pagination.js');
 const icons = read('../src/renderer/js/icons.js');
@@ -72,6 +73,20 @@ test('la jauge de lecture se remplit du bord d’où part la poignée', () => {
     /\[dir='rtl'\] \.reader__rail \{[^}]*to left/s.test(rail),
     'RTL : le dégradé doit être renversé',
   );
+});
+
+test('la bande des nouveautés défile dans le sens de lecture', () => {
+  // `scrollLeft` décroît en RTL et croît en LTR. Écrit en dur pour l'arabe, le
+  // bouton « suivant » de l'accueil ne bougeait pas d'un pixel sous interface
+  // anglaise — un défaut qui coïncide avec la vérité dans la langue où l'on
+  // développe, donc invisible jusqu'à la bascule.
+  assert.ok(
+    /const avance = \(\) => \(localeDir\(currentLocale\(\)\) === 'rtl' \? -1 : 1\)/.test(home),
+    'le sens du défilement doit se déduire de la direction de l’interface',
+  );
+  for (const fige of ['left: step()', 'left: -step()']) {
+    assert.ok(!home.includes(fige), `l’accueil fige le sens du défilement : ${fige}`);
+  }
 });
 
 test('les décalages physiques du lecteur ont leur pendant RTL', () => {

@@ -166,6 +166,8 @@ class Reader {
    */
   #selectionAtPress = false;
   #selectionTimer = null;
+  /** Vrai dès que le routeur a démonté la vue : `start()` s'arrête là où elle en est. */
+  #disposed = false;
   /**
    * `selectionchange` est le **seul** évènement qui arrive pendant qu'une
    * sélection existe. `mouseup` est un évènement de l'ère souris : il convient
@@ -193,6 +195,7 @@ class Reader {
       // Le contenu n'est lisible qu'une fois le fichier installé : sans lui, la
       // fiche est le seul endroit où l'on peut faire quelque chose.
       const detail = await repository.getBookDetail(this.#editionId);
+      if (this.#disposed) return;
       if (detail.download?.status !== 'installed') {
         navigate(`/book/${this.#editionId}`);
         return;
@@ -207,6 +210,7 @@ class Reader {
           .getBookAnnotations(this.#editionId)
           .catch(() => ({ highlights: [], notes: [], bookmarks: [] })),
       ]);
+      if (this.#disposed) return;
       this.#annotations = annotations;
 
       this.#title = detail.summary.title;
@@ -228,6 +232,7 @@ class Reader {
 
       this.#build();
       await this.#show(this.#index, { save: false });
+      if (this.#disposed) return;
       document.addEventListener('keydown', this.#keyHandler);
       // `selectionchange` ne se pose que sur `document` : c'est là qu'il naît.
       document.addEventListener('selectionchange', this.#selectionHandler);
@@ -239,6 +244,7 @@ class Reader {
         navigate(`/book/${this.#editionId}`);
         return;
       }
+      if (this.#disposed) return;
       this.#host.replaceChildren(
         errorView(error, () => navigate(`/book/${this.#editionId}`)),
       );
@@ -246,6 +252,11 @@ class Reader {
   }
 
   dispose() {
+    // `start()` court encore : elle est faite d'attentes, et le routeur peut
+    // démonter la vue entre deux. Sans ce drapeau, elle reprenait après coup et
+    // posait ses écouteurs sur `document` — un lecteur quitté continuait alors
+    // d'avaler les flèches et le `Ctrl+F` de l'écran suivant.
+    this.#disposed = true;
     document.removeEventListener('keydown', this.#keyHandler);
     document.removeEventListener('selectionchange', this.#selectionHandler);
     document.removeEventListener('fullscreenchange', this.#fullscreenHandler);
@@ -1249,10 +1260,9 @@ class Reader {
         if (highlight) this.#editNote(highlight, null);
       }),
       item('copy', t('reader.copy'), () => this.#copySelection()),
-      item('translate', t('reader.translate'), () => {
-        toast(t('reader.translateSoon'));
-        this.#hideSelection();
-      }),
+      // Pas d'entrée « traduire » : elle n'ouvrait qu'un message d'attente. Un
+      // outil qui annonce son propre chantier prend la place d'un doigt et
+      // n'apprend rien qu'on ne sache après le premier essai.
       item('search', t('reader.searchTitle'), () => this.#searchSelection()),
       h(
         'div',

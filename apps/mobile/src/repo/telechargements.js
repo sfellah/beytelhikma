@@ -1133,8 +1133,13 @@ export function creerMethodesTelechargements(ctx) {
    * Vérifie s'il existe un catalogue plus récent. Ne lève jamais pour cause de
    * réseau : `lirePointeur` rend `null` et `decideUpdate` en tire une décision
    * silencieuse.
+   *
+   * `ignoreDeclined` fait le même office qu'en Electron : un refus tait une
+   * proposition, pas la question que pose l'écran des réglages. Le rendu est le
+   * même des deux côtés — s'il passe l'option ici sans qu'on la lise, l'écran
+   * annoncerait « à jour » sur une version explicitement refusée.
    */
-  const checkCatalogUpdate = () =>
+  const checkCatalogUpdate = ({ ignoreDeclined = false } = {}) =>
     garde('vérification du catalogue', async () => {
       const pointeur = await lirePointeur();
       const db = await catalogue();
@@ -1144,7 +1149,7 @@ export function creerMethodesTelechargements(ctx) {
       return decideUpdate({
         pointer: pointeur,
         localVersion: info?.catalog_version ?? 0,
-        declinedVersion: refusee,
+        declinedVersion: ignoreDeclined ? null : refusee,
       });
     });
 
@@ -1379,7 +1384,9 @@ export function creerMethodesTelechargements(ctx) {
      */
     installCatalogUpdate: () =>
       garde('mise à jour du catalogue', async () => {
-        const verdict = await checkCatalogUpdate();
+        // Le clic *est* l'acceptation : un refus antérieur ne peut pas faire
+        // échouer l'installation qu'on vient de demander.
+        const verdict = await checkCatalogUpdate({ ignoreDeclined: true });
         if (verdict.action !== 'offer') return { catalogVersion: null };
         const fin = chrono();
         await installerCatalogue(verdict.pointer);

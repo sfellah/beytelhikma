@@ -328,6 +328,31 @@ if (!shim) {
   });
 }
 
+console.log('\nbases');
+
+controle('les deux applications écrivent la même version de `user.sqlite`', () => {
+  // Les deux implémentations portent le numéro en dur, chacune de son côté —
+  // il n'y a pas de module partagé pour lui, et il n'y en aura pas : le mobile
+  // ne peut pas importer le processus principal d'Electron. Ce qu'on peut
+  // faire, c'est interdire la dérive.
+  //
+  // Ce qui arriverait sans ce contrôle : les deux clients peuvent partager une
+  // racine de bibliothèque. Celui qui pose le plus petit `user_version` fait
+  // rejouer à l'autre des migrations déjà faites, ou pire, le fait lire des
+  // tables qu'il croit absentes.
+  const bureau = /export const USER_DB_SCHEMA_VERSION = (\d+)/.exec(
+    fs.readFileSync(path.join(repoRoot, 'apps', 'desktop', 'src', 'main', 'app-database.js'), 'utf8'),
+  );
+  const mobile = /const VERSION_SCHEMA = (\d+)/.exec(
+    fs.readFileSync(path.join(appDir, 'src', 'repo', 'utilisateur.js'), 'utf8'),
+  );
+  if (!bureau) return 'USER_DB_SCHEMA_VERSION introuvable dans app-database.js';
+  if (!mobile) return 'VERSION_SCHEMA introuvable dans repo/utilisateur.js';
+  return bureau[1] === mobile[1]
+    ? null
+    : `bureau ${bureau[1]}, mobile ${mobile[1]} — deux clients sur une même racine se marcheraient dessus`;
+});
+
 console.log('\nartefact');
 
 controle('www/ n’est pas suivi par git', () => {

@@ -1,7 +1,8 @@
 import { COVER_FAMILIES, coverFamily } from '../../../shared/book-cover.js';
+import { localeDir } from '../../../shared/locale.js';
 import { h } from '../dom.js';
 import { excerpt, initial, n, ordinal, percent } from '../format.js';
-import { t } from '../i18n.js';
+import { currentLocale, t } from '../i18n.js';
 import { arrowBackward, arrowForward, categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
@@ -397,8 +398,13 @@ function recentSection(recent) {
   );
 
   const step = () => Math.max(240, scroller.clientWidth * 0.8);
-  previous.onclick = () => scroller.scrollBy({ left: step(), behavior: 'smooth' });
-  next.onclick = () => scroller.scrollBy({ left: -step(), behavior: 'smooth' });
+  // Le *sens de lecture* décide du signe, jamais une constante : en RTL,
+  // avancer fait décroître `scrollLeft`, en LTR il croît. Écrit en dur pour
+  // l'arabe, « suivant » ne bougeait pas d'un pixel sous interface anglaise —
+  // le défaut coïncidait avec la vérité dans la langue où l'on développe.
+  const avance = () => (localeDir(currentLocale()) === 'rtl' ? -1 : 1);
+  previous.onclick = () => scroller.scrollBy({ left: -avance() * step(), behavior: 'smooth' });
+  next.onclick = () => scroller.scrollBy({ left: avance() * step(), behavior: 'smooth' });
 
   const syncEdges = () => {
     const max = scroller.scrollWidth - scroller.clientWidth;

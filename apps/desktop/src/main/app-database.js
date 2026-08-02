@@ -165,9 +165,23 @@ export class BookNotInstalledError extends Error {
  * Un dossier de bibliothèque contient `catalog.sqlite` et `books/`.
  */
 export function resolveLibrarySource(projectRoot) {
+  // `dist/shamela` est à la racine du dépôt, pas à côté de l'application. Le
+  // chemin se **cherche en remontant** au lieu de compter les niveaux : quand
+  // l'application est passée de `beytelhikma-electron/` à `apps/desktop/`, un
+  // « `..` » écrit en dur a désigné `apps/dist/shamela`, qui n'existe pas — et
+  // le repli sur les cinq livres d'exemple ne dit rien, il montre juste une
+  // bibliothèque presque vide.
+  const ancetres = [];
+  for (let dir = projectRoot, monte = 0; monte < 4; monte += 1) {
+    ancetres.push(path.join(dir, 'dist', 'shamela'));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
   const candidates = [
     process.env.BEYTELHIKMA_LIBRARY,
-    path.join(projectRoot, '..', 'dist', 'shamela'),
+    ...ancetres,
     path.join(projectRoot, 'assets', 'sample'),
   ].filter(Boolean);
 

@@ -484,6 +484,41 @@ test('un refus est retenu par version, pas une fois pour toutes', async () => {
   assert.equal((await repository.getSettings())['distribution.declined_catalog_version'], '8');
 });
 
+test('un refus tait la proposition, jamais la question posée', async () => {
+  // Le refus existe pour qu'une bannière ne revienne pas seule. Qui ouvre les
+  // réglages et clique « vérifier » repose la question : lui répondre par le
+  // silence d'un refus passé afficherait « catalogue à jour » alors qu'une
+  // version plus récente attend, et il n'y aurait plus aucun moyen de
+  // l'installer.
+  const vrai = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        catalog_version: 999,
+        schema_version: 2,
+        object_key: 'catalog/999/catalog.sqlite.zst',
+        sha256: 'a'.repeat(64),
+      }),
+      { status: 200 },
+    );
+
+  try {
+    await repository.declineCatalogUpdate(999);
+
+    const tu = await repository.checkCatalogUpdate();
+    assert.equal(tu.action, 'none');
+    assert.equal(tu.reason, 'declined');
+    assert.equal(tu.pointer, null);
+
+    const demandé = await repository.checkCatalogUpdate({ ignoreDeclined: true });
+    assert.equal(demandé.action, 'offer');
+    assert.equal(demandé.pointer?.catalog_version, 999);
+  } finally {
+    globalThis.fetch = vrai;
+    await repository.declineCatalogUpdate('');
+  }
+});
+
 test('les informations d’application décrivent la bibliothèque installée', async () => {
   const about = await repository.getAbout();
   assert.equal(about.editionCount, 5);

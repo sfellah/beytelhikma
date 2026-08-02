@@ -6,6 +6,17 @@ const routes = [];
 let notFound = null;
 let host = null;
 let current = null;
+/**
+ * Numéro de la résolution en cours.
+ *
+ * `resolve` est `async` : une vue peut être attendue pendant qu'un second
+ * `hashchange` en lance une autre. Le second passait alors son `dispose` sur un
+ * `current` encore nul — la première vue n'était **jamais** démontée, et ses
+ * écouteurs de `document` survivaient à l'écran qui les avait posés. Le
+ * lecteur, qui écoute les flèches et `Ctrl+F`, continuait de les avaler
+ * ailleurs.
+ */
+let generation = 0;
 
 export function defineRoutes(definitions, { fallback } = {}) {
   routes.length = 0;
@@ -30,10 +41,6 @@ export function navigate(path) {
 export function back() {
   if (history.length > 1) history.back();
   else navigate('/home');
-}
-
-export function currentRoute() {
-  return current;
 }
 
 /**
@@ -70,12 +77,20 @@ async function resolve() {
   const found = match(segments);
   const query = Object.fromEntries(new URLSearchParams(rawQuery ?? ''));
 
+  const mine = ++generation;
   current?.dispose?.();
   current = null;
 
-  if (!found) {
-    if (notFound) current = await notFound(host, { path: rawPath });
+  const vue = found
+    ? await found.route.view(host, { ...found.params, query, path: rawPath })
+    : await notFound?.(host, { path: rawPath });
+
+  // Une navigation plus récente a pris la main pendant l'attente : cette vue-ci
+  // n'est plus à l'écran. On la démonte au lieu de l'inscrire — sans quoi elle
+  // devient la vue « courante » et démontera celle qui l'a remplacée.
+  if (mine !== generation) {
+    vue?.dispose?.();
     return;
   }
-  current = await found.route.view(host, { ...found.params, query, path: rawPath });
+  current = vue ?? null;
 }
