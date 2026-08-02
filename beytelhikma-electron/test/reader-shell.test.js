@@ -312,6 +312,86 @@ test('un clic sur le texte referme le panneau ouvert, et rien de plus', () => {
   );
 });
 
+// -------------------------------------------------------------- sélection
+
+/**
+ * Mesuré sur l'appareil : le navigateur défait la sélection **entre**
+ * `mousedown` et `mouseup`.
+ *
+ *     mousedown   sélection vide = false   « ومعاني القرآ »
+ *     mouseup     sélection vide = true    « »
+ *     click       sélection vide = true    « »
+ *
+ * Une garde posée au `click` ne peut donc jamais protéger la tape qui vient de
+ * défaire une sélection : elle lit toujours du vide et escamote les barres. On
+ * ne pouvait plus rien sélectionner — la moindre touche rappelait les outils.
+ */
+test('la tape qui défait une sélection ne rappelle pas les barres', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.ok(
+    /addEventListener\('pointerdown'/.test(reader),
+    'l’état doit se relever au pointerdown, seul moment où il est encore vrai',
+  );
+
+  const start = reader.indexOf('#onContentClick(event) {');
+  const corps = reader.slice(start, reader.indexOf('\n  }', start));
+  const releve = corps.indexOf('this.#selectionAtPress');
+  const barres = corps.indexOf("classList.toggle('is-hidden')");
+  assert.notEqual(releve, -1, 'le clic doit consulter l’état relevé à l’appui');
+  assert.ok(releve < barres, 'et le consulter avant de toucher aux barres');
+  assert.ok(
+    /if \(pressee\) \{\s*\r?\n\s*this\.#hideSelection\(\);\s*\r?\n\s*return;/.test(corps),
+    'une tape qui défait une sélection ne fait que cela',
+  );
+});
+
+/**
+ * `selectionchange` est le seul évènement qui arrive **pendant** qu'une
+ * sélection existe. Le lecteur n'écoutait que `mouseup`, un évènement de l'ère
+ * souris : au doigt, l'appui long est piloté par la couche native du WebView,
+ * et la feuille des couleurs ne s'ouvrait donc jamais. Le spike mobile l'avait
+ * mesuré ; la correction n'avait pas été reportée ici.
+ */
+test('la sélection se détecte par selectionchange, pas par mouseup seul', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.ok(
+    /addEventListener\('selectionchange', this\.#selectionHandler\)/.test(reader),
+    'il faut écouter selectionchange sur document',
+  );
+  assert.ok(
+    /removeEventListener\('selectionchange', this\.#selectionHandler\)/.test(reader),
+    'et le retirer en partant',
+  );
+  assert.ok(
+    /clearTimeout\(this\.#selectionTimer\)/.test(reader),
+    'l’antirebond doit être annulé en partant',
+  );
+
+  // Sans antirebond, une sélection qui s'étire ferait sauter la feuille à
+  // chaque caractère : `selectionchange` en émet un par pas.
+  assert.ok(/SELECTION_SETTLE/.test(reader), 'la mesure doit attendre que la sélection se pose');
+});
+
+/**
+ * Le ruban dressé est posé sur le texte : il ne doit pas capter le doigt. En
+ * RTL il couvre le bord où **commence** chaque ligne, et il avalait le geste
+ * qui aurait démarré une sélection.
+ */
+test('le voile du ruban dressé laisse passer le doigt', () => {
+  const views = read('../src/renderer/styles/views.css');
+  const bloc = (selector) => {
+    const start = views.indexOf(selector);
+    assert.notEqual(start, -1, `règle absente : ${selector}`);
+    return views.slice(start, views.indexOf('}', start));
+  };
+
+  const voile = bloc('.reader--pager-vertical .reader__footer,\n');
+  assert.ok(/pointer-events:\s*none/.test(voile), 'le voile doit être transparent au doigt');
+
+  const controles = bloc('.reader--pager-vertical .reader__tool,\n');
+  assert.ok(/pointer-events:\s*auto/.test(controles), 'les chevrons et la jauge gardent leur prise');
+});
+
 // --------------------------------------------------------- marges système
 
 /**

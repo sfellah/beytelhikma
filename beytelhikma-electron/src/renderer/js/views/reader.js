@@ -39,6 +39,13 @@ const MIN_FONT = 16;
 const MAX_FONT = 34;
 const HINT_DELAY = 4000;
 
+/**
+ * Délai laissé à une sélection pour se poser avant qu'on la mesure. Une
+ * sélection qui s'étire émet `selectionchange` à chaque caractère ; sans ce
+ * répit, la feuille des couleurs sauterait sous le doigt qui la fabrique.
+ */
+const SELECTION_SETTLE = 250;
+
 /** Défilement continu : pages gardées de part et d'autre, et seuils de recharge. */
 const FLOW_KEEP = 40;
 const FLOW_STEP = 3;
@@ -147,6 +154,33 @@ class Reader {
    * les doigts de celui qui lit.
    */
   #fullscreen = canGoFullscreen();
+  /**
+   * Une sélection était-elle vivante quand le doigt s'est posé ?
+   *
+   * Le navigateur défait la sélection **entre `mousedown` et `mouseup`** :
+   * mesuré sur l'appareil, `mousedown` la voit encore, `mouseup` et `click`
+   * lisent du vide. Une garde posée au `click` ne peut donc jamais protéger la
+   * tape qui vient de défaire une sélection — elle voit toujours du vide et
+   * escamote les barres. L'état se relève donc au `pointerdown`, seul moment
+   * où il est encore vrai.
+   */
+  #selectionAtPress = false;
+  #selectionTimer = null;
+  /**
+   * `selectionchange` est le **seul** évènement qui arrive pendant qu'une
+   * sélection existe. `mouseup` est un évènement de l'ère souris : il convient
+   * au cliquer-glisser, où la sélection survit au relâchement, et pas au doigt,
+   * où l'appui long est piloté par la couche native. C'est ce que le spike
+   * mobile avait mesuré, et la correction n'avait jamais été reportée ici :
+   * sans elle, le menu de surlignage ne s'ouvre pas au doigt.
+   *
+   * Antirebond : une sélection qui s'étire en émet des dizaines, et la feuille
+   * sauterait à chaque caractère.
+   */
+  #selectionHandler = () => {
+    clearTimeout(this.#selectionTimer);
+    this.#selectionTimer = setTimeout(() => this.#onSelection(), SELECTION_SETTLE);
+  };
 
   constructor(host, editionId, requestedPageId) {
     this.#host = host;
@@ -195,6 +229,8 @@ class Reader {
       this.#build();
       await this.#show(this.#index, { save: false });
       document.addEventListener('keydown', this.#keyHandler);
+      // `selectionchange` ne se pose que sur `document` : c'est là qu'il naît.
+      document.addEventListener('selectionchange', this.#selectionHandler);
       if (this.#fullscreen) document.addEventListener('fullscreenchange', this.#fullscreenHandler);
       this.#hintTimer = setTimeout(() => this.#hideHint(), HINT_DELAY);
     } catch (error) {
@@ -211,9 +247,11 @@ class Reader {
 
   dispose() {
     document.removeEventListener('keydown', this.#keyHandler);
+    document.removeEventListener('selectionchange', this.#selectionHandler);
     document.removeEventListener('fullscreenchange', this.#fullscreenHandler);
     clearTimeout(this.#saveTimer);
     clearTimeout(this.#hintTimer);
+    clearTimeout(this.#selectionTimer);
     this.#closeShortcuts?.();
     this.#closeShortcuts = null;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -397,7 +435,17 @@ class Reader {
     scroll.addEventListener('scroll', () => this.#onScroll(scroll));
     scroll.addEventListener('click', (event) => this.#onContentClick(event));
     scroll.addEventListener('wheel', (event) => this.#onWheel(event), { passive: false });
-    scroll.addEventListener('mouseup', () => setTimeout(() => this.#onSelection(), 0));
+    // Le dernier moment où la sélection est encore lisible : `mouseup` et
+    // `click` arrivent après que le navigateur l'a défaite.
+    scroll.addEventListener('pointerdown', () => {
+      const selection = window.getSelection();
+      this.#selectionAtPress = Boolean(selection) && !selection.isCollapsed;
+    });
+    // Trois portes vers la même mesure, toutes antirebondies : `selectionchange`
+    // porte le doigt, les deux autres achèvent un cliquer-glisser sans attendre
+    // le répit.
+    scroll.addEventListener('mouseup', this.#selectionHandler);
+    scroll.addEventListener('touchend', this.#selectionHandler);
 
     this.#nodes = {
       root,
@@ -1830,7 +1878,24 @@ class Reader {
 
   #onContentClick(event) {
     if (event.target.closest('button, a, input, .reader__selection')) return;
-    // Ne pas masquer l'interface au milieu d'une sélection de texte.
+
+    // Une tape qui **défait** une sélection ne fait que cela. Elle ne rappelle
+    // pas les barres : c'est le geste qu'on fait pour revenir au texte, pas
+    // pour appeler les outils.
+    //
+    // L'état vient du `pointerdown`, pas d'ici : le navigateur défait la
+    // sélection entre `mousedown` et `mouseup`, et la lire maintenant montre
+    // toujours du vide. C'est pour cela que les barres ressortaient à la
+    // moindre touche sur le texte, et qu'on ne pouvait plus rien sélectionner.
+    const pressee = this.#selectionAtPress;
+    this.#selectionAtPress = false;
+    if (pressee) {
+      this.#hideSelection();
+      return;
+    }
+
+    // Un cliquer-glisser qui s'achève sur le texte laisse sa sélection vivante :
+    // celle-là se lit encore ici, et l'interface ne doit pas bouger.
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) return;
     this.#hideSelection();

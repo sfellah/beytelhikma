@@ -2195,6 +2195,24 @@ html:not([dir='rtl']) .scroller--at-start {
   backdrop-filter: none;
 }
 
+/* Un voile posé sur le texte ne doit pas non plus **capter le doigt**. La bande
+   couvre le bord droit, et en RTL c'est là que commence chaque ligne : elle
+   avalait le geste qui aurait démarré une sélection. Seuls les objets qu'on
+   manœuvre gardent leur prise — les chevrons et la jauge. */
+.reader--pager-vertical .reader__footer,
+.reader--pager-vertical .reader__toolbar,
+.reader--pager-vertical .reader__pager,
+.reader--pager-vertical .reader__pager-label,
+.reader--pager-vertical .reader__progress,
+.reader--pager-vertical .reader__percent {
+  pointer-events: none;
+}
+
+.reader--pager-vertical .reader__tool,
+.reader--pager-vertical .reader__rail {
+  pointer-events: auto;
+}
+
 /* Escamoté, il sort par son bord — pas par le bas, qu'il ne touche plus. */
 .reader--pager-vertical .reader__footer.is-hidden {
   transform: translateX(100%);

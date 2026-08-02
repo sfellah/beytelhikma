@@ -146,6 +146,21 @@ Trois pièges, chacun rencontré et chacun tenu par un test :
 - `writing-mode: vertical-rl` dresse le rail, mais c'est `direction` qui décide du bout d'où part la valeur : hérité en RTL, il envoyait la page 2 sur 230 au *bas* du rail. Le rail n'est pas du texte — il porte `direction: ltr`, et la page 1 se lit en haut dans les deux langues.
 - `min-height: 0` sur la jauge n'est pas une précaution : sans lui, un `input` dressé réclame plus de hauteur que la bande n'en a, et le rail dépassait l'écran par les deux bouts — la première et la dernière page devenaient injoignables à la glissade.
 
+**Une sélection ne se détecte pas au `mouseup`.** Mesuré sur l'appareil, le navigateur défait la sélection **entre `mousedown` et `mouseup`** :
+
+```
+mousedown   sélection vide = false   « ومعاني القرآ »
+mouseup     sélection vide = true    « »
+click       sélection vide = true    « »
+```
+
+Deux conséquences, chacune un défaut vécu :
+
+- `selectionchange` est le **seul** évènement qui arrive pendant qu'une sélection existe. `mouseup` est de l'ère souris : il convient au cliquer-glisser, où la sélection survit au relâchement, et pas au doigt, où l'appui long est piloté par la couche native du WebView. Le spike mobile l'avait mesuré au premier jour ; tant que la correction n'a pas été reportée dans le lecteur, la feuille des couleurs ne s'ouvrait pas au doigt. Antirebond de 250 ms, sinon elle saute à chaque caractère.
+- Une garde posée au `click` (`if (!selection.isCollapsed) return`) ne peut **jamais** protéger la tape qui vient de défaire une sélection : elle lit toujours du vide. L'état se relève donc au `pointerdown`, seul moment où il est encore vrai, et une tape qui défait une sélection ne fait que cela — elle ne rappelle pas les barres. Sans quoi la moindre touche sur le texte fait ressortir les outils, et l'on ne peut plus rien sélectionner du tout.
+
+**Un voile posé sur le texte ne doit pas capter le doigt.** Le ruban dressé couvre le bord où *commence* chaque ligne en RTL : il avalait le geste qui aurait démarré une sélection. `pointer-events: none` sur le voile et ses boîtes, `auto` sur les seuls objets qu'on manœuvre — les chevrons et la jauge.
+
 **Un clic sur le texte referme le panneau ouvert**, et s'arrête là : la croix est à l'autre bout de l'écran, revenir au livre est de toute façon le geste suivant, et escamoter les barres dans la foulée ferait deux choses pour un seul geste.
 
 **Le mode se règle dans `/settings`, pas dans le panneau du lecteur.** Les trois autres réglages de ce panneau — taille, ambiance, face — se touchent *en lisant* ; celui-ci se pose une fois et vaut pour tous les livres, `reader.mode` n'ayant jamais été un réglage par livre. Sur un téléphone il tenait en plus le haut d'une feuille déjà à l'étroit. La liste vit dans `src/shared/reading-modes.js`, **seule** : deux écrans la montrent maintenant, et c'est exactement la configuration qui avait produit la police orpheline et le `sepia` mort. La touche `V` du lecteur écrit le même réglage — deux portes, une seule valeur. Le contrat des captures est `data-reading-mode`, comme `data-tool` l'est pour la barre.
