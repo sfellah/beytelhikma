@@ -6,6 +6,15 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.4.1] — 2026-08-03
+
+### added
+- Pincer la page à deux doigts agrandit ou réduit le texte du livre : les lignes se replient au lieu de déborder de l'écran, et la taille obtenue est celle des réglages.
+- Les côtés de la page, qui la tournent au toucher, peuvent être éteints depuis les réglages : la main qui tient l'appareil frôle le bord, et c'est le seul geste du lecteur qu'on déclenche sans le vouloir. Le glissement, les chevrons et les flèches tournent toujours.
+
+### changed
+- Le bouton de téléchargement de l'accueil mène désormais droit au fichier qui convient au visiteur — l'APK sur un téléphone Android, l'installeur sur Windows — au lieu d'annoncer Windows à tout le monde.
+
 ## [0.4.0] — 2026-08-02
 
 ### added

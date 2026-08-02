@@ -6,6 +6,15 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.4.1] — 2026-08-03
+
+### added
+- Pinching the page with two fingers grows or shrinks the book text: the lines reflow instead of spilling off the screen, and the size you land on is the one in the settings.
+- The sides of the page, which turn it on a tap, can now be switched off in the settings: the hand holding the device brushes the edge, and this is the one reader gesture you trigger without meaning to. Swiping, the chevrons and the arrow keys still turn the page.
+
+### changed
+- The download button on the home page now leads straight to the file that suits the visitor — the APK on an Android phone, the installer on Windows — instead of announcing Windows to everyone.
+
 ## [0.4.0] — 2026-08-02
 
 ### added
