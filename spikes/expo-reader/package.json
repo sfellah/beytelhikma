@@ -1,0 +1,26 @@
+{
+  "name": "expo-reader",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "expo": "~57.0.9",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-webview": "13.16.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "check": "node check.mjs",
+    "parity": "node parity.mjs",
+    "verify": "node check.mjs && node parity.mjs"
+  },
+  "private": true,
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}
