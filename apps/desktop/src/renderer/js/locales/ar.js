@@ -376,6 +376,10 @@ export default {
   'settings.catalogFailed': 'تعذّر التحديث',
   'settings.checkUpdates': 'التحقّق من التحديثات',
   'settings.catalogHint': 'يُنزَّل الفهرس كاملًا ويُستبدل دفعة واحدة',
+
+  'update.catalogAvailable': 'يتوفّر فهرس أحدث (الإصدار {version})',
+  'update.install': 'تحديث',
+  'update.skip': 'تخطّي هذا الإصدار',
   'settings.about': 'عن التطبيق',
   'settings.librarySource': 'مصدر المكتبة',
   'settings.dataFolder': 'مجلد البيانات',

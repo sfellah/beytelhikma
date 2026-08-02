@@ -135,20 +135,22 @@ la validation d'`edition_id` avant tout `path.join` (`src/main/edition-id.js`),
 et le SHA-256 du catalogue vérifié **avant** le `rename`
 (`src/main/catalog-updater.js`).
 
+La mise à jour du catalogue se propose désormais au démarrage, depuis le rendu
+partagé : une bande écartable quand une version plus récente existe, le
+silence dans les cinq autres cas, et un refus retenu par version. L'APK
+Android embarque sa graine de catalogue et explore hors ligne dès
+l'installation, sans `adb push`.
+
 Reste à faire, dans cet ordre :
 
-1. **La mise à jour du catalogue au démarrage.** Le chemin complet est en place
-   et testé — pointeur, décision, installation vérifiée — mais rien n'appelle
-   `checkCatalogUpdate` à l'ouverture. Le seul déclencheur est le bouton de
-   `/settings`, et `declineCatalogUpdate` n'a donc aucun appelant.
-2. **Le câblage `electron-updater`.** La configuration de publication est en
+1. **Le câblage `electron-updater`.** La configuration de publication est en
    place et les workflows produisent déjà `latest.yml` ; le module côté
    application reste à écrire. Ni la cible portable ni le `.deb` ne peuvent se
    mettre à jour — seul l'AppImage le peut.
-3. **La signature Windows.** Sans certificat, SmartScreen affiche un
+2. **La signature Windows.** Sans certificat, SmartScreen affiche un
    avertissement à chaque installation ; la page de téléchargement le dit et
    donne l'empreinte SHA-512.
-4. **L'application Android n'a pas de chaîne de publication.** `npm run
+3. **L'application Android n'a pas de chaîne de publication.** `npm run
    android:release` produit une archive signée de la clé de débogage ; aucun
    workflow ne la construit, et rien ne la distribue.
 

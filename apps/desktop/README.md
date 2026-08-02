@@ -76,10 +76,14 @@ versions. Cinq branches de décision sur six sont silencieuses : hors ligne,
 pointeur illisible, schéma trop récent, déjà à jour, version refusée — une
 application hors ligne a déjà tout ce qu'il lui faut pour explorer.
 
-**Rien ne l'appelle encore au démarrage** : le seul déclencheur est le bouton de
-`/settings`, qui repose la question sans tenir compte d'un refus passé
+Au démarrage, le rendu (`js/catalog-update.js`) vérifie **après le premier
+rendu** et propose : une bande écartable, seulement quand une version plus
+récente existe — les cinq autres branches restent silencieuses. L'écarter
+refuse **cette version-là** (`declineCatalogUpdate`) ; le bouton de `/settings`
+repose la question sans tenir compte d'un refus passé
 (`checkCatalogUpdate({ ignoreDeclined: true })`) — un refus tait une
-proposition, pas une question posée.
+proposition, pas une question posée. Le mobile régénère ce rendu : la même
+bannière tourne sur Android.
 
 **Limite connue** : `sql.js` charge chaque livre intégralement en mémoire. Les
 120 livres de la sélection par défaut plafonnent à ~18 Mo, mais le corpus complet

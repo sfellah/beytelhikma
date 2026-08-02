@@ -28,9 +28,10 @@ npm run release:win   # tests + graine + installeur NSIS et portable
 
 # application Android (depuis apps/mobile/)
 npm run verify        # parité des 67 méthodes du pont, hors appareil
+npm run seed          # graine de catalogue -> data/, embarquée dans l'APK par prepare-www
 npm run data          # bucket -> .sqlite -> adb push (~30 Mo)
 npm run android       # prepare:www + cap sync + build + lancement
-npm run android:release  # sans la sonde, aligné et signé
+npm run android:release  # graine + sans la sonde, aligné et signé
 
 python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple -> apps/desktop/assets/sample/
 python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
@@ -100,7 +101,7 @@ L'empreinte est **exigée**, pas seulement comparée quand elle est là. `if (po
 
 **Le verdict porte sa raison, et les raisons ne se valent pas.** Un `if (action !== 'offer')` nu annonçait « à jour » à une application hors ligne — c'est-à-dire une vérification qui n'a jamais eu lieu. `VERDICT_MESSAGES` (dans `views/settings.js`) distingue `upToDate` de `noPointer`, `malformed` et `schemaTooNew`. Le silence reste la règle pour une vérification *automatique* ; il ne l'est plus pour une question posée à la main.
 
-Reste à câbler : rien n'appelle `checkCatalogUpdate` au démarrage. Le seul déclencheur est le bouton de `/settings`, et `declineCatalogUpdate` — le refus par version, testé — n'a donc aucun appelant.
+**La proposition est câblée au démarrage, dans le rendu partagé.** `src/renderer/js/catalog-update.js` appelle `checkCatalogUpdate()` après le premier rendu — jamais avant, son échec se tait, et **sans** `ignoreDeclined` : une vérification automatique respecte un refus passé. Seule une offre réelle s'affiche, en bande écartable (`.update-banner`, jamais une boîte modale) ; l'écarter appelle `declineCatalogUpdate(version)` — le refus par version a son appelant — et accepter passe par `installCatalogUpdate` puis `remount()`, parce que les écrans lisent le catalogue au montage. Le mobile régénère ce rendu : les deux applications ont la même bannière, le shim portant les trois méthodes contre SQLite natif. `test/catalog-update-startup.test.js` tient chacune de ces règles.
 
 **La bibliothèque source se cherche en remontant, elle ne se compte pas en `..`.** `resolveLibrarySource` essaie `dist/shamela` sur quatre ancêtres. Le chemin écrit en dur a désigné `apps/dist/shamela` le jour où l'application est passée de `beytelhikma-electron/` à `apps/desktop/` — et rien n'a cassé : on retombe sur les cinq livres d'exemple, en croyant lire le corpus.
 
@@ -330,7 +331,9 @@ Les fichiers sont servis par le schéma `userfont:`, qui ne sort jamais de `user
 
 `apps/mobile/` est le **même rendu**, pas une seconde interface. `scripts/prepare-www.mjs` efface `www/` et le refait entièrement depuis `apps/desktop/src/renderer/` et `apps/desktop/src/shared/` : une copie régénérée ne peut pas dériver, et c'est la seule façon de ne pas rejouer `MIRROR_DIRS`, le `sepia` mort et la liste de polices déclarée deux fois.
 
-Un seul fichier diffère : `src/renderer/js/repository.js`, remplacé par `src/repository.capacitor.js` et ses quatre modules `src/repo/*` — **67 méthodes, aucune `not-ported`**. Les modules sont des fabriques sans aucun `import` : chacune reçoit ses dépendances en argument.
+Un seul fichier diffère : `src/renderer/js/repository.js`, remplacé par `src/repository.capacitor.js` et ses cinq modules `src/repo/*` — **67 méthodes, aucune `not-ported`**. Les modules sont des fabriques sans aucun `import` : chacune reçoit ses dépendances en argument.
+
+**L'APK embarque la graine de catalogue.** `scripts/fetch-seed.mjs` (mobile) importe `fetchSeed` du bureau — la recette, pas une copie — et remplit le cache `data/` (ignoré par git) ; `prepare-www.mjs`, qui efface `www/` à chaque exécution, copie `catalog.sqlite.zst` (~4,9 Mo compressés, jamais les 28,8 Mo décompressés) dans `www/assets/` et **refuse de produire un `www/` sans graine** — installée sans elle, l'application n'aurait aucun catalogue et ne montrerait rien. Au premier lancement, `src/repo/graine.js` la décompresse (le fzstd déjà embarqué) et l'installe **seulement si `catalog.sqlite` est absent**, la règle d'`AppDatabase.#plantSeed` : la graine est figée à la date du build, le catalogue installé a pu être mis à jour depuis le bucket, et l'écraser le ferait régresser à chaque mise à jour de l'application. Écriture de côté puis `rename`, comme partout ; `npm run verify` éprouve le planteur avec des dépendances factices.
 
 `npm run verify` compare `preload.cjs`, `repository.js` et le shim, et tourne en CI **sans appareil ni `npm ci`** : les trois modules Capacitor sont bouchonnés. Il vérifie aussi que les deux applications posent le **même `user_version`** — le numéro est écrit en dur des deux côtés, faute d'un module que le mobile puisse partager avec le processus principal d'Electron, et deux clients sur une même racine se marcheraient dessus.
 

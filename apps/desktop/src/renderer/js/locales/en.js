@@ -367,6 +367,10 @@ export default {
   'settings.catalogFailed': 'Update failed',
   'settings.checkUpdates': 'Check for updates',
   'settings.catalogHint': 'The catalogue is downloaded whole and swapped in one go',
+
+  'update.catalogAvailable': 'A newer catalogue is available (version {version})',
+  'update.install': 'Update',
+  'update.skip': 'Skip this version',
   'settings.about': 'About',
   'settings.librarySource': 'Library source',
   'settings.dataFolder': 'Data folder',

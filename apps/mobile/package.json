@@ -6,12 +6,13 @@
   "description": "Beyt El Hikma — bibliothèque numérique arabe, application Android (Capacitor)",
   "scripts": {
     "prepare:www": "node scripts/prepare-www.mjs",
+    "seed": "node scripts/fetch-seed.mjs",
     "data": "node scripts/fetch-real-data.mjs",
     "push": "node scripts/fetch-real-data.mjs --push-only",
     "verify": "node scripts/verify.mjs",
     "sync": "npm run prepare:www && npx cap sync android",
     "android": "npm run sync && npx cap run android",
-    "android:release": "node scripts/prepare-www.mjs --sans-sonde && npx cap sync android && node scripts/release-android.mjs"
+    "android:release": "npm run seed && node scripts/prepare-www.mjs --sans-sonde && npx cap sync android && node scripts/release-android.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.0",

@@ -6,9 +6,10 @@ sous Capacitor, sur SQLite natif.
 ```bash
 npm install
 npm run verify     # parité des 67 méthodes du pont, hors appareil
+npm run seed       # graine de catalogue -> data/  (embarquée dans l'APK)
 npm run data       # bucket -> .sqlite -> adb push  (~30 Mo)
 npm run android    # prepare:www + cap sync + build + lancement
-npm run android:release   # sans la sonde, aligné et signé
+npm run android:release   # graine + sans la sonde, aligné et signé
 ```
 
 Prérequis : un SDK Android (`ANDROID_HOME`), un appareil ou un émulateur, et le
@@ -34,6 +35,7 @@ pont. Le portage tient donc en un fichier remplacé.
 | `src/repo/utilisateur.js` | 21 | schéma et migrations de `user.sqlite`, réglages, progression, bibliothèque, collections, annotations |
 | `src/repo/telechargements.js` | 15 | file séquentielle, `Range`, zstd, SHA-256, renommage, mise à jour du catalogue |
 | `src/repo/polices.js` | 3 | installation depuis Google Fonts, avec les bornes du modèle |
+| `src/repo/graine.js` | — | plantation de la graine de catalogue au premier lancement |
 
 **Les 67 méthodes sont portées ; aucune ne lève `not-ported`.** `npm run verify`
 compare les trois listes — `preload.cjs`, `repository.js`, le shim — et échoue si
@@ -41,9 +43,34 @@ l'une diverge. C'est ce contrôle qui tourne en CI : une méthode ajoutée d'un 
 sans son pendant de l'autre casse la barrière au lieu de se découvrir sur un
 téléphone.
 
-Les quatre modules de `src/repo/` sont des **fabriques sans aucun `import`** :
+Les cinq modules de `src/repo/` sont des **fabriques sans aucun `import`** :
 chacune reçoit ses dépendances en argument, et `repository.capacitor.js` est le
 seul endroit qui connaisse l'assemblage.
+
+## La graine de catalogue
+
+L'APK embarque `assets/catalog.sqlite.zst` — **le `.zst` compressé (~4,9 Mo),
+jamais les 28,8 Mo décompressés**. `npm run seed` remplit le cache `data/` avec
+la recette du bureau **importée**, pas recopiée (`apps/desktop/scripts/fetch-seed.mjs` :
+empreinte vérifiée contre le pointeur, schéma refusé s'il est trop récent,
+aucun repli sur une graine périmée) ; `prepare-www.mjs` la copie dans
+`www/assets/` à chaque régénération et refuse de produire un `www/` sans elle —
+installée sans graine, l'application n'avait aucun catalogue et ne montrait
+rien.
+
+Au premier lancement, `src/repo/graine.js` la décompresse avec le fzstd déjà
+embarqué et l'installe **seulement si `catalog.sqlite` est absent** : la graine
+est figée à la date du build, le catalogue installé a pu être mis à jour depuis
+le bucket, et l'écraser le ferait régresser à chaque mise à jour de
+l'application. Écriture de côté puis `rename`, comme partout. `npm run verify`
+éprouve le planteur avec des dépendances factices, sans appareil.
+
+L'application explore donc hors ligne dès l'installation ; `npm run data` et
+son `adb push` restent le chemin des données de développement (le vrai livre,
+le catalogue décompressé). La mise à jour du catalogue se propose ensuite au
+démarrage, depuis le rendu partagé (`js/catalog-update.js`) : la même bannière
+que le bureau, les trois méthodes du pont étant portées ici contre SQLite
+natif.
 
 ## Deux choses que la plateforme impose
 

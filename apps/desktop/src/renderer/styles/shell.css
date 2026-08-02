@@ -399,6 +399,49 @@
   }
 }
 
+/* ------------------------------------------- bannière de mise à jour du catalogue */
+
+/* La mise à jour se propose : une bande discrète au-dessus de la barre basse,
+   qu'on écarte d'un geste — jamais une boîte modale qui barre la route. Sous
+   le toast (z-index 100) : c'est lui qui annonce le résultat de la bande, il
+   passe devant. Surface pleine et non inversée : la bande porte des boutons,
+   elle se lit comme un morceau d'interface, pas comme un message éphémère. */
+.update-banner {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(96px + var(--safe-bottom));
+  z-index: 99;
+  display: flex;
+  /* Sur un téléphone, la phrase et les boutons ne tiennent pas côte à côte :
+     la bande se replie en deux lignes au lieu d'écraser le texte en colonne. */
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  width: max-content;
+  max-width: min(92vw, 560px);
+  margin-inline: auto;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--on-surface);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in var(--motion-base) var(--ease-out);
+}
+
+.update-banner__text {
+  min-width: 0;
+  text-align: center;
+}
+
+.update-banner__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-xs);
+  align-items: center;
+}
+
 @media (min-width: 900px) {
   .rail {
     display: flex;

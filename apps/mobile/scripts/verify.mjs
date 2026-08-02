@@ -353,6 +353,134 @@ controle('les deux applications écrivent la même version de `user.sqlite`', ()
     : `bureau ${bureau[1]}, mobile ${mobile[1]} — deux clients sur une même racine se marcheraient dessus`;
 });
 
+console.log('\ngraine');
+
+/**
+ * La graine de catalogue embarquée dans l'APK. Trois contrôles :
+ *
+ * 1. le planteur (`src/repo/graine.js`) est **éprouvé** avec des dépendances
+ *    factices — c'est une fabrique sans aucun `import`, précisément pour ça ;
+ * 2. il ne plante que si le catalogue est absent : la graine est figée à la
+ *    date du build, le catalogue installé a pu être mis à jour depuis le
+ *    bucket, et l'écraser ferait régresser le catalogue de l'utilisateur à
+ *    chaque mise à jour de l'application ;
+ * 3. le shim et `prepare-www.mjs` sont bien câblés — sans eux, le planteur
+ *    est un module mort et l'APK repart sans catalogue.
+ */
+let creerPlanteurGraine = null;
+let erreurGraine = null;
+try {
+  ({ creerPlanteurGraine } = await import(
+    pathToFileURL(path.join(appDir, 'src', 'repo', 'graine.js')).href
+  ));
+} catch (erreur) {
+  erreurGraine = erreur;
+}
+
+/** Un monde factice : journal des écritures, présence du catalogue simulée. */
+function mondeGraine({ cataloguePresent }) {
+  const operations = [];
+  let lectures = 0;
+  const planter = creerPlanteurGraine({
+    RepositoryError: class extends Error {
+      constructor(what, code, cause) {
+        super(what);
+        this.code = code;
+        this.cause = cause;
+      }
+    },
+    chrono: () => () => {},
+    filesystem: () => ({
+      writeFile: async ({ path: p }) => operations.push(['writeFile', p]),
+      appendFile: async ({ path: p }) => operations.push(['appendFile', p]),
+      rename: async ({ from, to }) => operations.push(['rename', from, to]),
+      deleteFile: async ({ path: p }) => operations.push(['deleteFile', p]),
+    }),
+    sqlite: () => ({
+      isNCDatabase: async () => ({ result: cataloguePresent }),
+    }),
+    decompressZstd: async (octets) => new Uint8Array(octets.length * 3),
+    chargerGraine: async () => {
+      lectures += 1;
+      return new Uint8Array(1024);
+    },
+  });
+  return { planter, operations, lectures: () => lectures };
+}
+
+let verdictPlantation = erreurGraine ? `repo/graine.js illisible : ${erreurGraine.message}` : null;
+let verdictPresence = verdictPlantation;
+
+if (creerPlanteurGraine) {
+  // Premier lancement : catalogue absent, la graine doit s'installer — de
+  // côté puis renommée, le `rename` en dernier geste, jamais d'écriture
+  // directe dans la cible : une coupure laisserait un catalogue tronqué qui
+  // s'ouvrirait sans broncher au démarrage suivant.
+  try {
+    const premier = mondeGraine({ cataloguePresent: false });
+    const resultat = await premier.planter('/racine');
+    const ops = premier.operations;
+    const derniere = ops[ops.length - 1];
+    if (resultat?.action !== 'planted') {
+      verdictPlantation = `action « ${resultat?.action} », « planted » attendue`;
+    } else if (!premier.lectures()) {
+      verdictPlantation = 'la graine embarquée n’a jamais été lue';
+    } else if (derniere?.[0] !== 'rename' || derniere[2] !== '/racine/catalog.sqlite') {
+      verdictPlantation = `dernier geste « ${derniere?.join(' ')} », « rename -> /racine/catalog.sqlite » attendu`;
+    } else if (
+      ops.some(([op, p]) => (op === 'writeFile' || op === 'appendFile') && p === '/racine/catalog.sqlite')
+    ) {
+      verdictPlantation = 'écriture directe dans catalog.sqlite : une coupure laisserait un catalogue tronqué';
+    }
+  } catch (erreur) {
+    verdictPlantation = `la plantation lève : ${erreur.message}`;
+  }
+
+  // Catalogue déjà installé : rien ne doit être lu ni écrit. C'est la règle
+  // d'`AppDatabase.#plantSeed`, et elle n'est pas devinable — une graine plus
+  // ancienne que le catalogue téléchargé l'écraserait en silence.
+  try {
+    const second = mondeGraine({ cataloguePresent: true });
+    const resultat = await second.planter('/racine');
+    if (resultat?.action !== 'present') {
+      verdictPresence = `action « ${resultat?.action} », « present » attendue`;
+    } else if (second.lectures()) {
+      verdictPresence = 'la graine a été lue alors qu’un catalogue est installé';
+    } else if (second.operations.length) {
+      verdictPresence = `écritures inattendues : ${second.operations.map(([op]) => op).join(', ')}`;
+    } else {
+      verdictPresence = null;
+    }
+  } catch (erreur) {
+    verdictPresence = `le cas « déjà installé » lève : ${erreur.message}`;
+  }
+}
+
+controle('la graine se plante au premier lancement, de côté puis renommée', () => verdictPlantation);
+controle('la graine ne se plante que si le catalogue est absent', () => verdictPresence);
+
+controle('le shim plante la graine avant d’ouvrir le catalogue', () => {
+  const source = fs.readFileSync(shimPath, 'utf8');
+  if (!source.includes('creerPlanteurGraine')) return 'le shim n’assemble pas repo/graine.js';
+  const plantation = source.indexOf('await planterGraine(');
+  if (plantation < 0) return 'catalogue() ne plante jamais la graine';
+  const ouverture = source.indexOf("fin('catalogue:ouverture'");
+  if (ouverture >= 0 && plantation > ouverture) {
+    return 'la graine se plante après l’ouverture du catalogue : trop tard';
+  }
+  return null;
+});
+
+controle('prepare-www embarque la graine depuis le cache data/', () => {
+  const source = fs.readFileSync(path.join(scriptsDir, 'prepare-www.mjs'), 'utf8');
+  const griefs = [];
+  if (!source.includes('catalog.sqlite.zst')) griefs.push('la graine n’est jamais copiée vers www/');
+  if (!source.includes('catalog-seed.json')) griefs.push('la description de la graine n’est pas embarquée');
+  return griefs.length
+    ? `${griefs.join(' ; ')} — www/ est effacé à chaque exécution, la graine doit être recopiée par prepare-www`
+    : null;
+});
+
 console.log('\nartefact');
 
 controle('www/ n’est pas suivi par git', () => {
@@ -385,6 +513,28 @@ controle('www/ n’est pas suivi par git', () => {
   return ignore.status === 0
     ? null
     : `\`git check-ignore ${sonde}\` rend ${ignore.status} : aucune règle ne l’exclut. ${rappel}`;
+});
+
+controle('la graine (data/) n’est pas suivie par git', () => {
+  // Même méthode que www/ : l'index d'abord, la règle ensuite, interrogée sur
+  // un chemin **dans** le dossier — la règle `data/` ne vise que des
+  // répertoires, et `check-ignore` sur un chemin encore absent ne peut pas
+  // deviner que c'en est un. La graine est un artefact du build : la
+  // versionner ferait entrer plusieurs Mo de binaire dans l'historique à
+  // chaque publication de catalogue.
+  const dataRelatif = 'apps/mobile/data';
+  const suivis = spawnSync('git', ['ls-files', '--', dataRelatif], { cwd: repoRoot, encoding: 'utf8' });
+  if (suivis.error) return `git indisponible : ${suivis.error.message}`;
+  const listes = String(suivis.stdout ?? '').trim();
+  if (listes) {
+    return `suivis par git :\n       ${listes.split('\n').join('\n       ')}`;
+  }
+  const sonde = `${dataRelatif}/catalog.sqlite.zst`;
+  const ignore = spawnSync('git', ['check-ignore', '-q', '--', sonde], { cwd: repoRoot });
+  if (ignore.error) return `git indisponible : ${ignore.error.message}`;
+  return ignore.status === 0
+    ? null
+    : `\`git check-ignore ${sonde}\` rend ${ignore.status} : aucune règle ne l’exclut de git`;
 });
 
 console.log(

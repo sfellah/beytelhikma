@@ -1,5 +1,6 @@
 import { syncAppFont } from './app-font.js';
 import { syncUserFonts } from './user-fonts.js';
+import { proposeCatalogUpdate } from './catalog-update.js';
 import { syncLocale } from './i18n.js';
 import { defineRoutes, start } from './router.js';
 import { placeholderView } from './shell.js';
@@ -55,3 +56,8 @@ syncLocale();
 syncUserFonts().then(syncAppFont);
 
 start(document.getElementById('app'), { initial: '/home' });
+
+// La mise à jour du catalogue se propose, ne s'impose pas : la vérification
+// part après le premier rendu, jamais avant, et son échec n'empêche jamais
+// l'application de s'ouvrir. Seule une offre réelle se voit (catalog-update.js).
+proposeCatalogUpdate();

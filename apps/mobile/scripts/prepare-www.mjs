@@ -31,6 +31,17 @@ const shimSource = path.join(appDir, 'src', 'repository.capacitor.js');
 const probeSource = path.join(appDir, 'src', 'probe.js');
 
 /**
+ * La graine de catalogue embarquée dans l'APK : le `.zst` **compressé**
+ * (± 5 Mo), jamais les 28,8 Mo décompressés — le premier lancement le
+ * décompresse sur l'appareil avec le `fzstd` déjà embarqué. Elle vit dans le
+ * cache `data/`, rempli par `npm run seed` (la recette du bureau, importée) :
+ * `www/` est effacé à chaque exécution, une graine posée là à la main
+ * disparaîtrait au premier `npm run sync`.
+ */
+const seedArchive = path.join(appDir, 'data', 'catalog.sqlite.zst');
+const seedDescription = path.join(appDir, 'data', 'catalog-seed.json');
+
+/**
  * La sonde est un **instrument**, pas une fonctionnalité : elle affiche les
  * temps relevés sur l'appareil pour que l'exemple prouve ce qu'il avance. Un
  * build de release n'a rien à prouver, et un panneau de mesures posé sur
@@ -285,6 +296,10 @@ const exigences = [
   [rendererDir, 'le rendu Electron (apps/desktop/src/renderer/)'],
   [sharedDir, 'les modules partagés (apps/desktop/src/shared/)'],
   [shimSource, 'le shim `src/repository.capacitor.js` — écrit en parallèle, il n’existe pas encore'],
+  // Pas de repli sur un APK sans graine : installée sur un téléphone sans
+  // `adb push`, l'application n'aurait aucun catalogue et ne montrerait rien.
+  [seedArchive, 'la graine de catalogue `data/catalog.sqlite.zst` — lancez `npm run seed`'],
+  [seedDescription, 'la description de la graine `data/catalog-seed.json` — produite par `npm run seed`'],
   ...(sansSonde
     ? []
     : [[probeSource, 'la sonde `src/probe.js` — écrite en parallèle, elle n’existe pas encore']]),
@@ -331,6 +346,21 @@ if (sansSonde) {
   fs.copyFileSync(probeSource, path.join(wwwDir, 'js', 'probe.js'));
   console.log('  ajouté     www/js/probe.js       <- src/probe.js');
 }
+
+/**
+ * La graine part dans l'APK, à côté des assets du rendu. Le shim la lit par
+ * `fetch` même-origine (`connect-src 'self'`) et la plante au premier
+ * lancement, seulement si aucun catalogue n'est installé (`repo/graine.js`).
+ * C'est le pendant mobile d'`assets/catalog.sqlite.zst` du bureau.
+ */
+fs.mkdirSync(path.join(wwwDir, 'assets'), { recursive: true });
+fs.copyFileSync(seedArchive, path.join(wwwDir, 'assets', 'catalog.sqlite.zst'));
+fs.copyFileSync(seedDescription, path.join(wwwDir, 'assets', 'catalog-seed.json'));
+const graine = JSON.parse(fs.readFileSync(seedDescription, 'utf8'));
+console.log(
+  `  ajouté     www/assets/catalog.sqlite.zst <- data/ ` +
+    `(graine v${graine.catalog_version}, ${(fs.statSync(seedArchive).size / 1_000_000).toFixed(1)} Mo)`,
+);
 
 // Les modules du dépôt, écrits comme des fabriques sans aucun import : c'est
 // ce qui leur permet d'être servis à plat, sans résolution de spécificateur.

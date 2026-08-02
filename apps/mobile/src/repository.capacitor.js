@@ -39,6 +39,7 @@ import { creerMethodesCatalogue } from './repo/catalogue-plus.js';
 import { creerMethodesPolices } from './repo/polices.js';
 import { creerMethodesTelechargements } from './repo/telechargements.js';
 import { creerMethodesUtilisateur } from './repo/utilisateur.js';
+import { creerPlanteurGraine } from './repo/graine.js';
 
 function arabe() {
   arabePromise ??= import(new URL('../shared/arabic.js', import.meta.url).href).catch((erreur) => {
@@ -557,6 +558,37 @@ async function executerBrut(sql) {
   await sqlite().execute({ database: base, statements: sql, transaction: false, readonly: false });
 }
 
+// --------------------------------------------------------------- la graine
+
+/**
+ * Lit la graine embarquée : `www/assets/catalog.sqlite.zst`, posée là par
+ * `prepare-www.mjs` depuis le cache `data/` que `scripts/fetch-seed.mjs`
+ * remplit au build. Capacitor sert `www/` depuis `https://localhost`, la même
+ * origine que la page : `connect-src 'self'` couvre ce `fetch`. Un montage
+ * antérieur, sans graine, répond 404 — l'erreur remonte typée et l'écran la
+ * dit, au lieu du rien silencieux d'avant.
+ */
+async function chargerGraine() {
+  const url = new URL('../assets/catalog.sqlite.zst', import.meta.url).href;
+  const reponse = await fetch(url, { cache: 'no-store' });
+  if (!reponse.ok) {
+    throw new RepositoryError(
+      `graine de catalogue absente de l'application (HTTP ${reponse.status})`,
+      'db-missing',
+    );
+  }
+  return new Uint8Array(await reponse.arrayBuffer());
+}
+
+const planterGraine = creerPlanteurGraine({
+  RepositoryError,
+  chrono,
+  filesystem,
+  sqlite,
+  decompressZstd,
+  chargerGraine,
+});
+
 // ------------------------------------------------------------- le catalogue
 
 let cataloguePromise = null;
@@ -571,6 +603,10 @@ function catalogue() {
   const promesse = (async () => {
     const racine = await racineAppareil();
     const chemin = `${racine}/catalog.sqlite`;
+    // Premier lancement : l'APK embarque la graine de catalogue, et elle ne se
+    // plante que si `catalog.sqlite` est absent — la raison est dans
+    // `repo/graine.js`, c'est la règle d'`AppDatabase.#plantSeed`.
+    await planterGraine(racine);
     const fin = chrono();
     await ouvrir(chemin);
     fin('catalogue:ouverture', chemin);
