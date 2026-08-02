@@ -167,11 +167,15 @@ tâches.
    suivante. Le ruban y perd donc les deux chevrons et la fraction
    « ١٢ / ٢٣٠ » : sans page à l'écran, ils ne désignent plus rien de visible.
    Il ne garde que ce qui dit où l'on en est — la jauge et le pourcentage. En
-   mode page, il garde tout. Le fil ne garde qu'une tranche de pages autour de
-   la lecture (`FLOW_KEEP`) : sql.js tient déjà tout le livre en mémoire, un
-   fil sans fin ferait enfler la page autant que le processus — un seul bloc à
-   l'œil, donc, pas dans l'arbre, et `page_id` continue de porter l'ancrage des
-   annotations. Sélection de texte
+   mode page, il garde tout. Le fil **monte le livre entier et ne démonte
+   rien** : on descend, on descend, et tout est là, y compris derrière soi. Il
+   ne l'attend pas pour autant — on ouvre sur quelques pages autour de la
+   reprise, puis le reste monte dans les creux, par tranches, dans les deux
+   sens ; le remplissage cède la place au geste et s'arrête avec la vue.
+   Un seul bloc à l'œil, donc, pas dans l'arbre : `page_id` continue de porter
+   l'ancrage des annotations. Ce que ça coûte : ~25 nœuds DOM par page, soit
+   ~5 000 pour un livre médian du corpus (206 pages) et ~270 000 au 99ᵉ
+   centile (10 766 pages) — il n'y a aujourd'hui aucune borne. Sélection de texte
    native, taille de police (curseur, boutons, `Ctrl`+molette), face de lecture
    parmi les trois arabes, progression écrite dans `user.sqlite`. L'ambiance
    (ورقي / أبيض / ليلي) n'appartient plus au lecteur : c'est le thème de

@@ -202,10 +202,10 @@ test('au fil continu, le ruban perd les chevrons et la fraction, garde la jauge'
  */
 test('le titre de chapitre se compare au bloc voisin monté, pas au cache des pages', () => {
   const reader = read('../src/renderer/js/views/reader.js');
-  const corps = methode(reader, '#syncChapters() {');
+  const corps = methode(reader, '#syncChapters(from = this.#first, to = this.#last) {');
 
   assert.ok(
-    /this\.#blocks\.get\(block\.index - 1\)/.test(corps),
+    /this\.#blocks\.get\(index - 1\)/.test(corps),
     'la comparaison doit lire le bloc monté juste avant',
   );
   assert.equal(
@@ -214,15 +214,144 @@ test('le titre de chapitre se compare au bloc voisin monté, pas au cache des pa
     'le cache des pages n’est pas ce qui est à l’écran',
   );
 
-  // Le fenêtrage démonte et remonte les deux bords du fil : chaque mouvement
-  // doit redemander la décision, sinon la page devenue première du fil reste
-  // muette et l'on ne sait plus dans quel chapitre on lit.
-  for (const entete of ['async #extendEnd() {', 'async #extendStart() {']) {
-    assert.ok(
-      methode(reader, entete).includes('this.#syncChapters()'),
-      `${entete} doit resynchroniser les titres`,
+  // Chaque tranche ajoutée doit redemander la décision, sinon la page qui
+  // ouvrait le fil reste muette et l'on ne sait plus dans quel chapitre on lit.
+  // Par tranche, et jamais pour tout le fil : il porte le livre entier.
+  for (const entete of ['async #extendEnd(steps = FLOW_STEP) {', 'async #extendStart(steps = FLOW_STEP) {']) {
+    const corps = methode(reader, entete);
+    assert.ok(/this\.#syncChapters\([^)]+\)/.test(corps), `${entete} doit resynchroniser les titres`);
+    assert.equal(
+      /this\.#syncChapters\(\)/.test(corps),
+      false,
+      `${entete} relit tout le fil à chaque tranche`,
     );
   }
+});
+
+/**
+ * Le fil ne garde plus une tranche : il finit par porter le livre entier. On
+ * descend, on descend, et tout est là — y compris derrière soi, sans rien
+ * réattendre.
+ */
+test('au fil continu, rien ne se démonte derrière : le livre entier finit monté', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.equal(/#trim\(/.test(reader), false, 'l’élagage démontait ce qu’on venait de lire');
+  assert.equal(/FLOW_KEEP/.test(reader), false, 'plus aucune borne au nombre de pages montées');
+});
+
+/**
+ * Le reste du livre monte **après** le premier dessin, par tranches, dans les
+ * deux sens : le lecteur ouvre sur la page reprise, et ce qui la précède compte
+ * autant que ce qui la suit. Attendre le livre entier avant de peindre serait
+ * un refus déguisé.
+ */
+test('le reste du livre monte en tâche de fond, dans les deux sens', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+
+  const flot = methode(reader, 'async #showInFlow(index, { save = true, jump = true } = {}) {');
+  assert.ok(
+    /await this\.#fill\(\);\s*\r?\n\s*this\.#startBackfill\(\);/.test(flot),
+    'le remplissage part après le premier écran rempli',
+  );
+  assert.equal(
+    /await this\.#startBackfill/.test(reader),
+    false,
+    'attendre le livre entier avant le premier dessin est un refus déguisé',
+  );
+
+  const fond = methode(reader, '#startBackfill() {');
+  assert.ok(fond.includes('this.#extendEnd(BACKFILL_STEP)'), 'la fin doit se remplir');
+  assert.ok(fond.includes('this.#extendStart(BACKFILL_STEP)'), 'le début aussi');
+  assert.equal(
+    /\|\|\s*\(?await this\.#extendStart/.test(fond),
+    false,
+    'un court-circuit garderait le début du livre pour la fin',
+  );
+
+  // Le même chemin, pas un second. La compensation de `scrollTop` n'est écrite
+  // qu'une fois, dans `#extendStart` : un remplissage qui prependrait lui-même
+  // ferait sauter la lecture à chaque tranche ajoutée au-dessus d'elle.
+  for (const interdit of ['prepend', 'scrollTop', 'scrollHeight']) {
+    assert.equal(
+      fond.includes(interdit),
+      false,
+      `le remplissage ne doit pas refaire « ${interdit} » à sa façon`,
+    );
+  }
+
+  // Une seule extension à la fois : le geste de l'utilisateur passe devant.
+  assert.ok(fond.includes('this.#extending'), 'le défilement de l’utilisateur passe devant');
+
+  // La fin normale est un fil qui couvre le livre. S'arrêter au premier tour
+  // qui n'a rien monté laisserait le livre à moitié là, parce que le geste de
+  // l'utilisateur tenait les bornes pendant qu'on attendait.
+  assert.ok(
+    /this\.#first <= 0 && this\.#last >= this\.#pageCount - 1/.test(fond),
+    'le remplissage s’arrête sur un livre monté, pas sur un tour vide',
+  );
+  assert.ok(fond.includes('BACKFILL_GIVE_UP'), 'et ne tourne pas à vide sur un livre qui résiste');
+});
+
+/**
+ * Un `requestIdleCallback` qui se reprogramme seul est exactement la fuite que
+ * le routeur vient de corriger : il doit mourir avec la vue, avec le mode, et
+ * à chaque nouveau départ. Le jeton compte pour deux — il arrête le tour
+ * programmé **et** celui qui est en vol, un tour étant fait d'attentes.
+ */
+test('le remplissage de fond s’arrête avec la vue, avec le mode, et à chaque départ', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+
+  assert.ok(methode(reader, 'dispose() {').includes('this.#stopBackfill()'), 'au démontage');
+  assert.ok(methode(reader, '#setMode(key) {').includes('this.#stopBackfill()'), 'au mode page');
+
+  const fond = methode(reader, '#startBackfill() {');
+  assert.ok(fond.includes('this.#stopBackfill()'), 'un nouveau départ arrête le précédent');
+  assert.ok(fond.includes('this.#disposed'), 'un tour en vol doit se relire démonté');
+  assert.ok(/token !== this\.#backfillToken/.test(fond), 'et se relire périmé');
+
+  const arret = methode(reader, '#stopBackfill() {');
+  assert.ok(/this\.#backfillToken \+= 1/.test(arret), 'l’arrêt périme le tour en vol');
+  assert.ok(/this\.#backfillCancel\?\.\(\)/.test(arret), 'et annule celui qui est programmé');
+});
+
+/**
+ * Le fil portant le livre entier, plus rien de ce qui se rejoue à chaque geste
+ * ne peut être proportionnel au nombre de pages montées. Mesuré sur le corpus :
+ * la médiane est à 206 pages, mais 1,2 % des livres dépassent 10 000 pages.
+ */
+test('rien sur le chemin du défilement ne coûte le livre entier', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const balaie = /for \(const block of this\.#blocks\.values\(\)\)/;
+
+  // La page lue : un rectangle par page montée, à chaque évènement de
+  // défilement, forcerait des milliers de dispositions par geste.
+  const visible = methode(reader, '#visibleBlock() {');
+  assert.equal(balaie.test(visible), false, '#visibleBlock balaie tout le fil');
+  assert.ok(/low \+ high/.test(visible), 'la page lue se trouve par dichotomie');
+
+  // Franchir une page ne change que deux blocs, et le signet d'aucun.
+  const courant = methode(reader, '#setCurrent(index, page, { save = true } = {}) {');
+  assert.equal(balaie.test(courant), false, '#setCurrent balaie tout le fil');
+  assert.ok(courant.includes('this.#syncBookmarkButton()'), 'le bouton seul suit la page courante');
+
+  // Le chapitre d'une page : au balayage, le corpus donne 54 millions de tours
+  // au 99ᵉ centile de `pages × sommaire`, et 17 milliards sur le plus gros.
+  const chapitre = methode(reader, '#chapterFor(page) {');
+  assert.equal(
+    /for \(const entry of this\.#toc\)/.test(chapitre),
+    false,
+    '#chapterFor balaie tout le sommaire pour chaque page montée',
+  );
+
+  // Poser une teinte sur trois mots ne doit pas rejouer `renderBookHtml` sur
+  // des milliers de pages.
+  const apres = methode(reader, '#afterAnnotationChange(pageId = null) {');
+  assert.ok(apres.includes('block.page.pageId === pageId'), 'seule la page touchée se repeint');
+  assert.equal(
+    reader.includes('#afterAnnotationChange()'),
+    false,
+    'un appelant qui tait sa page fait repeindre tout le fil',
+  );
 });
 
 // ------------------------------------------------------------ ruban dressé

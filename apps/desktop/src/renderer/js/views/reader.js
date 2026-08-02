@@ -46,11 +46,36 @@ const HINT_DELAY = 4000;
  */
 const SELECTION_SETTLE = 250;
 
-/** Défilement continu : pages gardées de part et d'autre, et seuils de recharge. */
-const FLOW_KEEP = 40;
+/**
+ * Défilement continu : tranche ajoutée d'un coup, et distance au bord qui
+ * déclenche la recharge. Il n'y a **pas** de borne au nombre de pages montées —
+ * le fil finit par porter le livre entier. Ce qui reste borné, c'est le travail
+ * fait d'un seul tenant : monter huit mille pages avant le premier dessin
+ * serait un refus déguisé.
+ */
 const FLOW_STEP = 3;
 const NEAR_START = 600;
 const NEAR_END = 900;
+
+/**
+ * Remplissage de fond : ce qui monte le reste du livre une fois la lecture
+ * commencée.
+ *
+ * La tranche est plus large que celle du défilement parce qu'elle est plus
+ * rare : chaque tranche ajoutée *avant* la lecture force une disposition pour
+ * rendre à `scrollTop` la hauteur qu'il vient de perdre, et sur un livre
+ * entièrement monté une disposition coûte le livre entier. Quatre fois moins de
+ * tranches, c'est quatre fois moins de dispositions forcées.
+ *
+ * `BACKFILL_TIMEOUT` est le délai au bout duquel `requestIdleCallback` cède :
+ * sans lui, un lecteur qui défile sans relâche ne verrait jamais de creux et le
+ * livre ne finirait pas de monter.
+ */
+const BACKFILL_STEP = 12;
+const BACKFILL_PAUSE = 16;
+const BACKFILL_TIMEOUT = 300;
+/** Tours de suite sans rien monter avant d'abandonner un livre qui résiste. */
+const BACKFILL_GIVE_UP = 5;
 
 /** Entrées de sommaire montées d'un coup ; au-delà, on déplie à la demande. */
 const TOC_WINDOW = 80;
@@ -135,6 +160,17 @@ class Reader {
   #last = -1;
   /** Une seule extension du fil à la fois, sinon les bornes se marchent dessus. */
   #extending = false;
+  /**
+   * Remplissage de fond : ce qui l'annule, et la génération en cours.
+   *
+   * Le jeton compte pour deux : il arrête une passe déjà programmée, et il
+   * arrête celle qui est *en train* de s'exécuter — un tour de remplissage est
+   * fait d'attentes, et la vue peut être démontée entre deux. Un
+   * `requestIdleCallback` qui survit à la vue est exactement la fuite que le
+   * routeur vient de corriger.
+   */
+  #backfillCancel = null;
+  #backfillToken = 0;
   /** Page affichée, pour ancrer une annotation sans la rechercher. */
   #page = null;
   /**
@@ -257,6 +293,10 @@ class Reader {
     // posait ses écouteurs sur `document` — un lecteur quitté continuait alors
     // d'avaler les flèches et le `Ctrl+F` de l'écran suivant.
     this.#disposed = true;
+    // Le remplissage de fond est fait d'attentes et se reprogramme seul : sans
+    // ce coup d'arrêt, il continuerait de monter les pages d'un livre que
+    // personne ne lit plus, dans un arbre détaché.
+    this.#stopBackfill();
     document.removeEventListener('keydown', this.#keyHandler);
     document.removeEventListener('selectionchange', this.#selectionHandler);
     document.removeEventListener('fullscreenchange', this.#fullscreenHandler);
@@ -808,7 +848,7 @@ class Reader {
           this.#annotations.bookmarks = this.#annotations.bookmarks.filter(
             (item) => item.bookmarkId !== entry.bookmark.bookmarkId,
           );
-          this.#afterAnnotationChange();
+          this.#afterAnnotationChange(entry.pageId);
         }),
       );
     } else if (entry.kind === 'highlight') {
@@ -935,12 +975,22 @@ class Reader {
     return this.#highlightsByPage.get(pageId) ?? [];
   }
 
-  /** Redessine les pages montées et le panneau après toute écriture. */
-  #afterAnnotationChange() {
+  /**
+   * Redessine le panneau, le signet, et **la seule page touchée**.
+   *
+   * Repeindre toutes les pages montées était tenable tant que le fil n'en
+   * gardait qu'une tranche ; il porte maintenant le livre entier, et poser une
+   * teinte sur trois mots relançait `renderBookHtml` sur des milliers de pages.
+   * [pageId] est toujours connu de l'appelant — une annotation appartient à une
+   * page. Nul par prudence : tout est repeint, ce qui est lent mais jamais faux.
+   */
+  #afterAnnotationChange(pageId = null) {
     this.#highlightsByPage = null;
     this.#drawAnnotations();
-    this.#syncBookmark();
-    for (const block of this.#blocks.values()) this.#paintBlock(block);
+    this.#syncBookmark(pageId);
+    for (const block of this.#blocks.values()) {
+      if (pageId == null || block.page.pageId === pageId) this.#paintBlock(block);
+    }
   }
 
   /** Repeint le contenu d'une page montée : recherche puis annotations. */
@@ -977,7 +1027,7 @@ class Reader {
         ...this.#annotations.highlights.filter((item) => item.highlightId !== saved.highlightId),
         saved,
       ];
-      this.#afterAnnotationChange();
+      this.#afterAnnotationChange(page.pageId);
       return saved;
     } catch (error) {
       toast(error?.message ?? t('reader.highlightSaveFailed'));
@@ -1014,7 +1064,7 @@ class Reader {
         ...this.#annotations.notes.filter((note) => note.noteId !== saved.noteId),
         saved,
       ];
-      this.#afterAnnotationChange();
+      this.#afterAnnotationChange(saved.pageId);
       toast(t('reader.noteSaved'));
     } catch (error) {
       toast(error?.message ?? t('reader.noteSaveFailed'));
@@ -1031,7 +1081,7 @@ class Reader {
     this.#annotations.notes = this.#annotations.notes.filter(
       (item) => item.noteId !== note.noteId,
     );
-    this.#afterAnnotationChange();
+    this.#afterAnnotationChange(note.pageId);
   }
 
   async #removeHighlight(highlight) {
@@ -1058,7 +1108,7 @@ class Reader {
     this.#annotations.notes = this.#annotations.notes.filter(
       (note) => note.highlightId !== highlight.highlightId,
     );
-    this.#afterAnnotationChange();
+    this.#afterAnnotationChange(highlight.pageId);
   }
 
   async #toggleBookmark() {
@@ -1075,7 +1125,7 @@ class Reader {
       this.#annotations.bookmarks = result.added
         ? [...this.#annotations.bookmarks, result.bookmark]
         : this.#annotations.bookmarks.filter((item) => item.pageId !== page.pageId);
-      this.#afterAnnotationChange();
+      this.#afterAnnotationChange(page.pageId);
       toast(t(result.added ? 'reader.bookmarkAdded' : 'reader.bookmarkRemoved'));
     } catch (error) {
       toast(error?.message ?? t('reader.bookmarkSaveFailed'));
@@ -1091,11 +1141,16 @@ class Reader {
    * arbore son signet : sans repère dans le texte, le bouton avait l'air de
    * ne rien faire.
    */
-  #syncBookmark() {
+  #syncBookmark(pageId = null) {
     for (const block of this.#blocks.values()) {
+      if (pageId != null && block.page.pageId !== pageId) continue;
       block.root.classList.toggle('is-bookmarked', this.#isBookmarked(block.page.pageId));
     }
+    this.#syncBookmarkButton();
+  }
 
+  /** L'icône de la barre haute seule : ce que la page courante change. */
+  #syncBookmarkButton() {
     const button = this.#nodes.bookmarkButton;
     if (!button || !this.#page) return;
     const marked = this.#isBookmarked(this.#page.pageId);
@@ -1377,11 +1432,17 @@ class Reader {
    * plus) dirait « déjà annoncé » d'un chapitre dont la première page a quitté
    * l'écran. En mode page, chaque page rouvre son chapitre : c'est le seul
    * repère de la feuille.
+   *
+   * La décision se demande **par tranche** — de [from] à [to] — et non pour
+   * tout le fil : celui-ci porte le livre entier, et le relire à chaque tranche
+   * ajoutée ferait le carré du livre en écritures de style.
    */
-  #syncChapters() {
+  #syncChapters(from = this.#first, to = this.#last) {
     const flow = this.#prefs.mode === 'scroll';
-    for (const block of this.#blocks.values()) {
-      const previous = flow ? this.#blocks.get(block.index - 1) : null;
+    for (let index = from; index <= to; index += 1) {
+      const block = this.#blocks.get(index);
+      if (!block) continue;
+      const previous = flow ? this.#blocks.get(index - 1) : null;
       const repete = Boolean(previous) && previous.title === block.title;
       block.chapter.style.display = block.title && !repete ? '' : 'none';
     }
@@ -1423,9 +1484,14 @@ class Reader {
 
   /**
    * Mode fil continu : si la page demandée est déjà montée on s'y rend, sinon
-   * on repart d'elle. Le fil reste borné — `FLOW_KEEP` pages autour de la
-   * lecture — parce que sql.js tient tout le livre en mémoire et qu'un fil sans
-   * fin ferait enfler la page autant que le processus.
+   * on repart d'elle.
+   *
+   * Le fil n'est plus borné : il finit par porter le livre entier. Mais il ne
+   * l'attend pas — on ouvre sur quelques pages autour de la position, puis
+   * `#startBackfill` monte le reste dans les creux, dans les deux sens. Un
+   * `await` du livre complet avant le premier dessin serait un refus déguisé,
+   * et le lecteur ouvre rarement à la page 1 : ce qui précède la reprise compte
+   * autant que ce qui la suit.
    */
   async #showInFlow(index, { save = true, jump = true } = {}) {
     const known = this.#blocks.get(index);
@@ -1442,6 +1508,7 @@ class Reader {
       this.#nodes.lastScroll = 0;
       this.#setCurrent(index, page, { save });
       await this.#fill();
+      this.#startBackfill();
       return;
     }
 
@@ -1466,98 +1533,175 @@ class Reader {
     }
   }
 
-  async #extendEnd() {
+  /**
+   * Allonge le fil par la fin. Rien n'est démonté en retour : le fil garde tout
+   * ce qu'il a monté, et l'on peut redescendre sur ses pas sans rien
+   * réattendre.
+   *
+   * La tranche part d'un coup, dans un fragment : mille `append` séparés, ce
+   * sont mille occasions pour le navigateur de reprendre la disposition.
+   */
+  async #extendEnd(steps = FLOW_STEP) {
     if (this.#extending) return false;
     this.#extending = true;
     try {
-      let grew = false;
-      for (let step = 0; step < FLOW_STEP; step += 1) {
-        const next = this.#last + 1;
+      const depart = this.#last;
+      const pages = [];
+      for (let step = 0; step < steps; step += 1) {
+        const next = depart + 1 + step;
         if (next >= this.#pageCount) break;
         const page = await this.#pageAt(next);
         if (!page) break;
-        const block = this.#makeBlock(next, page);
-        this.#nodes.flow.append(block.root);
-        this.#blocks.set(next, block);
-        this.#last = next;
-        grew = true;
+        pages.push([next, page]);
       }
-      if (grew) {
-        this.#trim('start');
-        // Après l'élagage : la page devenue première du fil n'a plus de voisin
-        // montée avant elle, et doit reprendre son titre de chapitre.
-        this.#syncChapters();
-      }
-      return grew;
+      // Le fil a pu être reconstruit pendant l'attente — un saut depuis le
+      // sommaire, par exemple : la tranche calculée ne s'y raccorde plus.
+      if (!pages.length || this.#last !== depart) return false;
+
+      const ajoutes = pages.map(([index, page]) => this.#makeBlock(index, page));
+      const tranche = document.createDocumentFragment();
+      for (const block of ajoutes) tranche.append(block.root);
+      this.#nodes.flow.append(tranche);
+      for (const block of ajoutes) this.#blocks.set(block.index, block);
+
+      const premier = ajoutes[0].index;
+      this.#last = ajoutes[ajoutes.length - 1].index;
+      // Seules les pages ajoutées changent d'avis sur leur titre : celles d'au-
+      // dessus gardent le voisin qu'elles avaient. Relire tout le fil à chaque
+      // tranche coûterait le carré du livre.
+      this.#syncChapters(premier, this.#last);
+      return true;
     } finally {
       this.#extending = false;
     }
   }
 
-  async #extendStart() {
+  /**
+   * Allonge le fil par le début. C'est le seul chemin qui ajoute du contenu
+   * *avant* la lecture, et donc le seul qui doive rendre à `scrollTop` la
+   * hauteur qu'il vient de perdre — le remplissage de fond passe par lui, il
+   * n'existe pas de second endroit où cette compensation serait écrite.
+   *
+   * Toute la tranche est posée d'un coup, entre **une seule** paire de mesures.
+   * Chaque `scrollHeight` lu force une disposition, et sur un livre entièrement
+   * monté une disposition coûte le livre entier : les mesurer page par page
+   * rendait le remplissage quadratique.
+   */
+  async #extendStart(steps = FLOW_STEP) {
     if (this.#extending) return false;
     this.#extending = true;
     try {
       const scroll = this.#nodes.scroll;
-      let grew = false;
-      for (let step = 0; step < FLOW_STEP; step += 1) {
-        const previous = this.#first - 1;
+      const depart = this.#first;
+      const pages = [];
+      for (let step = 0; step < steps; step += 1) {
+        const previous = depart - 1 - step;
         if (previous < 0) break;
         const page = await this.#pageAt(previous);
         if (!page) break;
-        const block = this.#makeBlock(previous, page);
-        const before = scroll.scrollHeight;
-        this.#nodes.flow.prepend(block.root);
-        // Le contenu ajouté au-dessus décalerait la lecture : on lui rend
-        // exactement la hauteur qu'il vient de perdre.
-        scroll.scrollTop += scroll.scrollHeight - before;
-        this.#blocks.set(previous, block);
-        this.#first = previous;
-        grew = true;
+        pages.push([previous, page]);
       }
-      if (grew) {
-        this.#trim('end');
-        // Une page ajoutée en tête peut porter le chapitre de celle qui la
-        // suivait : c'est elle qui l'annonce désormais, et sa voisine se tait.
-        this.#syncChapters();
-        this.#nodes.lastScroll = scroll.scrollTop;
-      }
-      return grew;
+      // Le fil a pu être reconstruit pendant l'attente — un saut depuis le
+      // sommaire, par exemple : la tranche calculée ne s'y raccorde plus.
+      if (!pages.length || this.#first !== depart) return false;
+
+      const ajoutes = pages.map(([index, page]) => this.#makeBlock(index, page));
+      // Les blocs ont été fabriqués à reculons : le fragment les remet dans
+      // l'ordre du texte.
+      const tranche = document.createDocumentFragment();
+      for (const block of [...ajoutes].reverse()) tranche.append(block.root);
+      const before = scroll.scrollHeight;
+      this.#nodes.flow.prepend(tranche);
+      scroll.scrollTop += scroll.scrollHeight - before;
+
+      for (const block of ajoutes) this.#blocks.set(block.index, block);
+      this.#first = ajoutes[ajoutes.length - 1].index;
+      // La tranche, plus la page qui ouvrait le fil : elle annonçait son
+      // chapitre faute de voisin, et se tait si sa nouvelle voisine le porte.
+      this.#syncChapters(this.#first, depart);
+      this.#nodes.lastScroll = scroll.scrollTop;
+      return true;
     } finally {
       this.#extending = false;
     }
   }
 
-  /** Élague le fil par le bout opposé au sens de lecture. */
-  #trim(side) {
-    const scroll = this.#nodes.scroll;
-    while (this.#blocks.size > FLOW_KEEP) {
-      const index = side === 'start' ? this.#first : this.#last;
-      if (index === this.#index) break;
-      const block = this.#blocks.get(index);
-      if (!block) break;
-      if (side === 'start') {
-        const before = scroll.scrollHeight;
-        block.root.remove();
-        scroll.scrollTop -= before - scroll.scrollHeight;
-        this.#first += 1;
-      } else {
-        block.root.remove();
-        this.#last -= 1;
+  /**
+   * Monte le reste du livre entre deux respirations, dans les deux sens, tant
+   * qu'il reste quelque chose à monter.
+   *
+   * Le défilement de l'utilisateur passe devant : le tour repasse plus tard si
+   * une extension est déjà en cours (`#extending`), plutôt que d'ouvrir une
+   * seconde course sur les mêmes bornes. Et il passe par `#extendEnd` /
+   * `#extendStart`, pas par un chemin à lui : la compensation de `scrollTop`
+   * n'est écrite qu'une fois.
+   */
+  #startBackfill() {
+    this.#stopBackfill();
+    if (this.#prefs.mode !== 'scroll') return;
+    const token = (this.#backfillToken += 1);
+    let vides = 0;
+
+    const tour = async () => {
+      this.#backfillCancel = null;
+      if (this.#disposed || token !== this.#backfillToken) return;
+      // La seule fin normale : le fil couvre le livre.
+      if (this.#first <= 0 && this.#last >= this.#pageCount - 1) return;
+
+      if (!this.#extending) {
+        // Les deux sens, sans court-circuit : le lecteur ouvre sur la page
+        // reprise, et ce qui la précède compte autant que ce qui la suit.
+        const avance = await this.#extendEnd(BACKFILL_STEP);
+        if (this.#disposed || token !== this.#backfillToken) return;
+        const recule = await this.#extendStart(BACKFILL_STEP);
+        if (this.#disposed || token !== this.#backfillToken) return;
+
+        // Un tour peut ne rien monter sans que le livre soit fini : le geste de
+        // l'utilisateur tenait les bornes pendant qu'on attendait. On réessaie,
+        // mais pas sans fin — une page illisible ferait tourner le remplissage
+        // à vide jusqu'à ce qu'on ferme le livre.
+        vides = avance || recule ? 0 : vides + 1;
+        if (vides >= BACKFILL_GIVE_UP) return;
       }
-      this.#blocks.delete(index);
+      this.#scheduleBackfill(token, tour);
+    };
+
+    this.#scheduleBackfill(token, tour);
+  }
+
+  #scheduleBackfill(token, tour) {
+    if (this.#disposed || token !== this.#backfillToken) return;
+    // `requestIdleCallback` laisse passer le geste et la peinture : le
+    // remplissage n'arrive que dans les creux. Son `timeout` garantit qu'un
+    // lecteur qui défile sans relâche finit quand même son livre.
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(tour, { timeout: BACKFILL_TIMEOUT });
+      this.#backfillCancel = () => cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(tour, BACKFILL_PAUSE);
+      this.#backfillCancel = () => clearTimeout(id);
     }
+  }
+
+  /** Arrête le remplissage : passage en mode page, saut ailleurs, ou départ. */
+  #stopBackfill() {
+    this.#backfillToken += 1;
+    this.#backfillCancel?.();
+    this.#backfillCancel = null;
   }
 
   /** Synchronise la barre basse, le signet et la progression sur [index]. */
   #setCurrent(index, page, { save = true } = {}) {
     const changed = this.#index !== index || this.#page?.pageId !== page.pageId;
+
+    // Les deux pages concernées, pas toutes celles qui sont montées : ce
+    // passage est appelé à chaque page franchie en défilant, et le fil porte le
+    // livre entier.
+    this.#blocks.get(this.#index)?.root.classList.remove('is-current');
+    this.#blocks.get(index)?.root.classList.add('is-current');
+
     this.#index = index;
     this.#page = page;
-
-    for (const block of this.#blocks.values()) {
-      block.root.classList.toggle('is-current', block.index === index);
-    }
 
     this.#nodes.slider.value = String(index + 1);
     this.#nodes.pagerCurrent.textContent = n(index + 1);
@@ -1570,7 +1714,9 @@ class Reader {
     this.#nodes.previous.disabled = index === 0;
     this.#nodes.next.disabled = index >= this.#pageCount - 1;
 
-    this.#syncBookmark();
+    // Le bouton seul : franchir une page ne change le signet d'aucune autre, et
+    // relire tout le fil à chaque page franchie coûterait le livre entier.
+    this.#syncBookmarkButton();
     if (changed) {
       this.#pendingSelection = null;
       this.#pendingPage = null;
@@ -1592,13 +1738,32 @@ class Reader {
     else toast(t('reader.openPageFailed'));
   }
 
+  /**
+   * Le chapitre qui couvre [page] : la dernière entrée du sommaire dont la
+   * page d'ouverture ne dépasse pas la sienne.
+   *
+   * Par dichotomie, et non par balayage. Le fil monte le livre entier, et cette
+   * question se pose une fois par page montée : au balayage, le corpus donne
+   * 54 millions de tours au 99ᵉ centile de `pages × sommaire`, et 17 milliards
+   * sur le plus gros livre. Le sommaire est trié par `pageId` croissant —
+   * l'ancien balayage s'arrêtait au premier dépassement, il le supposait déjà.
+   */
   #chapterFor(page) {
-    let current = null;
-    for (const entry of this.#toc) {
-      if (entry.pageId <= page.pageId) current = entry;
-      else break;
+    const toc = this.#toc;
+    if (!toc.length) return null;
+    let low = 0;
+    let high = toc.length - 1;
+    let found = null;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (toc[middle].pageId <= page.pageId) {
+        found = toc[middle];
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
     }
-    return current?.title ?? null;
+    return found?.title ?? null;
   }
 
   #percent() {
@@ -1658,6 +1823,10 @@ class Reader {
    */
   #setMode(key) {
     if (resolveReadingMode(key) !== key || key === this.#prefs.mode) return;
+    // La page imprimée n'a qu'une page à l'écran : le remplissage de fond n'y a
+    // plus d'objet, et le laisser tourner monterait un livre que personne ne
+    // regarde. `#show` le relance si l'on revient au fil.
+    this.#stopBackfill();
     this.#prefs.mode = key;
     for (const mode of READING_MODES) {
       this.#nodes.root.classList.toggle(`reader--${mode.key}`, mode.key === key);
@@ -1981,21 +2150,39 @@ class Reader {
     else if (top < NEAR_START) this.#extendStart();
   }
 
-  /** La page montée que l'on est en train de lire : celle sous le haut d'écran. */
+  /**
+   * La page montée que l'on est en train de lire : celle sous le haut d'écran.
+   *
+   * Par dichotomie, et non par balayage. Le fil porte le livre entier et cette
+   * question se pose à **chaque** évènement de défilement : un
+   * `getBoundingClientRect()` par page monterait à des milliers de lectures de
+   * disposition par geste, et chacune force le navigateur à tout recalculer.
+   * Les blocs sont contigus de `#first` à `#last` et rangés dans l'ordre du
+   * texte : leurs bords croissent, la dichotomie est légitime.
+   */
   #visibleBlock() {
     const line = this.#nodes.scroll.getBoundingClientRect().top + 140;
+    let low = this.#first;
+    let high = this.#last;
     let best = null;
-    let bestGap = Infinity;
-    for (const block of this.#blocks.values()) {
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const block = this.#blocks.get(middle);
+      if (!block) break;
       const rect = block.root.getBoundingClientRect();
-      if (rect.top <= line && rect.bottom > line) return block;
-      const gap = Math.abs(rect.top - line);
-      if (gap < bestGap) {
+      if (rect.bottom <= line) {
+        low = middle + 1;
+      } else if (rect.top > line) {
+        // Au-dessus de la ligne : on retient la plus haute qui la dépasse, elle
+        // répond quand la lecture est au-dessus de la première page montée.
         best = block;
-        bestGap = gap;
+        high = middle - 1;
+      } else {
+        return block;
       }
     }
-    return best;
+    // Sinon la ligne est passée sous la dernière page : c'est celle-là.
+    return best ?? this.#blocks.get(this.#last) ?? null;
   }
 
   #showChrome() {
