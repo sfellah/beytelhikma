@@ -1,7 +1,7 @@
 /**
  * La parité des catalogues, et l'interdiction d'un texte arabe écrit en dur
  * dans un gabarit — même règle et même raison que
- * `beytelhikma-electron/test/no-hardcoded-strings.test.js` : sans ce test, la
+ * `apps/desktop/test/no-hardcoded-strings.test.js` : sans ce test, la
  * prochaine section réintroduirait une chaîne non traduite, et le défaut ne se
  * verrait qu'en changeant de langue, c'est-à-dire jamais pendant le travail.
  */

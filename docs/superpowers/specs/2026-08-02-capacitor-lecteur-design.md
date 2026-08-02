@@ -78,7 +78,7 @@ spikes/capacitor-reader/
 
 ### `prepare-www.mjs` — pas un miroir, un artefact
 
-Copie `beytelhikma-electron/src/renderer/` vers `www/`, puis remplace
+Copie `apps/desktop/src/renderer/` vers `www/`, puis remplace
 `js/repository.js` par le shim. `www/` est ignoré par git et régénéré avant
 chaque `cap sync`.
 
@@ -177,7 +177,7 @@ Ses vues importent `../../shared/digits.js` et `../../../shared/arabic.js`, hors
 de `src/renderer/`. Sous Capacitor la racine servie est `www/`, et un navigateur
 **écrête** les `..` qui remontent au-dessus de la racine : les deux formes
 retombent donc sur `/shared/…`. `prepare-www.mjs` copie aussi
-`beytelhikma-electron/src/shared/` vers `www/shared/`, et tous les imports
+`apps/desktop/src/shared/` vers `www/shared/`, et tous les imports
 marchent sans être réécrits — précisément la propriété que ce portage achète.
 
 ### Aucun spécificateur nu dans le shim

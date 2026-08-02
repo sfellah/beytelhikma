@@ -18,7 +18,7 @@ from shamela.validate import check_database, check_source
 from shamela.tests.fixtures import make_book, make_meta
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-SAMPLE = os.path.join(REPO, "beytelhikma-electron", "assets", "sample")
+SAMPLE = os.path.join(REPO, "apps", "desktop", "assets", "sample")
 
 
 class PlanVolumesTest(unittest.TestCase):

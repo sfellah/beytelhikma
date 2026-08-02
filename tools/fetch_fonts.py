@@ -2,7 +2,7 @@
 
 Télécharge les sous-ensembles *arabe* et *latin* d'Amiri, Noto Naskh Arabic et
 IBM Plex Sans Arabic depuis Google Fonts, les dépose dans
-`beytelhikma-electron/src/renderer/assets/fonts/` et régénère
+`apps/desktop/src/renderer/assets/fonts/` et régénère
 `styles/fonts.css`. L'application est hors ligne : rien ne doit être servi
 depuis le réseau à l'exécution (voir la CSP `font-src 'self'` de `index.html`).
 
@@ -14,7 +14,7 @@ import re
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RENDERER = ROOT / "beytelhikma-electron" / "src" / "renderer"
+RENDERER = ROOT / "apps" / "desktop" / "src" / "renderer"
 FONT_DIR = RENDERER / "assets" / "fonts"
 
 # Chrome récent : sans cet en-tête, Google Fonts renvoie des TTF non compressés.

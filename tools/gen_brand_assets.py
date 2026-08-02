@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE = REPO_ROOT / "logo.png"
-OUT_DIR = REPO_ROOT / "beytelhikma-electron" / "src" / "renderer" / "assets" / "brand"
+OUT_DIR = REPO_ROOT / "apps" / "desktop" / "src" / "renderer" / "assets" / "brand"
 
 # Gouttière verticale du lockup : tout ce qui est à droite est le symbole.
 GUTTER_X = 489
@@ -122,7 +122,7 @@ def main() -> None:
     # L'icône Windows sort du même dessin que `app-icon.png` : la dériver ici
     # plutôt que de la convertir à la main est ce qui empêche l'icône de
     # l'installeur de dater d'un logo que plus personne n'utilise.
-    ico_dir = REPO_ROOT / "beytelhikma-electron" / "build"
+    ico_dir = REPO_ROOT / "apps" / "desktop" / "build"
     ico_dir.mkdir(parents=True, exist_ok=True)
     ico = ico_dir / "icon.ico"
     exports["app-icon.png"].save(ico, sizes=ICO_SIZES)

@@ -18,7 +18,7 @@
 - Le rendu n'a ni Node ni accès disque : il ne peut appeler que les méthodes listées dans `REPOSITORY_METHODS`, répercutées à l'identique dans `src/preload/preload.cjs`.
 - Pas de chaîne HTML interprétée dans le rendu : tout passe par `h()` de `src/renderer/js/dom.js`.
 - Pas d'alignement gauche/droite codé en dur : l'interface est RTL.
-- Les tests tournent avec `npm test` depuis `beytelhikma-electron/` et ne doivent jamais toucher le réseau réel.
+- Les tests tournent avec `npm test` depuis `apps/desktop/` et ne doivent jamais toucher le réseau réel.
 - Le client Flutter (`beytelhikma/`) n'est pas modifié par ce plan.
 
 ## Structure des fichiers
@@ -50,8 +50,8 @@
 ### Task 1: Gestionnaire de téléchargement — chemin nominal
 
 **Files:**
-- Create: `beytelhikma-electron/src/main/download-manager.js`
-- Test: `beytelhikma-electron/test/download-manager.test.js`
+- Create: `apps/desktop/src/main/download-manager.js`
+- Test: `apps/desktop/test/download-manager.test.js`
 
 **Interfaces:**
 - Consumes: rien.
@@ -61,7 +61,7 @@
 
 - [ ] **Step 1: Écrire le test du chemin nominal**
 
-Créer `beytelhikma-electron/test/download-manager.test.js` :
+Créer `apps/desktop/test/download-manager.test.js` :
 
 ```js
 import assert from 'node:assert/strict';
@@ -139,12 +139,12 @@ test('un téléchargement nominal installe le livre décompressé', async () => 
 
 - [ ] **Step 2: Lancer le test, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: FAIL — `Cannot find module .../src/main/download-manager.js`
 
 - [ ] **Step 3: Écrire l'implémentation minimale**
 
-Créer `beytelhikma-electron/src/main/download-manager.js` :
+Créer `apps/desktop/src/main/download-manager.js` :
 
 ```js
 import crypto from 'node:crypto';
@@ -265,13 +265,13 @@ async function unpackAndVerify({ release, part, storageRoot }) {
 
 - [ ] **Step 4: Lancer le test, vérifier le succès**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: PASS (1 test)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/download-manager.js beytelhikma-electron/test/download-manager.test.js
+git add apps/desktop/src/main/download-manager.js apps/desktop/test/download-manager.test.js
 git commit -m "feat(electron): téléchargement, décompression zstd et vérification SHA-256"
 ```
 
@@ -280,8 +280,8 @@ git commit -m "feat(electron): téléchargement, décompression zstd et vérific
 ### Task 2: Reprise `Range`, annulation, erreurs
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/download-manager.js`
-- Test: `beytelhikma-electron/test/download-manager.test.js`
+- Modify: `apps/desktop/src/main/download-manager.js`
+- Test: `apps/desktop/test/download-manager.test.js`
 
 **Interfaces:**
 - Consumes: `installRelease`, `DownloadError` de la tâche 1.
@@ -289,7 +289,7 @@ git commit -m "feat(electron): téléchargement, décompression zstd et vérific
 
 - [ ] **Step 1: Écrire les tests d'échec**
 
-Ajouter à `beytelhikma-electron/test/download-manager.test.js` :
+Ajouter à `apps/desktop/test/download-manager.test.js` :
 
 ```js
 test('un SHA-256 non conforme échoue et ne laisse aucun fichier', async () => {
@@ -389,7 +389,7 @@ test('une annulation interrompt et efface le .part', async () => {
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: FAIL — la reprise, l'annulation et la conservation du `.part` ne sont pas implémentées.
 
 - [ ] **Step 3: Implémenter reprise et annulation**
@@ -461,13 +461,13 @@ function abandon(part, code, cause) {
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/download-manager.js beytelhikma-electron/test/download-manager.test.js
+git add apps/desktop/src/main/download-manager.js apps/desktop/test/download-manager.test.js
 git commit -m "feat(electron): reprise par Range, annulation et erreurs de téléchargement"
 ```
 
@@ -476,8 +476,8 @@ git commit -m "feat(electron): reprise par Range, annulation et erreurs de tél�
 ### Task 3: Source locale et file séquentielle
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/download-manager.js`
-- Test: `beytelhikma-electron/test/download-manager.test.js`
+- Modify: `apps/desktop/src/main/download-manager.js`
+- Test: `apps/desktop/test/download-manager.test.js`
 
 **Interfaces:**
 - Consumes: `installRelease`, `DownloadError`.
@@ -498,7 +498,7 @@ git commit -m "feat(electron): reprise par Range, annulation et erreurs de tél�
 
 - [ ] **Step 1: Écrire les tests**
 
-Ajouter à `beytelhikma-electron/test/download-manager.test.js` :
+Ajouter à `apps/desktop/test/download-manager.test.js` :
 
 ```js
 import { DownloadQueue } from '../src/main/download-manager.js';
@@ -604,7 +604,7 @@ test('setBaseUrl remplace l’origine de l’URL publiée', async () => {
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: FAIL — `DownloadQueue` n'existe pas, `librarySource` est ignoré.
 
 - [ ] **Step 3: Implémenter la source locale et la file**
@@ -855,13 +855,13 @@ Note : `unpackAndVerify` est appelée depuis `installRelease` avant le `verifyin
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
-Run: `cd beytelhikma-electron && node --test test/download-manager.test.js`
+Run: `cd apps/desktop && node --test test/download-manager.test.js`
 Expected: PASS (10 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/download-manager.js beytelhikma-electron/test/download-manager.test.js
+git add apps/desktop/src/main/download-manager.js apps/desktop/test/download-manager.test.js
 git commit -m "feat(electron): file séquentielle de téléchargement et repli sur la bibliothèque locale"
 ```
 
@@ -870,8 +870,8 @@ git commit -m "feat(electron): file séquentielle de téléchargement et repli s
 ### Task 4: `AppDatabase` cesse de matérialiser les livres
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/app-database.js`
-- Test: `beytelhikma-electron/test/library.test.js`
+- Modify: `apps/desktop/src/main/app-database.js`
+- Test: `apps/desktop/test/library.test.js`
 
 **Interfaces:**
 - Consumes: rien.
@@ -883,7 +883,7 @@ git commit -m "feat(electron): file séquentielle de téléchargement et repli s
 
 - [ ] **Step 1: Écrire le test**
 
-Ajouter à la fin de `beytelhikma-electron/test/library.test.js` :
+Ajouter à la fin de `apps/desktop/test/library.test.js` :
 
 ```js
 import { AppDatabase, BookNotInstalledError } from '../src/main/app-database.js';
@@ -920,7 +920,7 @@ test('un livre non installé ne se matérialise plus tout seul', async () => {
 
 - [ ] **Step 2: Lancer le test, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/library.test.js`
+Run: `cd apps/desktop && node --test test/library.test.js`
 Expected: FAIL — `BookNotInstalledError` n'est pas exportée, `book()` copie le fichier.
 
 - [ ] **Step 3: Modifier `app-database.js`**
@@ -979,13 +979,13 @@ Mettre à jour le commentaire de classe : remplacer la phrase « Le catalogue es
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès du nouveau**
 
-Run: `cd beytelhikma-electron && node --test test/library.test.js`
+Run: `cd apps/desktop && node --test test/library.test.js`
 Expected: le nouveau test PASS. D'autres tests de ce fichier et de `repository.test.js` peuvent échouer — ils dépendent de `warmUp()` et sont corrigés à la tâche 5.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/app-database.js beytelhikma-electron/test/library.test.js
+git add apps/desktop/src/main/app-database.js apps/desktop/test/library.test.js
 git commit -m "feat(electron): AppDatabase exige un livre installé, ferme et liste les livres"
 ```
 
@@ -994,9 +994,9 @@ git commit -m "feat(electron): AppDatabase exige un livre installé, ferme et li
 ### Task 5: `reconcileLibrary()` remplace `warmUp()`, gestionnaire branché
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js`
-- Modify: `beytelhikma-electron/test/repository.test.js`
-- Modify: `beytelhikma-electron/test/library.test.js`
+- Modify: `apps/desktop/src/main/book-repository.js`
+- Modify: `apps/desktop/test/repository.test.js`
+- Modify: `apps/desktop/test/library.test.js`
 
 **Interfaces:**
 - Consumes: `DownloadQueue`, `DownloadError` (tâche 3) ; `BookNotInstalledError`, `installedBooks()`, `closeBook()` (tâche 4).
@@ -1009,7 +1009,7 @@ git commit -m "feat(electron): AppDatabase exige un livre installé, ferme et li
 
 - [ ] **Step 1: Écrire le test**
 
-Dans `beytelhikma-electron/test/repository.test.js`, remplacer le bloc `before` :
+Dans `apps/desktop/test/repository.test.js`, remplacer le bloc `before` :
 
 ```js
 before(async () => {
@@ -1068,7 +1068,7 @@ Dans `test/library.test.js`, remplacer chaque `await repository.warmUp()` par `a
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: FAIL — `repository.createDownloadQueue is not a function`, `reconcileLibrary is not a function`.
 
 - [ ] **Step 3: Modifier `book-repository.js`**
@@ -1272,13 +1272,13 @@ Dans `main.js`, remplacer `await repository.warmUp();` par :
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS pour l'ensemble de la suite.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main beytelhikma-electron/test
+git add apps/desktop/src/main apps/desktop/test
 git commit -m "feat(electron): réconciliation de la bibliothèque et commandes de téléchargement"
 ```
 
@@ -1287,8 +1287,8 @@ git commit -m "feat(electron): réconciliation de la bibliothèque et commandes 
 ### Task 6: Suppression au choix de l'utilisateur
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js`
-- Test: `beytelhikma-electron/test/repository.test.js`
+- Modify: `apps/desktop/src/main/book-repository.js`
+- Test: `apps/desktop/test/repository.test.js`
 
 **Interfaces:**
 - Consumes: `closeBook()` (tâche 4), `DownloadQueue.isBusy()` (tâche 3).
@@ -1296,7 +1296,7 @@ git commit -m "feat(electron): réconciliation de la bibliothèque et commandes 
 
 - [ ] **Step 1: Écrire le test**
 
-Ajouter à `beytelhikma-electron/test/repository.test.js` :
+Ajouter à `apps/desktop/test/repository.test.js` :
 
 ```js
 test('supprimer en gardant la progression efface le fichier, pas la position', async () => {
@@ -1347,7 +1347,7 @@ Ajouter `all` à l'import depuis `../src/main/app-database.js` en tête du fichi
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/repository.test.js`
+Run: `cd apps/desktop && node --test test/repository.test.js`
 Expected: FAIL — `repository.deleteBook is not a function`
 
 - [ ] **Step 3: Implémenter `deleteBook`**
@@ -1393,13 +1393,13 @@ Ajouter `'deleteBook'` à `REPOSITORY_METHODS`.
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/book-repository.js beytelhikma-electron/test/repository.test.js
+git add apps/desktop/src/main/book-repository.js apps/desktop/test/repository.test.js
 git commit -m "feat(electron): suppression d'un livre avec ou sans conservation de la progression"
 ```
 
@@ -1408,8 +1408,8 @@ git commit -m "feat(electron): suppression d'un livre avec ou sans conservation 
 ### Task 7: Statuts exposés au rendu
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js`
-- Test: `beytelhikma-electron/test/repository.test.js`
+- Modify: `apps/desktop/src/main/book-repository.js`
+- Test: `apps/desktop/test/repository.test.js`
 
 **Interfaces:**
 - Consumes: `DownloadQueue.snapshot()`, `clearFailed()`.
@@ -1422,7 +1422,7 @@ git commit -m "feat(electron): suppression d'un livre avec ou sans conservation 
 
 - [ ] **Step 1: Écrire le test**
 
-Ajouter à `beytelhikma-electron/test/repository.test.js` :
+Ajouter à `apps/desktop/test/repository.test.js` :
 
 ```js
 test('les résumés portent le statut de téléchargement', async () => {
@@ -1448,7 +1448,7 @@ test('l’espace occupé compte les fichiers réellement présents', async () =>
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/repository.test.js`
+Run: `cd apps/desktop && node --test test/repository.test.js`
 Expected: FAIL — `downloadStatus` absent, `getStorageUsage` non définie.
 
 - [ ] **Step 3: Implémenter**
@@ -1548,13 +1548,13 @@ Ajouter `'getDownloads'`, `'clearFailedDownloads'`, `'getStorageUsage'` à `REPO
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/book-repository.js beytelhikma-electron/test/repository.test.js
+git add apps/desktop/src/main/book-repository.js apps/desktop/test/repository.test.js
 git commit -m "feat(electron): statut de téléchargement dans les résumés, fiches et espace occupé"
 ```
 
@@ -1563,9 +1563,9 @@ git commit -m "feat(electron): statut de téléchargement dans les résumés, fi
 ### Task 8: IPC, préchargement, canal poussé
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/main.js`
-- Modify: `beytelhikma-electron/src/preload/preload.cjs`
-- Modify: `beytelhikma-electron/src/renderer/js/repository.js`
+- Modify: `apps/desktop/src/main/main.js`
+- Modify: `apps/desktop/src/preload/preload.cjs`
+- Modify: `apps/desktop/src/renderer/js/repository.js`
 
 **Interfaces:**
 - Consumes: `REPOSITORY_METHODS` (tâches 5-7), `DownloadQueue` événement `'change'`.
@@ -1671,13 +1671,13 @@ export function onDownloadsChanged(callback) {
 
 - [ ] **Step 4: Vérifier que l'application démarre**
 
-Run: `cd beytelhikma-electron && npm test && BEYT_CAPTURE=1 npm start`
+Run: `cd apps/desktop && npm test && BEYT_CAPTURE=1 npm start`
 Expected: la suite passe ; l'application démarre, produit ses captures dans `build/screenshots/` et quitte sans erreur console.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/main.js beytelhikma-electron/src/preload/preload.cjs beytelhikma-electron/src/renderer/js/repository.js
+git add apps/desktop/src/main/main.js apps/desktop/src/preload/preload.cjs apps/desktop/src/renderer/js/repository.js
 git commit -m "feat(electron): IPC des téléchargements et canal poussé downloads:changed"
 ```
 
@@ -1686,9 +1686,9 @@ git commit -m "feat(electron): IPC des téléchargements et canal poussé downlo
 ### Task 9: Bloc d'action de la fiche livre
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/components/download-action.js`
-- Modify: `beytelhikma-electron/src/renderer/js/views/book-detail.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/components.css`
+- Create: `apps/desktop/src/renderer/js/components/download-action.js`
+- Modify: `apps/desktop/src/renderer/js/views/book-detail.js`
+- Modify: `apps/desktop/src/renderer/styles/components.css`
 
 **Interfaces:**
 - Consumes: `repository.downloadBook / cancelDownload / retryDownload / deleteBook`, `onDownloadsChanged` (tâche 8) ; `detail.download` (tâche 7).
@@ -1696,7 +1696,7 @@ git commit -m "feat(electron): IPC des téléchargements et canal poussé downlo
 
 - [ ] **Step 1: Écrire le composant**
 
-Créer `beytelhikma-electron/src/renderer/js/components/download-action.js` :
+Créer `apps/desktop/src/renderer/js/components/download-action.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -1900,13 +1900,13 @@ Si `--danger` n'existe pas dans `tokens.css`, l'ajouter au bloc `:root` avec la 
 
 - [ ] **Step 4: Vérifier visuellement**
 
-Run: `cd beytelhikma-electron && npm start`
+Run: `cd apps/desktop && npm start`
 Expected: la fiche d'un livre non installé affiche `تحميل (…)`; cliquer déclenche la barre puis l'état `installed` avec `ابدأ القراءة` et `حذف`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer
+git add apps/desktop/src/renderer
 git commit -m "feat(ui): bloc d'action de téléchargement sur la fiche livre"
 ```
 
@@ -1915,9 +1915,9 @@ git commit -m "feat(ui): bloc d'action de téléchargement sur la fiche livre"
 ### Task 10: Modale de suppression à deux issues
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/components/confirm-delete.js`
-- Modify: `beytelhikma-electron/src/renderer/js/views/book-detail.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/components.css`
+- Create: `apps/desktop/src/renderer/js/components/confirm-delete.js`
+- Modify: `apps/desktop/src/renderer/js/views/book-detail.js`
+- Modify: `apps/desktop/src/renderer/styles/components.css`
 
 **Interfaces:**
 - Consumes: `h()` de `dom.js`.
@@ -1925,7 +1925,7 @@ git commit -m "feat(ui): bloc d'action de téléchargement sur la fiche livre"
 
 - [ ] **Step 1: Écrire le composant**
 
-Créer `beytelhikma-electron/src/renderer/js/components/confirm-delete.js` :
+Créer `apps/desktop/src/renderer/js/components/confirm-delete.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -2047,13 +2047,13 @@ Si `--surface`, `--radius-lg`, `--space-*` portent d'autres noms dans `tokens.cs
 
 - [ ] **Step 4: Vérifier visuellement**
 
-Run: `cd beytelhikma-electron && npm start`
+Run: `cd apps/desktop && npm start`
 Expected: `حذف` sur un livre lu ouvre la modale à trois boutons ; sur un livre jamais ouvert, un seul bouton `حذف` plus `إلغاء`. `Échap` annule.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer
+git add apps/desktop/src/renderer
 git commit -m "feat(ui): modale de suppression, progression conservée ou effacée"
 ```
 
@@ -2062,10 +2062,10 @@ git commit -m "feat(ui): modale de suppression, progression conservée ou effac�
 ### Task 11: Écran `/downloads`
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/views/downloads.js`
-- Modify: `beytelhikma-electron/src/renderer/js/app.js`
-- Modify: `beytelhikma-electron/src/renderer/js/shell.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/views.css`
+- Create: `apps/desktop/src/renderer/js/views/downloads.js`
+- Modify: `apps/desktop/src/renderer/js/app.js`
+- Modify: `apps/desktop/src/renderer/js/shell.js`
+- Modify: `apps/desktop/src/renderer/styles/views.css`
 
 **Interfaces:**
 - Consumes: `repository.getDownloads / cancelDownload / retryDownload / clearFailedDownloads / getStorageUsage`, `onDownloadsChanged`, `formatBytes` (tâche 9).
@@ -2073,7 +2073,7 @@ git commit -m "feat(ui): modale de suppression, progression conservée ou effac�
 
 - [ ] **Step 1: Écrire la vue**
 
-Créer `beytelhikma-electron/src/renderer/js/views/downloads.js` :
+Créer `apps/desktop/src/renderer/js/views/downloads.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -2294,13 +2294,13 @@ Dans `src/renderer/styles/views.css` :
 
 - [ ] **Step 4: Vérifier visuellement**
 
-Run: `cd beytelhikma-electron && npm start`
+Run: `cd apps/desktop && npm start`
 Expected: lancer plusieurs téléchargements depuis les fiches, `/downloads` liste le travail actif et les suivants en attente, la pastille de navigation affiche leur nombre, l'annulation vide la ligne.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer
+git add apps/desktop/src/renderer
 git commit -m "feat(ui): écran des téléchargements et pastille de navigation"
 ```
 
@@ -2309,9 +2309,9 @@ git commit -m "feat(ui): écran des téléchargements et pastille de navigation"
 ### Task 12: Badge sur les cartes et garde du lecteur
 
 **Files:**
-- Modify: `beytelhikma-electron/src/renderer/js/components/book-card.js`
-- Modify: `beytelhikma-electron/src/renderer/js/views/reader.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/components.css`
+- Modify: `apps/desktop/src/renderer/js/components/book-card.js`
+- Modify: `apps/desktop/src/renderer/js/views/reader.js`
+- Modify: `apps/desktop/src/renderer/styles/components.css`
 
 **Interfaces:**
 - Consumes: `book.downloadStatus` (tâche 7).
@@ -2383,13 +2383,13 @@ Dans `src/renderer/styles/components.css` :
 
 - [ ] **Step 4: Vérifier visuellement**
 
-Run: `cd beytelhikma-electron && npm start`
+Run: `cd apps/desktop && npm start`
 Expected: les grilles montrent `✓` sur les livres installés ; ouvrir `#/reader/<id>` d'un livre non installé renvoie sur sa fiche.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer
+git add apps/desktop/src/renderer
 git commit -m "feat(ui): badge d'état sur les cartes et garde du lecteur"
 ```
 

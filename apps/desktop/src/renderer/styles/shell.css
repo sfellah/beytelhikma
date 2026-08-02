@@ -1,0 +1,444 @@
+/* Coquille applicative : barre latérale libellée (bureau, ancrée à droite comme
+   le veut le RTL), barre supérieure, barre inférieure (fenêtre étroite).
+   Le lecteur s'affiche sans coquille. */
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --------------------------------------------------------------- marque */
+
+/* Symbole du logo : mihrab et livre ouvert, encre émeraude et filets dorés.
+   Posé sans plaque ni ombre — le tracé est déjà l'identité — et décliné en
+   taille selon l'emplacement. La largeur suit la hauteur, le fichier n'est pas
+   carré. */
+.brand-mark {
+  display: block;
+  height: var(--mark-size, 36px);
+  width: auto;
+  flex: none;
+}
+
+/* --------------------------------------------------------- barre latérale */
+
+.rail {
+  display: none;
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--rail-width);
+  z-index: 40;
+  padding: calc(var(--space-lg) + var(--safe-top)) var(--space-md)
+    calc(var(--space-lg) + var(--safe-bottom));
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--surface-container-low);
+  border-inline-end: 1px solid var(--outline-variant);
+}
+
+.rail__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-sm) var(--space-xl);
+}
+
+.rail__brand a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--primary);
+  border-radius: var(--radius-lg);
+}
+
+.rail__wordmark {
+  font-family: var(--font-display);
+  font-size: var(--text-title-md);
+  line-height: var(--leading-title-md);
+  font-weight: 700;
+}
+
+.rail__list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* Les réglages ferment le rail. Le filet les sépare de la navigation plutôt
+   qu'un simple écart : sans trait, l'entrée flotte au bas de la colonne sans
+   qu'on sache si elle appartient encore à la liste. */
+.rail__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--outline-variant);
+}
+
+/* Élément actif : filet émeraude sur le bord *droit* du menu, comme le
+   prescrit `docs/DESIGN.md` — en RTL c'est le bord de début de ligne. Le filet est
+   dessiné par un pseudo-élément et non par la bordure : une bordure ne peut
+   que s'allumer, celui-ci se *déplie* depuis le centre, et c'est ce dépliage
+   qui rattache visuellement l'ancienne entrée active à la nouvelle. */
+.rail__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-lg);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  line-height: var(--leading-label-md);
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
+}
+
+.rail__item::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: -4px;
+  width: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  transform: scaleY(0);
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.rail__item-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.rail__item:hover {
+  background: color-mix(in srgb, var(--secondary-container) 50%, transparent);
+  color: var(--on-surface);
+}
+
+.rail__item:hover .rail__item-icon {
+  transform: scale(1.08);
+}
+
+.rail__item.is-active {
+  background: color-mix(in srgb, var(--secondary-container) 40%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.rail__item.is-active::before {
+  transform: scaleY(1);
+}
+
+/* --------------------------------------------------------------- topbar */
+
+/* La barre haute est *collée* en haut de la fenêtre, et sur un téléphone la
+   fenêtre commence sous la barre d'état du système : elle passait donc sous
+   l'heure et le réseau. Le retrait est ajouté au rembourrage plutôt que posé en
+   `top`, sinon le fond translucide s'arrêterait au bord de la barre système et
+   laisserait une bande de contenu défiler à découvert au-dessus. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: calc(var(--space-sm) + var(--safe-top)) calc(var(--space-gutter) + var(--safe-right))
+    var(--space-sm) calc(var(--space-gutter) + var(--safe-left));
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.2s, background-color 0.2s;
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--primary);
+  font-family: var(--font-display);
+  font-size: var(--text-headline-mobile);
+  line-height: 34px;
+  font-weight: 700;
+}
+
+/* Champ plein, sans bordure : la recherche est un objet posé, pas un cadre. */
+.topbar__search {
+  display: none;
+  position: relative;
+  flex: 1;
+  max-width: 420px;
+}
+
+.topbar__search .icon {
+  position: absolute;
+  inset-inline-start: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--outline);
+  pointer-events: none;
+}
+
+.topbar__search input {
+  width: 100%;
+  padding-block: 11px;
+  padding-inline: 46px 158px;
+  background: var(--surface-container-high);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+.topbar__search input::placeholder {
+  color: var(--outline);
+}
+
+.topbar__search input:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+/* Le raccourci n'est annoncé que là où il existe : voir `shell.js`. */
+.topbar__hint {
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  color: var(--outline);
+  font-family: var(--font-label);
+  pointer-events: none;
+}
+
+/* Le champ n'est plus le frère immédiat du raccourci : le bouton « في النصوص »
+   s'est glissé entre les deux. On vise donc le conteneur. */
+.topbar__search:focus-within .topbar__hint {
+  opacity: 0;
+}
+
+/* Second geste du même champ : chercher le terme dans le texte des livres
+   installés plutôt qu'un titre dans le catalogue. */
+.topbar__in-text {
+  position: absolute;
+  inset-inline-end: 76px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  cursor: pointer;
+}
+
+.topbar__in-text:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--on-surface-variant);
+}
+
+/* Porte de secours vers les réglages : masquée dès que le rail paraît (voir la
+   requête média en fin de fichier), où les réglages ont leur place au pied de
+   la colonne. Elle ne sert qu'en fenêtre étroite, où il n'y a ni rail ni place
+   dans la barre du bas. */
+.topbar__icon-button {
+  display: flex;
+  padding: 10px;
+  border-radius: var(--radius-pill);
+  color: var(--primary);
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.topbar__icon-button:hover {
+  background: var(--secondary-container);
+}
+
+.topbar__icon-button:active {
+  transform: scale(0.92);
+}
+
+/* ----------------------------------------------------------------- main */
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  /* Les 96px du bas dégagent la barre d'onglets ; celle-ci ayant grandi du
+     retrait système, la réserve suit, sinon la dernière ligne finit dessous. */
+  padding: var(--space-md) var(--space-gutter) calc(96px + var(--safe-bottom));
+}
+
+/* ---------------------------------------------------------- bottom nav */
+
+.bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  /* En bas, la barre de gestes d'Android : sans ce retrait, la dernière rangée
+     d'onglets tombe dessous et le geste de retour les traverse. */
+  padding: var(--space-sm) calc(var(--space-md) + var(--safe-right))
+    calc(var(--space-sm) + var(--safe-bottom)) calc(var(--space-md) + var(--safe-left));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--outline-variant);
+}
+
+.bottom-nav__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  transition: color var(--motion-base) var(--ease-out);
+}
+
+/* La pastille est toujours montée, simplement repliée derrière l'icône : elle
+   s'ouvre en largeur sous le pouce au lieu d'apparaître d'un coup. Le fond est
+   un pseudo-élément — mis à l'échelle sur la boîte, il écraserait l'icône. */
+.bottom-nav__item .bottom-nav__bubble {
+  position: relative;
+  padding: 2px var(--space-md);
+  display: flex;
+}
+
+.bottom-nav__bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-container);
+  transform: scaleX(0.35);
+  opacity: 0;
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.bottom-nav__item:active .bottom-nav__bubble::before {
+  transform: scaleX(0.9);
+  opacity: 0.5;
+}
+
+.bottom-nav__item.is-active {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.bottom-nav__item.is-active .bottom-nav__bubble::before {
+  transform: scaleX(1);
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(96px + var(--safe-bottom));
+  z-index: 100;
+  width: max-content;
+  max-width: 80vw;
+  margin-inline: auto;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-pill);
+  background: var(--inverse-surface);
+  color: var(--inverse-on-surface);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in var(--motion-base) var(--ease-out);
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+/* Sortie plus courte que l'entrée : un message qui s'attarde en partant se lit
+   comme une lenteur de l'application. */
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (min-width: 900px) {
+  .rail {
+    display: flex;
+  }
+
+  /* La place du rail est *réservée* par la coquille : le contenu se centre
+     ensuite dans ce qui reste. Une marge de départ sur `.main` le poussait
+     hors de l'écran dès que 1200px + rail dépassaient la fenêtre. */
+  .shell {
+    padding-inline-start: var(--rail-width);
+  }
+
+  .main {
+    padding: var(--space-xl) var(--space-gutter) var(--space-xxl);
+  }
+
+  /* Le retrait système est reconduit : une tablette dépasse 900px et garde sa
+     barre d'état. L'oublier ici rendrait le défaut invisible au développement
+     et présent sur l'appareil, ce qui est le pire des deux. */
+  .topbar {
+    padding: calc(var(--space-md) + var(--safe-top)) var(--space-gutter) var(--space-md);
+  }
+
+  .topbar__brand {
+    display: none;
+  }
+
+  .topbar__search {
+    display: flex;
+    max-width: 520px;
+  }
+
+  /* Le rail porte les réglages : deux portes vers le même écran, dont une au
+     coin le plus rare de la fenêtre, ne valent pas mieux qu'une seule bien
+     placée. */
+  .topbar__actions {
+    display: none;
+  }
+
+  .bottom-nav {
+    display: none;
+  }
+}

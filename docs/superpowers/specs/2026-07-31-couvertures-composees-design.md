@@ -1,7 +1,7 @@
 # Couvertures composées : forme, famille, patine
 
 Date : 2026-07-31
-Portée : `beytelhikma-electron/` et `beytelhikma/`. Aucun changement au modèle de
+Portée : `apps/desktop/` et `beytelhikma/`. Aucun changement au modèle de
 données : ni `tools/_common.py`, ni les bases générées, ni le schéma catalogue.
 
 ## 1. Objectif
@@ -186,7 +186,7 @@ nullables comme le reste.
 
 ## 6. Tests
 
-`beytelhikma-electron/test/book-cover.test.js` :
+`apps/desktop/test/book-cover.test.js` :
 
 - `coverShape` aux bornes exactes — 120/121 séparent `treatise` de `book`,
   400/401 `book` de `tome` ;

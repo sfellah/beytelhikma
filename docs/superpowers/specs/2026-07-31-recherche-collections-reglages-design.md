@@ -1,7 +1,7 @@
 # Recherche dans le livre, collections, réglages
 
 Date : 2026-07-31
-Portée : `beytelhikma-electron/`. Aucun changement de schéma, aucun changement de pipeline.
+Portée : `apps/desktop/`. Aucun changement de schéma, aucun changement de pipeline.
 
 Troisième et dernier volet, après la distribution MinIO et l'exploration du
 catalogue. Il ferme les trois derniers écrans laissés en attente.

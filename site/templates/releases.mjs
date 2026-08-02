@@ -1,6 +1,6 @@
 /**
  * L'historique des versions, en frise verticale — la forme de la maquette
- * `ui-examples/site-download.html`, dont la dernière version est pleine et les
+ * `docs/maquettes/site-download.html`, dont la dernière version est pleine et les
  * précédentes en retrait.
  *
  * Les notes viennent des `CHANGELOG.<langue>.md`, pas de l'API : le corps d'une

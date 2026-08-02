@@ -46,7 +46,7 @@ jobs:
         name: le tag correspond à la version du paquet
         run: |
           set -euo pipefail
-          version=$(node -p "require('./beytelhikma-electron/package.json').version")
+          version=$(node -p "require('./apps/desktop/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "v$version" != "$TAG" ]; then
             echo "::error::Le tag $TAG ne correspond pas à la version $version de package.json."
@@ -60,8 +60,8 @@ jobs:
 
       - name: la suite de l'application est verte
         run: |
-          npm ci --prefix beytelhikma-electron
-          npm test --prefix beytelhikma-electron
+          npm ci --prefix apps/desktop
+          npm test --prefix apps/desktop
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
@@ -87,10 +87,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: beytelhikma-electron/package-lock.json
+          cache-dependency-path: apps/desktop/package-lock.json
 
       - run: npm ci
-        working-directory: beytelhikma-electron
+        working-directory: apps/desktop
 
       # La graine est téléchargée depuis le bucket, jamais copiée d'un `dist/`
       # local : l'installeur ne peut donc pas promettre un catalogue que le
@@ -98,11 +98,11 @@ jobs:
       # injoignable — le build échoue franchement plutôt que d'embarquer une
       # graine périmée.
       - run: npm run seed
-        working-directory: beytelhikma-electron
+        working-directory: apps/desktop
 
       - name: empaqueter et téléverser
         run: npx --no-install electron-builder ${{ matrix.target }} --publish always
-        working-directory: beytelhikma-electron
+        working-directory: apps/desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

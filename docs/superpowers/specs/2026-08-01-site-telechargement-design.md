@@ -56,7 +56,7 @@ CHANGELOG.{ar,fr,en}.md
 ### Ce qui n'est jamais recopié
 
 `tokens.css`, les polices, la marque et les captures viennent de
-`beytelhikma-electron/src/renderer/`, copiés **au build**. Un test compare
+`apps/desktop/src/renderer/`, copiés **au build**. Un test compare
 `dist/styles/tokens.css` à la source, octet pour octet. C'est la leçon du thème
 `sepia` : deux copies d'une liste finissent par diverger, et la panne ne se voit
 qu'à l'écran.
@@ -164,7 +164,7 @@ dégradé, `backdrop-filter`, `box-shadow`, rayon de coin au-delà de 4 px.
 
 ## Ce que les maquettes ont perdu
 
-`ui-examples/site-home.html` et `site-download.html` ont fourni la structure :
+`docs/maquettes/site-home.html` et `site-download.html` ont fourni la structure :
 héros avec capture encadrée, grille bento, frise verticale des versions, encart
 de spécifications. Leur palette Tailwind était déjà celle de `tokens.css`, valeur
 pour valeur.

@@ -1,0 +1,13 @@
+{
+  "appId": "org.beytelhikma.app",
+  "appName": "Beyt El Hikma",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorSQLite": {
+      "androidIsEncryption": false
+    }
+  }
+}

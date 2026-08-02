@@ -12,8 +12,8 @@ on:
     paths:
       - 'site/**'
       - 'CHANGELOG.*.md'
-      - 'beytelhikma-electron/src/renderer/styles/tokens.css'
-      - 'beytelhikma-electron/src/renderer/assets/**'
+      - 'apps/desktop/src/renderer/styles/tokens.css'
+      - 'apps/desktop/src/renderer/assets/**'
       - '.github/workflows/site.yml'
   workflow_dispatch:
   workflow_call:
@@ -72,7 +72,7 @@ jobs:
       # corpus que l'application n'a pas.
       - name: relever le catalogue publié
         run: node scripts/fetch-seed.mjs
-        working-directory: beytelhikma-electron
+        working-directory: apps/desktop
 
       - name: rendre le site
         run: node build.mjs

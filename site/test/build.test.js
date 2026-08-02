@@ -13,7 +13,7 @@ import { build } from '../build.mjs';
 import { BASE_PATH, PAGES, SITE_LOCALES } from '../config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RENDERER = path.join(HERE, '..', '..', 'beytelhikma-electron', 'src', 'renderer');
+const RENDERER = path.join(HERE, '..', '..', 'apps', 'desktop', 'src', 'renderer');
 
 let out;
 let report;

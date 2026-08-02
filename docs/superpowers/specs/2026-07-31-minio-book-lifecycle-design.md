@@ -1,7 +1,7 @@
 # Distribution MinIO et cycle de vie des livres (Electron)
 
 Date : 2026-07-31
-Portée : `beytelhikma-electron/` et `tools/`. Le client Flutter n'est pas modifié.
+Portée : `apps/desktop/` et `tools/`. Le client Flutter n'est pas modifié.
 
 > **Partiellement remplacé.** `book_releases.download_url` s'appelle désormais
 > `object_key` et porte une clé **relative**, pas une URL absolue ; le réglage
@@ -281,7 +281,7 @@ Entrée de navigation dans la coque, avec pastille du nombre de travaux actifs.
 
 ## 9. Tests
 
-`beytelhikma-electron/test/download-manager.test.js` — serveur `node:http` local
+`apps/desktop/test/download-manager.test.js` — serveur `node:http` local
 servant un `.zst` fabriqué à la volée :
 
 - nominal → `installed`, fichier présent, SHA-256 correct ;
@@ -293,7 +293,7 @@ servant un `.zst` fabriqué à la volée :
 - annulation → `.part` supprimé, statut `removed` ;
 - 404 → `failed` avec message.
 
-`beytelhikma-electron/test/repository.test.js` :
+`apps/desktop/test/repository.test.js` :
 
 - `deleteBook` avec `keepProgress: true` → fichier absent, `current_page_id`
   intact ;

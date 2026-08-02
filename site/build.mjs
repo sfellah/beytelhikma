@@ -17,8 +17,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { toArabicDigits } from '../beytelhikma-electron/src/shared/digits.js';
-import { translate } from '../beytelhikma-electron/src/shared/translate.js';
+import { toArabicDigits } from '../apps/desktop/src/shared/digits.js';
+import { translate } from '../apps/desktop/src/shared/translate.js';
 import {
   BASE_PATH,
   DEFAULT_LOCALE,
@@ -39,7 +39,7 @@ import { releases as releasesPage } from './templates/releases.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
-const APP = path.join(ROOT, 'beytelhikma-electron');
+const APP = path.join(ROOT, 'apps', 'desktop');
 const RENDERER = path.join(APP, 'src', 'renderer');
 
 const REPO_URL = `https://github.com/${REPO.owner}/${REPO.name}`;
@@ -92,7 +92,7 @@ async function readBookCount(override) {
   const raw = await readIfExists(path.join(APP, 'assets', 'catalog-seed.json'));
   if (!raw) {
     throw new Error(
-      "assets/catalog-seed.json est absent : lance `npm run seed` dans beytelhikma-electron, " +
+      "assets/catalog-seed.json est absent : lance `npm run seed` dans apps/desktop, " +
         'ou passe `--books N` pour un rendu local.',
     );
   }

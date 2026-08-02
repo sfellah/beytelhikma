@@ -14,7 +14,7 @@
 - Règle de résolution, valable partout : **la présence de `://` dans une clé marque un absolu**. Tout le reste est relatif à la base configurée.
 - URL de base par défaut : `https://beytelhima-library.s3.eu-west-1.amazonaws.com`
 - Aucune mise à jour de catalogue ne supprime un fichier de livre. Jamais.
-- Tests Electron : `npm test` depuis `beytelhikma-electron/` (`node --test "test/**/*.test.js"`).
+- Tests Electron : `npm test` depuis `apps/desktop/` (`node --test "test/**/*.test.js"`).
 - Tests Python : `cd tools && python -m unittest discover -s shamela/tests -t .`
 - Les commentaires de code sont en français, comme le reste du dépôt.
 
@@ -24,26 +24,26 @@
 
 | Fichier | Responsabilité |
 | --- | --- |
-| `beytelhikma-electron/src/shared/distribution.js` *(créé)* | Fonction pure : `(base, clé) -> cible`. Aucun réseau, aucun disque. |
-| `beytelhikma-electron/test/distribution.test.js` *(créé)* | Table de cas de la résolution. |
-| `beytelhikma-electron/src/main/catalog-updater.js` *(créé)* | Pointeur, comparaison, téléchargement, échange atomique. |
-| `beytelhikma-electron/test/catalog-updater.test.js` *(créé)* | Serveur HTTP jetable, cas de décision et d'installation. |
+| `apps/desktop/src/shared/distribution.js` *(créé)* | Fonction pure : `(base, clé) -> cible`. Aucun réseau, aucun disque. |
+| `apps/desktop/test/distribution.test.js` *(créé)* | Table de cas de la résolution. |
+| `apps/desktop/src/main/catalog-updater.js` *(créé)* | Pointeur, comparaison, téléchargement, échange atomique. |
+| `apps/desktop/test/catalog-updater.test.js` *(créé)* | Serveur HTTP jetable, cas de décision et d'installation. |
 | `tools/_common.py` | DDL : `download_url` → `object_key`, `SCHEMA_VERSION` → 2. |
 | `tools/shamela/catalogdb.py` | Écrit la clé relative à l'import. |
 | `tools/gen_sample_data.py` | Idem pour le jeu d'exemple (`asset://`, inchangé sur le fond). |
 | `tools/publish_minio.py` | Construit les clés, publie catalogue + pointeur, policy `catalog/*`. |
-| `beytelhikma-electron/src/main/book-repository.js` | Lit `object_key`, réglage `distribution.base_url`. |
-| `beytelhikma-electron/src/main/download-manager.js` | Résout par `distribution.js`, `#applyBaseUrl` supprimé. |
-| `beytelhikma-electron/src/main/app-database.js` | `#syncInstalledLibrary` → réconciliation par édition. |
-| `beytelhikma-electron/src/renderer/js/views/settings.js` | Section « source de distribution ». |
+| `apps/desktop/src/main/book-repository.js` | Lit `object_key`, réglage `distribution.base_url`. |
+| `apps/desktop/src/main/download-manager.js` | Résout par `distribution.js`, `#applyBaseUrl` supprimé. |
+| `apps/desktop/src/main/app-database.js` | `#syncInstalledLibrary` → réconciliation par édition. |
+| `apps/desktop/src/renderer/js/views/settings.js` | Section « source de distribution ». |
 
 ---
 
 ### Task 1 : le module de résolution
 
 **Files:**
-- Create: `beytelhikma-electron/src/shared/distribution.js`
-- Test: `beytelhikma-electron/test/distribution.test.js`
+- Create: `apps/desktop/src/shared/distribution.js`
+- Test: `apps/desktop/test/distribution.test.js`
 
 **Interfaces:**
 - Consumes: rien.
@@ -54,7 +54,7 @@
 
 - [ ] **Step 1: Write the failing test**
 
-Créer `beytelhikma-electron/test/distribution.test.js` :
+Créer `apps/desktop/test/distribution.test.js` :
 
 ```js
 import assert from 'node:assert/strict';
@@ -123,12 +123,12 @@ test('isAbsoluteKey ne se laisse pas prendre par un chemin qui contient deux poi
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd beytelhikma-electron && npx node --test test/distribution.test.js`
+Run: `cd apps/desktop && npx node --test test/distribution.test.js`
 Expected: FAIL — `Cannot find module '../src/shared/distribution.js'`
 
 - [ ] **Step 3: Write the implementation**
 
-Créer `beytelhikma-electron/src/shared/distribution.js` :
+Créer `apps/desktop/src/shared/distribution.js` :
 
 ```js
 /**
@@ -187,13 +187,13 @@ export function resolveObject(baseUrl, objectKey) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd beytelhikma-electron && npx node --test test/distribution.test.js`
+Run: `cd apps/desktop && npx node --test test/distribution.test.js`
 Expected: PASS, 7 tests
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/shared/distribution.js beytelhikma-electron/test/distribution.test.js
+git add apps/desktop/src/shared/distribution.js apps/desktop/test/distribution.test.js
 git commit -m "feat(electron): résoudre une clé de catalogue contre une base configurable"
 ```
 
@@ -688,10 +688,10 @@ git commit -m "feat(tools): publier le catalogue versionné et son pointeur"
 ### Task 4 : le client lit une clé, plus une URL
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js:287-303` (`#activeRelease`), `:1877-1885` (`setDownloadBaseUrl`)
-- Modify: `beytelhikma-electron/src/main/download-manager.js:51-70`, `:219-235`, `:374-382`
-- Modify: `beytelhikma-electron/src/main/main.js:27`
-- Test: `beytelhikma-electron/test/download-manager.test.js`
+- Modify: `apps/desktop/src/main/book-repository.js:287-303` (`#activeRelease`), `:1877-1885` (`setDownloadBaseUrl`)
+- Modify: `apps/desktop/src/main/download-manager.js:51-70`, `:219-235`, `:374-382`
+- Modify: `apps/desktop/src/main/main.js:27`
+- Test: `apps/desktop/test/download-manager.test.js`
 
 **Interfaces:**
 - Consumes: `resolveObject`, `DEFAULT_BASE_URL` (tâche 1) ; colonne `object_key` (tâche 2).
@@ -699,7 +699,7 @@ git commit -m "feat(tools): publier le catalogue versionné et son pointeur"
 
 - [ ] **Step 1: Write the failing test**
 
-Ajouter à `beytelhikma-electron/test/download-manager.test.js` :
+Ajouter à `apps/desktop/test/download-manager.test.js` :
 
 ```js
 test('la clé relative est résolue contre la base configurée', async (t) => {
@@ -742,7 +742,7 @@ noms. Si aucun utilitaire `installOnce` n'existe, écrire l'attente sur l'évén
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd beytelhikma-electron && npx node --test test/download-manager.test.js`
+Run: `cd apps/desktop && npx node --test test/download-manager.test.js`
 Expected: FAIL — l'URL demandée est `undefined` ou l'origine n'est pas appliquée.
 
 - [ ] **Step 3: Write the implementation**
@@ -840,7 +840,7 @@ Dans `main.js:27` :
 
 - [ ] **Step 4: Run the full suite**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS. Si `repository.test.js` échoue sur `download_url`, c'est le jeu
 d'exemple qui n'a pas été régénéré à la tâche 2 — le refaire plutôt que d'adapter
 le test.
@@ -848,7 +848,7 @@ le test.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src beytelhikma-electron/test
+git add apps/desktop/src apps/desktop/test
 git commit -m "feat(electron): résoudre les livres par clé relative et base configurée"
 ```
 
@@ -857,8 +857,8 @@ git commit -m "feat(electron): résoudre les livres par clé relative et base co
 ### Task 5 : lire le pointeur et décider
 
 **Files:**
-- Create: `beytelhikma-electron/src/main/catalog-updater.js`
-- Test: `beytelhikma-electron/test/catalog-updater.test.js`
+- Create: `apps/desktop/src/main/catalog-updater.js`
+- Test: `apps/desktop/test/catalog-updater.test.js`
 
 **Interfaces:**
 - Consumes: `resolveObject` (tâche 1).
@@ -869,7 +869,7 @@ git commit -m "feat(electron): résoudre les livres par clé relative et base co
 
 - [ ] **Step 1: Write the failing test**
 
-Créer `beytelhikma-electron/test/catalog-updater.test.js` :
+Créer `apps/desktop/test/catalog-updater.test.js` :
 
 ```js
 import assert from 'node:assert/strict';
@@ -993,12 +993,12 @@ test('le pointeur est lu sous catalog/latest.json', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd beytelhikma-electron && npx node --test test/catalog-updater.test.js`
+Run: `cd apps/desktop && npx node --test test/catalog-updater.test.js`
 Expected: FAIL — `Cannot find module '../src/main/catalog-updater.js'`
 
 - [ ] **Step 3: Write the implementation**
 
-Créer `beytelhikma-electron/src/main/catalog-updater.js` :
+Créer `apps/desktop/src/main/catalog-updater.js` :
 
 ```js
 /**
@@ -1081,13 +1081,13 @@ export function decideUpdate({ pointer, localVersion, declinedVersion }) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd beytelhikma-electron && npx node --test test/catalog-updater.test.js`
+Run: `cd apps/desktop && npx node --test test/catalog-updater.test.js`
 Expected: PASS, 9 tests
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/catalog-updater.js beytelhikma-electron/test/catalog-updater.test.js
+git add apps/desktop/src/main/catalog-updater.js apps/desktop/test/catalog-updater.test.js
 git commit -m "feat(electron): lire le pointeur de catalogue et décider sans bruit"
 ```
 
@@ -1096,9 +1096,9 @@ git commit -m "feat(electron): lire le pointeur de catalogue et décider sans br
 ### Task 6 : installer le catalogue par échange atomique
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/catalog-updater.js`
-- Modify: `beytelhikma-electron/src/main/app-database.js` (fermeture/réouverture du catalogue)
-- Test: `beytelhikma-electron/test/catalog-updater.test.js`
+- Modify: `apps/desktop/src/main/catalog-updater.js`
+- Modify: `apps/desktop/src/main/app-database.js` (fermeture/réouverture du catalogue)
+- Test: `apps/desktop/test/catalog-updater.test.js`
 
 **Interfaces:**
 - Consumes: `fetchPointer`, `decideUpdate` (tâche 5) ; `installRelease` de `download-manager.js`.
@@ -1106,7 +1106,7 @@ git commit -m "feat(electron): lire le pointeur de catalogue et décider sans br
 
 - [ ] **Step 1: Write the failing test**
 
-Ajouter à `beytelhikma-electron/test/catalog-updater.test.js` :
+Ajouter à `apps/desktop/test/catalog-updater.test.js` :
 
 ```js
 import { createHash } from 'node:crypto';
@@ -1173,7 +1173,7 @@ test('un SHA-256 faux laisse l’ancien catalogue en place', async (t) => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd beytelhikma-electron && npx node --test test/catalog-updater.test.js`
+Run: `cd apps/desktop && npx node --test test/catalog-updater.test.js`
 Expected: FAIL — `installCatalog is not a function`
 
 - [ ] **Step 3: Write the implementation**
@@ -1271,7 +1271,7 @@ Vérifier avant d'écrire que `#catalog` et `catalog()` portent bien ces noms
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd beytelhikma-electron && npx node --test test/catalog-updater.test.js`
+Run: `cd apps/desktop && npx node --test test/catalog-updater.test.js`
 Expected: PASS
 
 Si `zlib.createZstdDecompress` n'existe pas dans le Node utilisé, reprendre la
@@ -1281,7 +1281,7 @@ plutôt que d'introduire une seconde façon de décompresser.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main beytelhikma-electron/test/catalog-updater.test.js
+git add apps/desktop/src/main apps/desktop/test/catalog-updater.test.js
 git commit -m "feat(electron): installer le catalogue par échange atomique"
 ```
 
@@ -1290,9 +1290,9 @@ git commit -m "feat(electron): installer le catalogue par échange atomique"
 ### Task 7 : réconcilier la bibliothèque installée
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/app-database.js:202-230` (`#syncInstalledLibrary`)
-- Modify: `beytelhikma-electron/src/main/book-repository.js` (`getLibrary`, exposition du drapeau)
-- Test: `beytelhikma-electron/test/library.test.js`
+- Modify: `apps/desktop/src/main/app-database.js:202-230` (`#syncInstalledLibrary`)
+- Modify: `apps/desktop/src/main/book-repository.js` (`getLibrary`, exposition du drapeau)
+- Test: `apps/desktop/test/library.test.js`
 
 **Interfaces:**
 - Consumes: `downloaded_books.release_id`, `book_releases.release_id` (existants).
@@ -1300,7 +1300,7 @@ git commit -m "feat(electron): installer le catalogue par échange atomique"
 
 - [ ] **Step 1: Write the failing test**
 
-Ajouter à `beytelhikma-electron/test/library.test.js` :
+Ajouter à `apps/desktop/test/library.test.js` :
 
 ```js
 test('une réédition est signalée, jamais appliquée', async (t) => {
@@ -1326,7 +1326,7 @@ lire le fichier d'abord et adapter ce test à ses conventions.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd beytelhikma-electron && npx node --test test/library.test.js`
+Run: `cd apps/desktop && npx node --test test/library.test.js`
 Expected: FAIL — `hasNewerRelease` vaut `undefined`
 
 - [ ] **Step 3: Write the implementation**
@@ -1384,13 +1384,13 @@ lisible. Mettre à jour le commentaire correspondant dans `CLAUDE.md` à la tâc
 
 - [ ] **Step 4: Run the full suite**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src beytelhikma-electron/test
+git add apps/desktop/src apps/desktop/test
 git commit -m "feat(electron): signaler les rééditions au lieu de purger la bibliothèque"
 ```
 
@@ -1399,10 +1399,10 @@ git commit -m "feat(electron): signaler les rééditions au lieu de purger la bi
 ### Task 8 : la bannière et le réglage
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js` (méthodes exposées)
-- Modify: `beytelhikma-electron/src/preload/preload.cjs` (`METHODS`)
-- Modify: `beytelhikma-electron/src/renderer/js/views/settings.js:180-215`
-- Test: `beytelhikma-electron/test/repository.test.js` (parité des listes)
+- Modify: `apps/desktop/src/main/book-repository.js` (méthodes exposées)
+- Modify: `apps/desktop/src/preload/preload.cjs` (`METHODS`)
+- Modify: `apps/desktop/src/renderer/js/views/settings.js:180-215`
+- Test: `apps/desktop/test/repository.test.js` (parité des listes)
 
 **Interfaces:**
 - Consumes: `fetchPointer`, `decideUpdate`, `installCatalog` (tâches 5-6).
@@ -1415,7 +1415,7 @@ Le test de parité existe déjà dans `repository.test.js` : il compare `METHODS
 trois noms dans **une seule** des deux listes, lancer le test, et vérifier qu'il
 échoue — c'est la preuve que le garde-fou fonctionne.
 
-Run: `cd beytelhikma-electron && npx node --test test/repository.test.js`
+Run: `cd apps/desktop && npx node --test test/repository.test.js`
 Expected: FAIL, avec les trois noms manquants nommés.
 
 - [ ] **Step 2: Implémenter les trois méthodes**
@@ -1472,7 +1472,7 @@ Ajouter les trois noms **aux deux** listes, `REPOSITORY_METHODS` et `METHODS`.
 
 - [ ] **Step 3: Run the parity test**
 
-Run: `cd beytelhikma-electron && npx node --test test/repository.test.js`
+Run: `cd apps/desktop && npx node --test test/repository.test.js`
 Expected: PASS
 
 - [ ] **Step 4: La section de réglages**
@@ -1547,13 +1547,13 @@ avant d'écrire.
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add beytelhikma-electron/src beytelhikma-electron/test
+git add apps/desktop/src apps/desktop/test
 git commit -m "feat(electron): proposer la mise à jour du catalogue depuis les réglages"
 ```
 

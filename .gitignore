@@ -17,11 +17,11 @@ __pycache__/
 # Graine de catalogue embarquée : artefact de build, récupérée du bucket par
 # `scripts/fetch-seed.mjs`. La versionner mettrait plusieurs Mo de binaire dans
 # l'historique à chaque publication. Le jeu d'exemple, lui, reste versionné.
-beytelhikma-electron/assets/catalog.sqlite.zst
-beytelhikma-electron/assets/catalog-seed.json
+apps/desktop/assets/catalog.sqlite.zst
+apps/desktop/assets/catalog-seed.json
 
 # Artefacts d'electron-builder
-beytelhikma-electron/release/
+apps/desktop/release/
 
 # Site : le rendu et les données relevées depuis l'API GitHub sont des
 # artefacts. Les sources (gabarits, locales, captures curées) sont versionnées.

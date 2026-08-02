@@ -1,4 +1,4 @@
-"""Contrôles par livre (DATA_MODEL_DESCISION §40).
+"""Contrôles par livre (docs/decisions-modele-donnees.md §40).
 
 Sur 8 589 livres, un livre malformé ne doit jamais coûter les 8 588 autres :
 l'appelant journalise l'échec, supprime le fichier partiel et continue. Un livre

@@ -16,7 +16,7 @@
 - Pas de chaîne HTML interprétée dans le rendu : tout par `h()` de `src/renderer/js/dom.js`.
 - Interface RTL : `inset-inline-start` / `inset-inline-end`, jamais `left` / `right`.
 - Textes visibles en arabe.
-- `npm test` depuis `beytelhikma-electron/` doit rester vert à chaque commit.
+- `npm test` depuis `apps/desktop/` doit rester vert à chaque commit.
 - Ne pas revenir sur les modifications récentes de `shell.js` et `main.js` (marque, icône d'application).
 
 ## Structure des fichiers
@@ -45,15 +45,15 @@
 ### Task 1: Normalisation arabe partagée
 
 **Files:**
-- Create: `beytelhikma-electron/src/shared/arabic.js`
-- Test: `beytelhikma-electron/test/arabic.test.js`
+- Create: `apps/desktop/src/shared/arabic.js`
+- Test: `apps/desktop/test/arabic.test.js`
 
 **Interfaces:**
 - Produces: `normalizeArabic(text: string): string`
 
 - [ ] **Step 1: Écrire le test de parité**
 
-`beytelhikma-electron/test/arabic.test.js` :
+`apps/desktop/test/arabic.test.js` :
 
 ```js
 import assert from 'node:assert/strict';
@@ -97,12 +97,12 @@ test('normalizeArabic tolère le vide et le non-arabe', () => {
 
 - [ ] **Step 2: Lancer, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/arabic.test.js`
+Run: `cd apps/desktop && node --test test/arabic.test.js`
 Expected: FAIL — `Cannot find module .../src/shared/arabic.js`
 
 - [ ] **Step 3: Écrire le module**
 
-`beytelhikma-electron/src/shared/arabic.js` :
+`apps/desktop/src/shared/arabic.js` :
 
 ```js
 /**
@@ -134,13 +134,13 @@ export function normalizeArabic(text) {
 
 - [ ] **Step 4: Lancer, vérifier le succès**
 
-Run: `cd beytelhikma-electron && node --test test/arabic.test.js`
+Run: `cd apps/desktop && node --test test/arabic.test.js`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/shared/arabic.js beytelhikma-electron/test/arabic.test.js
+git add apps/desktop/src/shared/arabic.js apps/desktop/test/arabic.test.js
 git commit -m "feat(electron): normalisation arabe partagée, conforme au pipeline"
 ```
 
@@ -149,8 +149,8 @@ git commit -m "feat(electron): normalisation arabe partagée, conforme au pipeli
 ### Task 2: Constructeur de requêtes
 
 **Files:**
-- Create: `beytelhikma-electron/src/main/catalog-query.js`
-- Test: `beytelhikma-electron/test/catalog-query.test.js`
+- Create: `apps/desktop/src/main/catalog-query.js`
+- Test: `apps/desktop/test/catalog-query.test.js`
 
 **Interfaces:**
 - Consumes: `normalizeArabic` (tâche 1).
@@ -164,7 +164,7 @@ git commit -m "feat(electron): normalisation arabe partagée, conforme au pipeli
 
 - [ ] **Step 1: Écrire les tests**
 
-`beytelhikma-electron/test/catalog-query.test.js` :
+`apps/desktop/test/catalog-query.test.js` :
 
 ```js
 import assert from 'node:assert/strict';
@@ -248,12 +248,12 @@ test('une facette est comptée sans son propre filtre', () => {
 
 - [ ] **Step 2: Lancer, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/catalog-query.test.js`
+Run: `cd apps/desktop && node --test test/catalog-query.test.js`
 Expected: FAIL — module absent.
 
 - [ ] **Step 3: Écrire le module**
 
-`beytelhikma-electron/src/main/catalog-query.js` :
+`apps/desktop/src/main/catalog-query.js` :
 
 ```js
 import { normalizeArabic } from '../shared/arabic.js';
@@ -426,13 +426,13 @@ export function buildFacetQuery(query, facetKey, options = {}) {
 
 - [ ] **Step 4: Lancer, vérifier le succès**
 
-Run: `cd beytelhikma-electron && node --test test/catalog-query.test.js`
+Run: `cd apps/desktop && node --test test/catalog-query.test.js`
 Expected: PASS (10 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/catalog-query.js beytelhikma-electron/test/catalog-query.test.js
+git add apps/desktop/src/main/catalog-query.js apps/desktop/test/catalog-query.test.js
 git commit -m "feat(electron): constructeur de requêtes du catalogue, paramètres liés"
 ```
 
@@ -441,8 +441,8 @@ git commit -m "feat(electron): constructeur de requêtes du catalogue, paramètr
 ### Task 3: Exploration côté dépôt
 
 **Files:**
-- Modify: `beytelhikma-electron/src/main/book-repository.js`
-- Modify: `beytelhikma-electron/test/repository.test.js`
+- Modify: `apps/desktop/src/main/book-repository.js`
+- Modify: `apps/desktop/test/repository.test.js`
 
 **Interfaces:**
 - Consumes: `buildList`, `buildCount`, `buildFacetQuery`, `FACETS` (tâche 2) ; `normalizeArabic` (tâche 1).
@@ -455,7 +455,7 @@ git commit -m "feat(electron): constructeur de requêtes du catalogue, paramètr
 
 - [ ] **Step 1: Écrire les tests**
 
-Ajouter à `beytelhikma-electron/test/repository.test.js` :
+Ajouter à `apps/desktop/test/repository.test.js` :
 
 ```js
 test('l’exploration sans filtre renvoie tout le catalogue', async () => {
@@ -526,7 +526,7 @@ test('la sélection se pèse et se met en file, sans les déjà installés', asy
 
 - [ ] **Step 2: Lancer, vérifier l'échec**
 
-Run: `cd beytelhikma-electron && node --test test/repository.test.js`
+Run: `cd apps/desktop && node --test test/repository.test.js`
 Expected: FAIL — `repository.exploreBooks is not a function`
 
 - [ ] **Step 3: Implémenter**
@@ -717,13 +717,13 @@ Ajouter à `REPOSITORY_METHODS` : `'exploreBooks'`, `'getFacets'`, `'suggestValu
 
 - [ ] **Step 4: Lancer, vérifier le succès**
 
-Run: `cd beytelhikma-electron && npm test`
+Run: `cd apps/desktop && npm test`
 Expected: PASS pour toute la suite.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add beytelhikma-electron/src/main/book-repository.js beytelhikma-electron/src/preload/preload.cjs beytelhikma-electron/test/repository.test.js
+git add apps/desktop/src/main/book-repository.js apps/desktop/src/preload/preload.cjs apps/desktop/test/repository.test.js
 git commit -m "feat(electron): exploration, facettes, suggestions et mise en file d'une sélection"
 ```
 
@@ -732,15 +732,15 @@ git commit -m "feat(electron): exploration, facettes, suggestions et mise en fil
 ### Task 4: Modale générique
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/components/modal.js`
-- Modify: `beytelhikma-electron/src/renderer/js/components/confirm-delete.js`
+- Create: `apps/desktop/src/renderer/js/components/modal.js`
+- Modify: `apps/desktop/src/renderer/js/components/confirm-delete.js`
 
 **Interfaces:**
 - Produces: `confirmDialog({ title, message, actions }): Promise<any>` où `actions` est un tableau `{ value, label, variant }` avec `variant ∈ 'filled' | 'danger' | 'tonal'`. La première action reçoit le focus. `Échap` et le clic hors panneau résolvent `null`.
 
 - [ ] **Step 1: Écrire la modale générique**
 
-`beytelhikma-electron/src/renderer/js/components/modal.js` :
+`apps/desktop/src/renderer/js/components/modal.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -836,13 +836,13 @@ export function confirmDelete({ title, hasProgress }) {
 
 - [ ] **Step 3: Vérifier que la suppression fonctionne toujours**
 
-Run: `cd beytelhikma-electron && npm start`
+Run: `cd apps/desktop && npm start`
 Expected: sur une fiche de livre installé, `حذف` ouvre la modale ; les trois issues se comportent comme avant.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer/js/components/modal.js beytelhikma-electron/src/renderer/js/components/confirm-delete.js
+git add apps/desktop/src/renderer/js/components/modal.js apps/desktop/src/renderer/js/components/confirm-delete.js
 git commit -m "refactor(ui): modale de confirmation générique, réutilisée par la suppression"
 ```
 
@@ -851,8 +851,8 @@ git commit -m "refactor(ui): modale de confirmation générique, réutilisée pa
 ### Task 5: Panneau de facettes
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/components/facet-panel.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/views.css`
+- Create: `apps/desktop/src/renderer/js/components/facet-panel.js`
+- Modify: `apps/desktop/src/renderer/styles/views.css`
 
 **Interfaces:**
 - Consumes: `repository.suggestValues` (tâche 3).
@@ -860,7 +860,7 @@ git commit -m "refactor(ui): modale de confirmation générique, réutilisée pa
 
 - [ ] **Step 1: Écrire le composant**
 
-`beytelhikma-electron/src/renderer/js/components/facet-panel.js` :
+`apps/desktop/src/renderer/js/components/facet-panel.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -1122,7 +1122,7 @@ Ajouter à `src/renderer/styles/views.css` :
 - [ ] **Step 3: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer/js/components/facet-panel.js beytelhikma-electron/src/renderer/styles/views.css
+git add apps/desktop/src/renderer/js/components/facet-panel.js apps/desktop/src/renderer/styles/views.css
 git commit -m "feat(ui): panneau de facettes avec compteurs et autocomplétion"
 ```
 
@@ -1131,12 +1131,12 @@ git commit -m "feat(ui): panneau de facettes avec compteurs et autocomplétion"
 ### Task 6: Écran `/explore`
 
 **Files:**
-- Create: `beytelhikma-electron/src/renderer/js/views/explore.js`
-- Modify: `beytelhikma-electron/src/renderer/js/app.js`
-- Modify: `beytelhikma-electron/src/renderer/js/shell.js`
-- Modify: `beytelhikma-electron/src/renderer/js/components/book-card.js`
-- Modify: `beytelhikma-electron/src/renderer/styles/views.css`
-- Modify: `beytelhikma-electron/src/main/capture.js`
+- Create: `apps/desktop/src/renderer/js/views/explore.js`
+- Modify: `apps/desktop/src/renderer/js/app.js`
+- Modify: `apps/desktop/src/renderer/js/shell.js`
+- Modify: `apps/desktop/src/renderer/js/components/book-card.js`
+- Modify: `apps/desktop/src/renderer/styles/views.css`
+- Modify: `apps/desktop/src/main/capture.js`
 
 **Interfaces:**
 - Consumes: `repository.exploreBooks / getFacets / getSelectionWeight / downloadSelection`, `facetPanel` (tâche 5), `confirmDialog` (tâche 4), `formatBytes` (déjà dans `download-action.js`).
@@ -1190,7 +1190,7 @@ Styles à ajouter dans `components.css` :
 
 - [ ] **Step 2: Écrire la vue**
 
-`beytelhikma-electron/src/renderer/js/views/explore.js` :
+`apps/desktop/src/renderer/js/views/explore.js` :
 
 ```js
 import { h } from '../dom.js';
@@ -1671,13 +1671,13 @@ Ajouter à `src/renderer/styles/views.css` :
 
 - [ ] **Step 5: Vérifier**
 
-Run: `cd beytelhikma-electron && npm test && BEYT_CAPTURE=1 npx electron .`
+Run: `cd apps/desktop && npm test && BEYT_CAPTURE=1 npx electron .`
 Expected: suite verte ; `build/screenshots/explore.png` montre la grille, le panneau de facettes et les compteurs ; aucune erreur de console dans la sortie.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add beytelhikma-electron/src/renderer beytelhikma-electron/src/main/capture.js
+git add apps/desktop/src/renderer apps/desktop/src/main/capture.js
 git commit -m "feat(ui): écran d'exploration, filtres, sélection et mise en file du lot"
 ```
 

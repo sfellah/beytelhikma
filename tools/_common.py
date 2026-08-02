@@ -13,7 +13,7 @@ Tout ce qui produit une base lue par l'application doit importer d'ici, jamais
 redéfinir. C'est ce qui rend une dérive de schéma impossible entre
 `gen_sample_data.py` (5 livres factices) et `import_shamela.py` (corpus réel).
 
-Voir DATAMODEL.md pour la description des tables.
+Voir docs/DATAMODEL.md pour la description des tables.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ TATWEEL = "ـ"
 
 
 def normalize_ar(text: str) -> str:
-    """Texte arabe normalisé pour la recherche souple (voir DATAMODEL.md §3).
+    """Texte arabe normalisé pour la recherche souple (voir docs/DATAMODEL.md §3).
 
     Mode « large » : harakāt, tatweel, variantes de alif, `ى→ي` et `ة→ه`.
     Le schéma n'a qu'une seule colonne de recherche, donc on privilégie le

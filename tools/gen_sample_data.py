@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Génère les bases SQLite d'exemple (catalog + book) conformes à DATAMODEL.md.
+"""Génère les bases SQLite d'exemple (catalog + book) conformes à docs/DATAMODEL.md.
 
-Sortie : beytelhikma-electron/assets/sample/
+Sortie : apps/desktop/assets/sample/
     catalog.sqlite
     books/<edition_id>.sqlite
 
@@ -30,7 +30,7 @@ from _common import (
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(ROOT, "beytelhikma-electron", "assets", "sample")
+OUT_DIR = os.path.join(ROOT, "apps", "desktop", "assets", "sample")
 BOOKS_DIR = os.path.join(OUT_DIR, "books")
 
 # Autres copies du jeu d'exemple à tenir synchrones. Vide depuis le retrait du

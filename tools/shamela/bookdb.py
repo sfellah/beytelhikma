@@ -361,7 +361,7 @@ def build_book(
 
 
 def finalize(path: str) -> None:
-    """Prépare le fichier pour la distribution (DATA_MODEL_DESCISION §41)."""
+    """Prépare le fichier pour la distribution (docs/decisions-modele-donnees.md §41)."""
     con = sqlite3.connect(path)
     try:
         con.execute("PRAGMA journal_mode = DELETE")

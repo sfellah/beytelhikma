@@ -4,19 +4,19 @@ Guidance pour Claude Code sur ce projet.
 
 ## Projet
 
-**Beyt El Hikma** — application de bureau Electron de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). L'implémentation vit dans `beytelhikma-electron/` (voir son `README.md`). Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique.
+**Beyt El Hikma** — application de bureau Electron de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). L'implémentation vit dans `apps/desktop/` (voir son `README.md`). Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique.
 
 ## Commandes
 
 ```bash
-# application (depuis beytelhikma-electron/)
+# application (depuis apps/desktop/)
 npm install           # dépendances
 npm start             # lancer l'app
 npm test              # suite de tests (node --test)
 npm run seed          # récupère la graine de catalogue depuis le bucket
 npm run release:win   # tests + graine + installeur NSIS et portable
 
-python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple -> beytelhikma-electron/assets/sample/
+python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple -> apps/desktop/assets/sample/
 python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
 
 # import du corpus Shamela 4 (depuis la racine)
@@ -47,7 +47,7 @@ python tools/publish_minio.py --endpoint aws --bucket <bucket> --catalog-only
 
 ## Architecture (règles à respecter)
 
-**Local-first, pas d'API.** La source de vérité est SQLite, conformément à `DATAMODEL.md` :
+**Local-first, pas d'API.** La source de vérité est SQLite, conformément à `docs/DATAMODEL.md` :
 
 | Base                       | Rôle                                      | Accès          |
 | -------------------------- | ----------------------------------------- | -------------- |
@@ -55,7 +55,7 @@ python tools/publish_minio.py --endpoint aws --bucket <bucket> --catalog-only
 | `books/<edition_id>.sqlite` | contenu d'un livre (pages, volumes, toc)  | lecture seule  |
 | `user.sqlite`              | bibliothèque, progression, réglages       | lecture/écriture |
 
-**Structure du code Electron** (`beytelhikma-electron/src/`) :
+**Structure du code Electron** (`apps/desktop/src/`) :
 
 - `main/` — processus principal : `app-database.js` (ouverture des trois bases, sql.js), `book-repository.js` (toutes les lectures/écritures exposées au rendu), `download-manager.js`, `catalog-updater.js`, `main.js` (fenêtre + IPC).
 - `preload/preload.cjs` — pont IPC, liste blanche `METHODS`.
@@ -98,7 +98,7 @@ Le nettoyage attrape aussi `-journal`, `-wal`, `-shm`, `.part` et `.tmp` : ces r
 
 Voir `docs/superpowers/specs/2026-07-31-source-distribution-configurable-design.md`.
 
-**Le jeu d'exemple** (5 livres, 3 à 5 pages) vit dans `beytelhikma-electron/assets/sample` et est produit par `tools/gen_sample_data.py` : ne jamais l'éditer à la main, modifier le générateur. `MIRROR_DIRS` (vide aujourd'hui) reste dans le générateur : quand une seconde copie existait, la recopie manuelle avait dérivé et la suite de tests échouait loin de sa cause.
+**Le jeu d'exemple** (5 livres, 3 à 5 pages) vit dans `apps/desktop/assets/sample` et est produit par `tools/gen_sample_data.py` : ne jamais l'éditer à la main, modifier le générateur. `MIRROR_DIRS` (vide aujourd'hui) reste dans le générateur : quand une seconde copie existait, la recopie manuelle avait dérivé et la suite de tests échouait loin de sa cause.
 
 **Le DDL vit dans `tools/_common.py`** (`BOOK_SCHEMA`, `CATALOG_SCHEMA`), importé à la fois par `gen_sample_data.py` et par l'importeur Shamela : une seule source de vérité, donc aucune dérive possible entre les données d'exemple et les données réelles. `tools/shamela/tests/test_pipeline.py::SchemaParityTest` échoue si ce n'est plus le cas.
 
@@ -128,9 +128,9 @@ Dans la barre haute, `Entrée` mène à `/search` et `Ctrl+Entrée` à `/explore
 
 **`Ctrl+F` se dispute par convention, pas par liste d'écrans.** La coquille l'écoute sur `window` pour viser le champ de la barre haute, le lecteur sur `document` pour chercher dans le livre ouvert ; `document` bulle avant `window`, donc le premier à répondre appelle `preventDefault()` et le second sort sur `defaultPrevented`. Une liste d'écrans exemptés devrait être tenue à jour au prochain écran — pas la convention. `test/shortcuts.test.js` la tient aux deux bouts.
 
-Maquettes HTML de référence dans `ui-examples/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design.
+Maquettes HTML de référence dans `docs/maquettes/` (`home.html`, `mylibrary.html`, `book-info.html`, `reader.html`) — s'en inspirer pour le design.
 
-**Annotations.** `user.sqlite` porte les trois tables de `DATAMODEL.md` — `bookmarks`, `highlights`, `notes` — depuis la version de schéma **2**. La migration est additive et rejouée à l'ouverture (`AppDatabase.#migrateUser`) : tout client qui partagerait une racine de bibliothèque doit lire le même `user_version`. Un surlignage s'ancre sur des décalages du texte rendu **et** sur le passage avec son contexte : les décalages seuls ne survivraient pas à une réédition (voir `src/renderer/js/annotations.js`).
+**Annotations.** `user.sqlite` porte les trois tables de `docs/DATAMODEL.md` — `bookmarks`, `highlights`, `notes` — depuis la version de schéma **2**. La migration est additive et rejouée à l'ouverture (`AppDatabase.#migrateUser`) : tout client qui partagerait une racine de bibliothèque doit lire le même `user_version`. Un surlignage s'ancre sur des décalages du texte rendu **et** sur le passage avec son contexte : les décalages seuls ne survivraient pas à une réédition (voir `src/renderer/js/annotations.js`).
 
 Les quatre teintes de surlignage sortent des jetons du projet (`HIGHLIGHTS` dans `views/reader.js`) et se posent à opacité variable selon l'ambiance (`--highlight-strength`, déclarée dans `tokens.css` et abaissée par le thème nuit) : une pastille claire sur fond de nuit mangerait l'encre. Le fond de recherche porte la classe `reader__match` et **jamais** le sélecteur `.reader__page mark` — celui-ci l'emportait par spécificité sur `.reader__highlight` et repeignait en jaune toutes les couleurs choisies.
 
@@ -241,7 +241,7 @@ La graine (`assets/catalog.sqlite.zst`) est **téléchargée depuis le bucket au
 
 **Au premier lancement**, `AppDatabase.#plantSeed` décompresse la graine — **seulement si `catalog.sqlite` est absent**. Une mise à jour d'application embarque une graine plus ancienne que le catalogue déjà téléchargé ; l'écraser ferait régresser le catalogue de l'utilisateur à chaque nouvelle version. Dans une application empaquetée, `librarySource` est nul : **aucun livre ne peut venir d'ailleurs que du bucket**, et `asset://` / `local://` ne s'y rencontrent jamais.
 
-`beytelhikma-electron/build/` est le `buildResources` d'electron-builder, pas un dossier de sortie : il porte `icon.ico`, dérivé de `app-icon.png` par `tools/gen_brand_assets.py`. Il n'est donc pas ignorable en bloc — git ne réinclut rien sous un dossier exclu. Ce qui est artefact y est nommé un par un (`build/screenshots/`), et les artefacts d'empaquetage sortent dans `release/`.
+`apps/desktop/build/` est le `buildResources` d'electron-builder, pas un dossier de sortie : il porte `icon.ico`, dérivé de `app-icon.png` par `tools/gen_brand_assets.py`. Il n'est donc pas ignorable en bloc — git ne réinclut rien sous un dossier exclu. Ce qui est artefact y est nommé un par un (`build/screenshots/`), et les artefacts d'empaquetage sortent dans `release/`.
 
 Reste à faire : le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) — le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement en développement copie toujours le catalogue depuis le dossier source local.
 
@@ -285,4 +285,4 @@ Les fichiers sont servis par le schéma `userfont:`, qui ne sort jamais de `user
 
 - Pas de contenu statique dans l'UI : toute donnée passe par le repository.
 - Composants partagés réutilisables dans `src/renderer/js/components/`.
-- `npm test` (depuis `beytelhikma-electron/`) doit être vert avant de conclure une tâche.
+- `npm test` (depuis `apps/desktop/`) doit être vert avant de conclure une tâche.

@@ -1,7 +1,7 @@
 # Exploration du catalogue : recherche, filtres, sélection, téléchargement
 
 Date : 2026-07-31
-Portée : `beytelhikma-electron/`. Ni le schéma des bases, ni `tools/`, ni le client Flutter ne sont modifiés.
+Portée : `apps/desktop/`. Ni le schéma des bases, ni `tools/`, ni le client Flutter ne sont modifiés.
 
 Suite de `2026-07-31-minio-book-lifecycle-design.md`, qui a rendu les livres
 téléchargeables. Ce document décrit l'écran qui permet de **trouver** quoi

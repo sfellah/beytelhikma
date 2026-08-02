@@ -1,7 +1,7 @@
 # Le thème sort du lecteur et devient celui de l'application
 
 **Date** : 2026-07-31
-**Portée** : `beytelhikma-electron/` uniquement. L'alignement du client Flutter reste au reste-à-faire.
+**Portée** : `apps/desktop/` uniquement. L'alignement du client Flutter reste au reste-à-faire.
 
 ## Le problème
 

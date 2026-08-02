@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="beytelhikma-electron/src/renderer/assets/brand/lockup.png" alt="Beyt El Hikma" width="360" />
+<img src="apps/desktop/src/renderer/assets/brand/lockup.png" alt="Beyt El Hikma" width="360" />
 
 **La bibliothèque arabe, hors ligne.**
 
@@ -9,8 +9,8 @@ catalogue local, aucun compte, aucun serveur.
 
 [Télécharger](https://sfellah.github.io/beytelhikma/) ·
 [Versions](https://sfellah.github.io/beytelhikma/fr/releases/) ·
-[Modèle de données](DATAMODEL.md) ·
-[Design](DESIGN.md)
+[Modèle de données](docs/DATAMODEL.md) ·
+[Design](docs/DESIGN.md)
 
 [![ci](https://github.com/sfellah/beytelhikma/actions/workflows/ci.yml/badge.svg)](https://github.com/sfellah/beytelhikma/actions/workflows/ci.yml)
 
@@ -34,21 +34,21 @@ anglaise.
 
 | Dossier | Rôle |
 | --- | --- |
-| `beytelhikma-electron/` | l'application — processus principal, préchargement, rendu. Voir son [README](beytelhikma-electron/README.md). |
+| `apps/desktop/` | l'application — processus principal, préchargement, rendu. Voir son [README](apps/desktop/README.md). |
 | `site/` | le site de présentation et de téléchargement : trois pages × trois langues, générées sans dépendance. |
 | `tools/` | la chaîne de données Python — import du corpus Shamela, génération du jeu d'exemple, publication vers S3. |
 | `docs/superpowers/specs/` | les notes de conception, une par décision structurante. |
-| `ui-examples/` | les maquettes HTML de référence. |
+| `docs/maquettes/` | les maquettes HTML de référence. |
 
-Trois documents portent le reste : [`DATAMODEL.md`](DATAMODEL.md) pour le
-schéma des trois bases, [`DESIGN.md`](DESIGN.md) pour le système visuel,
+Trois documents portent le reste : [`docs/DATAMODEL.md`](DATAMODEL.md) pour le
+schéma des trois bases, [`docs/DESIGN.md`](DESIGN.md) pour le système visuel,
 [`CLAUDE.md`](CLAUDE.md) pour les règles d'architecture et leurs raisons.
 
 ## Démarrer
 
 ```bash
 # l'application
-cd beytelhikma-electron
+cd apps/desktop
 npm install
 npm run seed        # récupère le catalogue publié depuis le bucket
 npm start
@@ -99,7 +99,7 @@ publie, la relit sans jeton, puis redéploie le site.
    rubrique sont des clés fixes (`added`, `changed`, `fixed`, `removed`,
    `security`), traduites à l'affichage.
 2. Aligner la version :
-   `npm --prefix beytelhikma-electron version <x.y.z> --no-git-tag-version`
+   `npm --prefix apps/desktop version <x.y.z> --no-git-tag-version`
 3. Pousser sur `main`, puis `git tag v<x.y.z> && git push origin v<x.y.z>`.
 
 Le reste est automatique. Le site relit l'API GitHub et se reconstruit :
