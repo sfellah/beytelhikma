@@ -251,6 +251,44 @@ test('le glissement est au doigt, jamais à la souris, jamais sur une sélection
   assert.ok(/addEventListener\('pointercancel'/.test(reader), 'un geste interrompu doit se ranger');
 });
 
+/**
+ * Deux gestes sur une seule surface, et c'est le navigateur qui arbitre. Sans
+ * `touch-action`, il arbitre en sa faveur : `auto` le laisse revendiquer le
+ * geste pour un défilement dès le seuil franchi — quelle que soit sa
+ * direction — et il annule alors le pointeur avant que `#onPointerUp` n'ait pu
+ * tourner. Rien ne défile pour autant, la colonne n'a pas de largeur en trop :
+ * sur un vrai doigt, le glissement ne faisait donc rien du tout, pas même de
+ * travers. Aucun test de geste ne l'aurait vue : à la souris le chemin est
+ * mort, et c'est le doigt sur du verre qui déclenche l'arbitrage — ce que ce
+ * test tient est la ligne CSS elle-même, pas un comportement observable ici.
+ *
+ * `pan-y` est la seule façon de garder l'axe horizontal : `preventDefault()`
+ * sur un évènement de pointeur n'annule pas un défilement, et un `touchmove`
+ * non passif trancherait l'axe au même instant, sur les mêmes pixels.
+ */
+test('la colonne ne concède au navigateur que le défilement vertical', () => {
+  const views = read('../src/renderer/styles/views.css');
+  const start = views.indexOf('.reader__scroll {');
+  assert.notEqual(start, -1, 'la colonne de lecture a disparu');
+  const bloc = views.slice(start, views.indexOf('}', start));
+
+  assert.ok(
+    /touch-action:\s*pan-y(\s+pinch-zoom)?\s*;/.test(bloc),
+    'sans touch-action, le navigateur avale le glissement et annule le pointeur',
+  );
+  // `pan-x` rendrait la ligne inutile — le navigateur reprendrait l'axe qu'on
+  // vient de lui refuser ; `none` coûterait le défilement dans la page.
+  assert.equal(/pan-x/.test(bloc), false, 'l’axe horizontal appartient au lecteur');
+  assert.equal(/touch-action:\s*none/.test(bloc), false, 'la page doit rester défilable');
+
+  // La règle et les écouteurs doivent porter sur le même élément : posée sur
+  // un enfant, elle ne gouvernerait pas le geste ; posée ailleurs, rien.
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.ok(/class:\s*'reader__scroll/.test(reader), 'la colonne écoutée est bien .reader__scroll');
+  assert.ok(/scroll\.addEventListener\('pointerdown'/.test(reader), 'le glissement part de la colonne');
+  assert.ok(/scroll\.addEventListener\('pointerup'/.test(reader), 'et s’y achève');
+});
+
 // -------------------------------------------------- défilement dans la page
 
 /**

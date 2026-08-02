@@ -1862,6 +1862,23 @@ html:not([dir='rtl']) .scroller--at-start {
 .reader__scroll {
   flex: 1;
   overflow-y: auto;
+  /* Deux gestes sur une seule surface : la colonne défile verticalement (une
+     feuille imprimée dépasse souvent l'écran) et le doigt tourne la page
+     horizontalement. C'est le navigateur qui arbitre entre les deux, et sans
+     cette ligne il tranche en sa faveur : `auto` le laisse revendiquer le
+     geste pour un défilement dès le seuil de tolérance franchi, quelle que
+     soit sa direction, et il annule alors le pointeur (`pointercancel`) avant
+     que `#onPointerUp` — seul endroit où `swipeTurn` est consulté — n'ait pu
+     tourner. La colonne n'ayant pas de largeur en trop, rien ne défile pour
+     autant : sur un vrai doigt, le glissement ne faisait donc rien du tout,
+     pas même de travers. `pan-y` ne lui concède que l'axe dont la page a
+     besoin et lui refuse l'autre — c'est la seule façon de le faire :
+     `preventDefault()` sur un évènement de pointeur n'annule pas un
+     défilement, et un `touchmove` non passif trancherait l'axe au même
+     instant, sur les mêmes pixels. Coût assumé : plus de pincement pour
+     agrandir dans la colonne — le lecteur a son propre réglage de taille, qui
+     recompose le texte au lieu de le grossir. */
+  touch-action: pan-y;
   padding: calc(clamp(96px, 14vh, 160px) + var(--safe-top))
     calc(var(--space-gutter) + var(--safe-right)) calc(160px + var(--safe-bottom))
     calc(var(--space-gutter) + var(--safe-left));
