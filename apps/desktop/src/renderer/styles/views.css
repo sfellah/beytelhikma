@@ -1893,12 +1893,16 @@ html:not([dir='rtl']) .scroller--at-start {
    arrive du bord vers lequel on va — à gauche quand on avance en RTL — et
    l'encre se fixe en fin de course (le flou part, il n'arrive jamais). Le
    déplacement est court : c'est une feuille qui retombe, pas un carrousel.
-   Le fil continu n'en veut pas — là, le mouvement, c'est le défilement. */
-.reader--page .reader__block.is-turned-next {
+
+   L'animation était portée par la classe de la façon de lire : il y en avait
+   une seconde, le fil vertical, qui n'en voulait pas. Il a été retiré, la
+   classe avec — il n'en reste qu'une, et une classe qui ne distingue plus rien
+   ne se garde pas par habitude. */
+.reader__block.is-turned-next {
   animation: page-turn-next var(--motion-slow) var(--ease-out) both;
 }
 
-.reader--page .reader__block.is-turned-previous {
+.reader__block.is-turned-previous {
   animation: page-turn-previous var(--motion-slow) var(--ease-out) both;
 }
 
@@ -1937,30 +1941,12 @@ html:not([dir='rtl']) .scroller--at-start {
   }
 }
 
-[dir='rtl'] .reader--page .reader__block.is-turned-next {
+[dir='rtl'] .reader__block.is-turned-next {
   animation-name: page-turn-next-rtl;
 }
 
-[dir='rtl'] .reader--page .reader__block.is-turned-previous {
+[dir='rtl'] .reader__block.is-turned-previous {
   animation-name: page-turn-previous-rtl;
-}
-
-/* Au fil, deux pages ne sont plus deux objets : c'est un texte. Aucune marge
-   entre les blocs — le dernier paragraphe de la page N et le premier de la
-   N+1 se suivent avec l'écart d'un paragraphe, celui que `.reader__page p`
-   donne déjà. Une marge, même discrète, redessinerait la coupure que le fil
-   défait, et l'œil compterait les pages au lieu de lire. Le pied imprimé, lui,
-   n'est pas dessiné du tout en fil continu (voir `#makeBlock`). */
-.reader--scroll .reader__block + .reader__block {
-  margin-top: 0;
-}
-
-/* Le titre de chapitre est la seule coupure qui reste au fil : il annonce ce
-   qui commence, et se pose donc au large. Sans ce dégagement il tomberait à un
-   interligne du paragraphe précédent, en gros corps — une collision, pas un
-   seuil. En mode page il ouvre la feuille, la réserve haute lui suffit. */
-.reader--scroll .reader__chapter {
-  margin-top: var(--space-xxl);
 }
 
 /* Signet de page : sans repère dans le texte, le bouton de la barre haute
@@ -2085,18 +2071,6 @@ html:not([dir='rtl']) .scroller--at-start {
   align-items: center;
   gap: var(--space-sm);
   color: var(--reader-muted);
-}
-
-/* Au fil, il n'y a plus de page à l'écran : les deux chevrons et la fraction
-   « ١٢ / ٢٣٠ » ne désignent plus rien de visible. Le ruban n'y garde que ce qui
-   dit *où l'on en est* — la jauge et le pourcentage.
-
-   Ici une règle CSS, et non un `if` au montage : les trois nœuds ont un sens en
-   mode page, et la touche `V` bascule le mode sans reconstruire la barre. Les
-   retirer de l'arbre obligerait à les y remettre — et `#setCurrent` continue de
-   les tenir à jour, pour qu'ils soient justes à l'instant où ils reviennent. */
-.reader--scroll .reader__pager {
-  display: none;
 }
 
 /* « ١ / ٢٣٠ » en trois nœuds : couché, c'est une ligne ; dressé, c'est une

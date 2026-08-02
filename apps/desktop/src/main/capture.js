@@ -217,65 +217,6 @@ async function shootAnnotationState(window, editionId, outDir, problems) {
   }
 }
 
-/**
- * Le fil continu. C'est un réglage persistant : on note celui de l'utilisateur,
- * on bascule, on capture, puis on le remet — sans quoi toutes les captures
- * suivantes, et sa prochaine lecture, se feraient dans un mode qu'il n'a pas
- * choisi.
- *
- * Le mode se pose depuis `/settings` : c'est là qu'il vit désormais, et passer
- * par l'écran plutôt que par la base garde le cache de réglages du renderer
- * honnête — une écriture directe le laisserait mentir jusqu'à la fin de la
- * session. Le lecteur lit le réglage à l'ouverture : il faut donc régler
- * **avant** d'entrer dans le livre.
- */
-async function poserMode(contents, mode) {
-  await contents.executeJavaScript(`location.hash = '#/settings'`);
-  if (!(await waitForSelector(contents, '[data-reading-mode]'))) return false;
-  await contents.executeJavaScript(
-    `document.querySelector('[data-reading-mode=${JSON.stringify(mode)}]').click()`,
-  );
-  await wait(200);
-  return true;
-}
-
-async function shootScrollMode(window, editionId, outDir, problems) {
-  const contents = window.webContents;
-  const before = await contents.executeJavaScript(
-    `window.beytelhikma.repository.getSettings().then((all) => all['reader.mode'] ?? 'page')`,
-  );
-
-  try {
-    if (!(await poserMode(contents, 'scroll'))) {
-      problems.push("reader-scroll : le réglage « نمط القراءة » est introuvable dans /settings");
-      return;
-    }
-    await contents.executeJavaScript(
-      `location.hash = ${JSON.stringify(`#/reader/${editionId}`)}`,
-    );
-    if (!(await waitForSelector(contents, '.reader__page p'))) {
-      problems.push("reader-scroll : le lecteur n'est jamais monté");
-      return;
-    }
-    // Le fil se remplit page par page : il lui faut plus qu'une frame.
-    await wait(1200);
-    await contents.executeJavaScript(
-      `document.querySelector('.reader__scroll').scrollTop = 900`,
-    );
-    await wait(800);
-    const image = await contents.capturePage();
-    fs.writeFileSync(path.join(outDir, 'reader-scroll.png'), image.toPNG());
-    console.log(`écrit : ${path.join(outDir, 'reader-scroll.png')}`);
-  } catch (error) {
-    problems.push(`reader-scroll : ${error?.message ?? error}`);
-  } finally {
-    await poserMode(contents, before === 'scroll' ? 'scroll' : 'page').catch(() => {});
-    await contents.executeJavaScript(
-      `window.beytelhikma.repository.saveSetting('reader.mode', ${JSON.stringify(before)})`,
-    );
-  }
-}
-
 async function shootReaderStates(window, editionId, outDir, problems) {
   for (const [name, script] of READER_STATES) {
     // Repasser par l'accueil : sans changement de hash, la vue n'est pas
@@ -469,7 +410,6 @@ export async function captureRoutes(window, { outDir, width = 1360, height = 900
   }
 
   await shootReaderStates(window, editionId, outDir, problems);
-  await shootScrollMode(window, editionId, outDir, problems);
   await shootAnnotationState(window, editionId, outDir, problems);
 
   // La recherche générale n'a d'écran que quand elle a cherché : sans terme,

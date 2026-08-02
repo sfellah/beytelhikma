@@ -13,12 +13,7 @@ import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
-import {
-  PAGER_LAYOUTS,
-  READING_MODES,
-  resolvePagerLayout,
-  resolveReadingMode,
-} from '../../../shared/reading-modes.js';
+import { PAGER_LAYOUTS, resolvePagerLayout } from '../../../shared/pager-layouts.js';
 import { openShortcuts } from '../components/shortcuts.js';
 
 const MIN_FONT = 16;
@@ -160,21 +155,16 @@ function languageSection() {
 }
 
 /**
- * Comment on parcourt un livre — page imprimée ou fil continu, ruban couché ou
- * dressé.
+ * Comment on parcourt un livre — où se pose le ruban de pagination.
  *
- * Ce choix se faisait dans le panneau du lecteur, entre la taille de la lettre
- * et l'ambiance. Il n'y avait pas sa place : les trois autres réglages de ce
- * panneau se touchent **en lisant**, celui-ci se pose une fois. Sur un
- * téléphone il tenait en plus le haut d'une feuille déjà à l'étroit.
- *
- * Il est ici, avec la langue et les polices, et il vaut pour tous les livres —
- * `reader.mode` n'a jamais été un réglage par livre. La touche `V` du lecteur
- * écrit le même réglage : deux portes, une seule valeur.
+ * Il y avait ici un second réglage, la façon de lire : page imprimée ou fil
+ * continu. Le fil a été essayé puis retiré ; il ne reste qu'une façon de lire,
+ * et un réglage à une seule valeur est un réglage mort — il demande un choix
+ * qui n'en est pas un. La ligne a donc disparu avec lui.
  */
 function readingSection(prefs) {
   /**
-   * Un choix segmenté sur une liste de `reading-modes.js`.
+   * Un choix segmenté sur une liste de `pager-layouts.js`.
    *
    * Le `dataset` est le contrat de la campagne de captures, comme `data-tool`
    * pour la barre du lecteur : le libellé suit la langue, l'attribut ne bouge
@@ -200,17 +190,6 @@ function readingSection(prefs) {
     'reading',
     t('settings.reading'),
     t('settings.readingHint'),
-    row(
-      t('reader.modeLabel'),
-      choix({
-        liste: READING_MODES,
-        valeur: resolveReadingMode(prefs['reader.mode']),
-        label: 'reader.modeLabel',
-        setting: 'reader.mode',
-        marque: 'readingMode',
-      }),
-      t('settings.readingModeHint'),
-    ),
     // Le ruban dressé ne prend pas de place en plus : le pied s'en va, la bande
     // le remplace, et c'est la largeur qui paie au lieu de la hauteur.
     row(

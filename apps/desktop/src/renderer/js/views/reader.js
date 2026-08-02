@@ -16,12 +16,10 @@ import { themeChoices } from '../components/theme-choices.js';
 import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
 import {
   DEFAULT_PAGER_LAYOUT,
-  DEFAULT_READING_MODE,
   PAGER_LAYOUTS,
-  READING_MODES,
   resolvePagerLayout,
-  resolveReadingMode,
-} from '../../../shared/reading-modes.js';
+} from '../../../shared/pager-layouts.js';
+import { swipeTurn, turnZone } from '../../../shared/page-turn.js';
 
 /**
  * Direction du **contenu**, qui n'est pas celle de l'interface : le corpus est
@@ -46,36 +44,9 @@ const HINT_DELAY = 4000;
  */
 const SELECTION_SETTLE = 250;
 
-/**
- * Défilement continu : tranche ajoutée d'un coup, et distance au bord qui
- * déclenche la recharge. Il n'y a **pas** de borne au nombre de pages montées —
- * le fil finit par porter le livre entier. Ce qui reste borné, c'est le travail
- * fait d'un seul tenant : monter huit mille pages avant le premier dessin
- * serait un refus déguisé.
- */
-const FLOW_STEP = 3;
-const NEAR_START = 600;
-const NEAR_END = 900;
-
-/**
- * Remplissage de fond : ce qui monte le reste du livre une fois la lecture
- * commencée.
- *
- * La tranche est plus large que celle du défilement parce qu'elle est plus
- * rare : chaque tranche ajoutée *avant* la lecture force une disposition pour
- * rendre à `scrollTop` la hauteur qu'il vient de perdre, et sur un livre
- * entièrement monté une disposition coûte le livre entier. Quatre fois moins de
- * tranches, c'est quatre fois moins de dispositions forcées.
- *
- * `BACKFILL_TIMEOUT` est le délai au bout duquel `requestIdleCallback` cède :
- * sans lui, un lecteur qui défile sans relâche ne verrait jamais de creux et le
- * livre ne finirait pas de monter.
- */
-const BACKFILL_STEP = 12;
-const BACKFILL_PAUSE = 16;
-const BACKFILL_TIMEOUT = 300;
-/** Tours de suite sans rien monter avant d'abandonner un livre qui résiste. */
-const BACKFILL_GIVE_UP = 5;
+// Les deux règles qui décident du sens — les tiers au clic, le glissement au
+// doigt — vivent dans `shared/page-turn.js`, pures et seules : c'est la seule
+// façon de les vérifier dans les *deux* directions d'écriture sans un DOM.
 
 /** Entrées de sommaire montées d'un coup ; au-delà, on déplie à la demande. */
 const TOC_WINDOW = 80;
@@ -132,7 +103,6 @@ class Reader {
   #prefs = {
     size: 22,
     font: DEFAULT_READER_FONT,
-    mode: DEFAULT_READING_MODE,
     pager: DEFAULT_PAGER_LAYOUT,
   };
   #saveTimer = null;
@@ -152,34 +122,29 @@ class Reader {
   #tocByPage = null;
   #pagesById = null;
   /**
-   * Pages montées à l'écran, par position dans le livre. En mode page il n'y en
-   * a qu'une ; en mode timer continu, une tranche glissante autour de la lecture.
+   * La page montée : une seule, toujours. Le lecteur n'a plus qu'une façon de
+   * lire — la feuille imprimée — et une carte de blocs n'aurait plus qu'une
+   * entrée.
    */
-  #blocks = new Map();
-  #first = 0;
-  #last = -1;
-  /** Une seule extension du fil à la fois, sinon les bornes se marchent dessus. */
-  #extending = false;
-  /**
-   * Remplissage de fond : ce qui l'annule, et la génération en cours.
-   *
-   * Le jeton compte pour deux : il arrête une passe déjà programmée, et il
-   * arrête celle qui est *en train* de s'exécuter — un tour de remplissage est
-   * fait d'attentes, et la vue peut être démontée entre deux. Un
-   * `requestIdleCallback` qui survit à la vue est exactement la fuite que le
-   * routeur vient de corriger.
-   */
-  #backfillCancel = null;
-  #backfillToken = 0;
+  #block = null;
   /** Page affichée, pour ancrer une annotation sans la rechercher. */
   #page = null;
   /**
    * Sélection décrite au moment où elle est faite : cliquer dans le menu la
-   * défait, il est trop tard pour la mesurer. La page est retenue avec, car en
-   * fil continu la sélection n'est pas forcément sur la page courante.
+   * défait, il est trop tard pour la mesurer. La page est retenue avec elle —
+   * un panneau ouvert entre-temps peut avoir changé la page courante.
    */
   #pendingSelection = null;
   #pendingPage = null;
+  /**
+   * Départ du glissement en cours, et trace du dernier qui a tourné la page.
+   *
+   * Un glissement au doigt émet souvent un `click` en fin de course : sans
+   * cette trace, la page tournerait deux fois — une fois par le geste, une fois
+   * par le clic qu'il laisse derrière lui.
+   */
+  #swipeFrom = null;
+  #swiped = false;
   /** Ferme la fiche des raccourcis, tant qu'elle est ouverte. */
   #closeShortcuts = null;
   #keyHandler = (event) => this.#onKey(event);
@@ -255,7 +220,6 @@ class Reader {
       this.#prefs = {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
         font: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
-        mode: resolveReadingMode(prefs['reader.mode']),
         pager: resolvePagerLayout(prefs['reader.pager']),
       };
 
@@ -293,10 +257,6 @@ class Reader {
     // posait ses écouteurs sur `document` — un lecteur quitté continuait alors
     // d'avaler les flèches et le `Ctrl+F` de l'écran suivant.
     this.#disposed = true;
-    // Le remplissage de fond est fait d'attentes et se reprogramme seul : sans
-    // ce coup d'arrêt, il continuerait de monter les pages d'un livre que
-    // personne ne lit plus, dans un arbre détaché.
-    this.#stopBackfill();
     document.removeEventListener('keydown', this.#keyHandler);
     document.removeEventListener('selectionchange', this.#selectionHandler);
     document.removeEventListener('fullscreenchange', this.#fullscreenHandler);
@@ -467,9 +427,10 @@ class Reader {
     const root = h(
       'div',
       {
-        class:
-          `reader reader--font-${this.#prefs.font} reader--${this.#prefs.mode}` +
-          ` reader--pager-${this.#prefs.pager}`,
+        // Il n'y a plus de classe de façon de lire : il n'en reste qu'une, et
+        // une classe qui ne distingue plus le lecteur de lui-même se garde par
+        // habitude. Les animations de feuilletage se portent donc sur le bloc.
+        class: `reader reader--font-${this.#prefs.font} reader--pager-${this.#prefs.pager}`,
         style: { '--reader-size': `${this.#prefs.size}px` },
       },
       header,
@@ -487,10 +448,16 @@ class Reader {
     scroll.addEventListener('click', (event) => this.#onContentClick(event));
     scroll.addEventListener('wheel', (event) => this.#onWheel(event), { passive: false });
     // Le dernier moment où la sélection est encore lisible : `mouseup` et
-    // `click` arrivent après que le navigateur l'a défaite.
-    scroll.addEventListener('pointerdown', () => {
+    // `click` arrivent après que le navigateur l'a défaite. C'est aussi le
+    // départ d'un glissement — les deux se relèvent au même instant.
+    scroll.addEventListener('pointerdown', (event) => {
       const selection = window.getSelection();
       this.#selectionAtPress = Boolean(selection) && !selection.isCollapsed;
+      this.#onPointerDown(event);
+    });
+    scroll.addEventListener('pointerup', (event) => this.#onPointerUp(event));
+    scroll.addEventListener('pointercancel', () => {
+      this.#swipeFrom = null;
     });
     // Trois portes vers la même mesure, toutes antirebondies : `selectionchange`
     // porte le doigt, les deux autres achèvent un cliquer-glisser sans attendre
@@ -988,9 +955,8 @@ class Reader {
     this.#highlightsByPage = null;
     this.#drawAnnotations();
     this.#syncBookmark(pageId);
-    for (const block of this.#blocks.values()) {
-      if (pageId == null || block.page.pageId === pageId) this.#paintBlock(block);
-    }
+    const block = this.#block;
+    if (block && (pageId == null || block.page.pageId === pageId)) this.#paintBlock(block);
   }
 
   /** Repeint le contenu d'une page montée : recherche puis annotations. */
@@ -1137,13 +1103,13 @@ class Reader {
   }
 
   /**
-   * L'icône dit si la page courante porte une marque, et chaque page montée
-   * arbore son signet : sans repère dans le texte, le bouton avait l'air de
-   * ne rien faire.
+   * L'icône dit si la page courante porte une marque, et la page montée arbore
+   * son signet : sans repère dans le texte, le bouton avait l'air de ne rien
+   * faire.
    */
   #syncBookmark(pageId = null) {
-    for (const block of this.#blocks.values()) {
-      if (pageId != null && block.page.pageId !== pageId) continue;
+    const block = this.#block;
+    if (block && (pageId == null || block.page.pageId === pageId)) {
       block.root.classList.toggle('is-bookmarked', this.#isBookmarked(block.page.pageId));
     }
     this.#syncBookmarkButton();
@@ -1360,22 +1326,18 @@ class Reader {
   }
 
   /**
-   * Monte une page : titre de chapitre quand il change, corps, notes de bas de
-   * page, et — en mode page seulement — le pied imprimé.
+   * Monte une page : son titre de chapitre, son corps, ses notes de bas de
+   * page, puis le pied imprimé.
    *
-   * Le pied n'est pas dessiné puis masqué au fil : il n'y est plus l'affichage
-   * d'une valeur qu'on aurait choisi de taire, c'est un nœud qui n'a rien à
-   * dire. Caché, il resterait dans l'arbre, dans la sélection et dans le texte
-   * copié — au milieu d'une phrase que le fil vient de recoudre. Les blocs sont
-   * entièrement reconstruits à chaque bascule de mode (`#setMode`) : ne pas le
-   * dessiner ne coûte donc rien au retour à la page imprimée.
+   * Chaque page rouvre son chapitre. C'est le seul repère de la feuille : on
+   * n'y voit rien de ce qui précède, et taire le titre parce que la page
+   * d'avant le portait laisserait le lecteur sans réponse à « où suis-je ».
    */
   #makeBlock(index, page) {
-    const flow = this.#prefs.mode === 'scroll';
     const body = h('article', { class: 'reader__page', dir: CONTENT_DIR });
     const footnotes = h('aside', { class: 'reader__footnotes', dir: CONTENT_DIR });
     const chapter = h('h2', { class: 'reader__chapter', dir: CONTENT_DIR });
-    const foot = flow ? null : h('div', { class: 'reader__page-foot label-sm' });
+    const foot = h('div', { class: 'reader__page-foot label-sm' });
     const ribbon = h(
       'span',
       { class: 'reader__block-mark', title: t('reader.markedPage'), 'aria-hidden': 'true' },
@@ -1392,9 +1354,6 @@ class Reader {
       foot,
     );
 
-    // Le titre est retenu sur le bloc : c'est `#syncChapters` qui décide de le
-    // montrer, et il lui faut celui du **voisin monté**, pas une valeur qu'il
-    // recalculerait.
     const title = this.#chapterFor(page);
     const block = { index, page, root, body, chapter, footnotes, foot, title };
     chapter.textContent = title ?? '';
@@ -1409,56 +1368,21 @@ class Reader {
     // `printed` est le numéro imprimé dans l'édition papier, `index` la
     // position dans le fichier : les deux diffèrent presque toujours, on ne
     // les mélange donc jamais dans un même « N sur M ».
-    if (foot) {
-      const printed = page.printedPageNum ?? page.sequenceNum;
-      foot.textContent =
-        t('reader.pageOf', { index: index + 1, total: this.#pageCount }) +
-        t('reader.printedPage', { printed });
-    }
+    const printed = page.printedPageNum ?? page.sequenceNum;
+    foot.textContent =
+      t('reader.pageOf', { index: index + 1, total: this.#pageCount }) +
+      t('reader.printedPage', { printed });
 
     root.classList.toggle('is-bookmarked', this.#isBookmarked(page.pageId));
     this.#paintBlock(block);
     return block;
   }
 
-  /**
-   * Décide, pour chaque page montée, si son titre de chapitre se voit.
-   *
-   * Au fil continu il n'annonce que ce qui **commence** : répété toutes les
-   * vingt lignes, il redécouperait en pages le texte que le fil vient de
-   * recoudre. La comparaison se fait avec le bloc **réellement monté** juste
-   * avant — le fenêtrage démonte et remonte les bords du fil, et une variable
-   * de parcours (ou le cache des pages, qui garde des pages qu'on ne voit
-   * plus) dirait « déjà annoncé » d'un chapitre dont la première page a quitté
-   * l'écran. En mode page, chaque page rouvre son chapitre : c'est le seul
-   * repère de la feuille.
-   *
-   * La décision se demande **par tranche** — de [from] à [to] — et non pour
-   * tout le fil : celui-ci porte le livre entier, et le relire à chaque tranche
-   * ajoutée ferait le carré du livre en écritures de style.
-   */
-  #syncChapters(from = this.#first, to = this.#last) {
-    const flow = this.#prefs.mode === 'scroll';
-    for (let index = from; index <= to; index += 1) {
-      const block = this.#blocks.get(index);
-      if (!block) continue;
-      const previous = flow ? this.#blocks.get(index - 1) : null;
-      const repete = Boolean(previous) && previous.title === block.title;
-      block.chapter.style.display = block.title && !repete ? '' : 'none';
-    }
-  }
-
   // ------------------------------------------------------------- affichage
 
-  #show(index, options = {}) {
-    const bounded = clamp(index, 0, Math.max(0, this.#pageCount - 1));
-    return this.#prefs.mode === 'scroll'
-      ? this.#showInFlow(bounded, options)
-      : this.#showAlone(bounded, options);
-  }
-
-  /** Mode page : une page monte, l'ancienne s'en va. */
-  async #showAlone(index, { save = true } = {}) {
+  /** Une page monte, l'ancienne s'en va. C'est la seule façon de lire. */
+  async #show(index, { save = true } = {}) {
+    index = clamp(index, 0, Math.max(0, this.#pageCount - 1));
     const page = await this.#pageAt(index);
     if (!page) return;
 
@@ -1469,237 +1393,21 @@ class Reader {
     const turn = index === this.#index ? 0 : Math.sign(index - this.#index);
 
     const block = this.#makeBlock(index, page);
-    this.#blocks = new Map([[index, block]]);
-    this.#first = index;
-    this.#last = index;
+    this.#block = block;
     this.#nodes.flow.replaceChildren(block.root);
-    this.#syncChapters();
     if (turn) {
       block.root.classList.add(turn > 0 ? 'is-turned-next' : 'is-turned-previous');
     }
+    // Une page imprimée dépasse souvent la hauteur de l'écran : la colonne
+    // garde son défilement, et une page qui arrive s'ouvre à son début.
     this.#nodes.scroll.scrollTop = 0;
     this.#nodes.lastScroll = 0;
     this.#setCurrent(index, page, { save });
   }
 
-  /**
-   * Mode fil continu : si la page demandée est déjà montée on s'y rend, sinon
-   * on repart d'elle.
-   *
-   * Le fil n'est plus borné : il finit par porter le livre entier. Mais il ne
-   * l'attend pas — on ouvre sur quelques pages autour de la position, puis
-   * `#startBackfill` monte le reste dans les creux, dans les deux sens. Un
-   * `await` du livre complet avant le premier dessin serait un refus déguisé,
-   * et le lecteur ouvre rarement à la page 1 : ce qui précède la reprise compte
-   * autant que ce qui la suit.
-   */
-  async #showInFlow(index, { save = true, jump = true } = {}) {
-    const known = this.#blocks.get(index);
-    if (!known) {
-      const page = await this.#pageAt(index);
-      if (!page) return;
-      const block = this.#makeBlock(index, page);
-      this.#blocks = new Map([[index, block]]);
-      this.#first = index;
-      this.#last = index;
-      this.#nodes.flow.replaceChildren(block.root);
-      this.#syncChapters();
-      this.#nodes.scroll.scrollTop = 0;
-      this.#nodes.lastScroll = 0;
-      this.#setCurrent(index, page, { save });
-      await this.#fill();
-      this.#startBackfill();
-      return;
-    }
-
-    if (jump) {
-      const scroll = this.#nodes.scroll;
-      scroll.scrollTop += known.root.getBoundingClientRect().top
-        - scroll.getBoundingClientRect().top
-        - 24;
-      this.#nodes.lastScroll = scroll.scrollTop;
-    }
-    this.#setCurrent(index, known.page, { save });
-  }
-
-  /** Complète le fil jusqu'à ce qu'il déborde de l'écran, dans les deux sens. */
-  async #fill() {
-    const scroll = this.#nodes.scroll;
-    for (let round = 0; round < 8; round += 1) {
-      const room = scroll.scrollHeight - scroll.clientHeight;
-      if (room > NEAR_END && scroll.scrollTop > NEAR_START) break;
-      const grew = (await this.#extendEnd()) || (await this.#extendStart());
-      if (!grew) break;
-    }
-  }
-
-  /**
-   * Allonge le fil par la fin. Rien n'est démonté en retour : le fil garde tout
-   * ce qu'il a monté, et l'on peut redescendre sur ses pas sans rien
-   * réattendre.
-   *
-   * La tranche part d'un coup, dans un fragment : mille `append` séparés, ce
-   * sont mille occasions pour le navigateur de reprendre la disposition.
-   */
-  async #extendEnd(steps = FLOW_STEP) {
-    if (this.#extending) return false;
-    this.#extending = true;
-    try {
-      const depart = this.#last;
-      const pages = [];
-      for (let step = 0; step < steps; step += 1) {
-        const next = depart + 1 + step;
-        if (next >= this.#pageCount) break;
-        const page = await this.#pageAt(next);
-        if (!page) break;
-        pages.push([next, page]);
-      }
-      // Le fil a pu être reconstruit pendant l'attente — un saut depuis le
-      // sommaire, par exemple : la tranche calculée ne s'y raccorde plus.
-      if (!pages.length || this.#last !== depart) return false;
-
-      const ajoutes = pages.map(([index, page]) => this.#makeBlock(index, page));
-      const tranche = document.createDocumentFragment();
-      for (const block of ajoutes) tranche.append(block.root);
-      this.#nodes.flow.append(tranche);
-      for (const block of ajoutes) this.#blocks.set(block.index, block);
-
-      const premier = ajoutes[0].index;
-      this.#last = ajoutes[ajoutes.length - 1].index;
-      // Seules les pages ajoutées changent d'avis sur leur titre : celles d'au-
-      // dessus gardent le voisin qu'elles avaient. Relire tout le fil à chaque
-      // tranche coûterait le carré du livre.
-      this.#syncChapters(premier, this.#last);
-      return true;
-    } finally {
-      this.#extending = false;
-    }
-  }
-
-  /**
-   * Allonge le fil par le début. C'est le seul chemin qui ajoute du contenu
-   * *avant* la lecture, et donc le seul qui doive rendre à `scrollTop` la
-   * hauteur qu'il vient de perdre — le remplissage de fond passe par lui, il
-   * n'existe pas de second endroit où cette compensation serait écrite.
-   *
-   * Toute la tranche est posée d'un coup, entre **une seule** paire de mesures.
-   * Chaque `scrollHeight` lu force une disposition, et sur un livre entièrement
-   * monté une disposition coûte le livre entier : les mesurer page par page
-   * rendait le remplissage quadratique.
-   */
-  async #extendStart(steps = FLOW_STEP) {
-    if (this.#extending) return false;
-    this.#extending = true;
-    try {
-      const scroll = this.#nodes.scroll;
-      const depart = this.#first;
-      const pages = [];
-      for (let step = 0; step < steps; step += 1) {
-        const previous = depart - 1 - step;
-        if (previous < 0) break;
-        const page = await this.#pageAt(previous);
-        if (!page) break;
-        pages.push([previous, page]);
-      }
-      // Le fil a pu être reconstruit pendant l'attente — un saut depuis le
-      // sommaire, par exemple : la tranche calculée ne s'y raccorde plus.
-      if (!pages.length || this.#first !== depart) return false;
-
-      const ajoutes = pages.map(([index, page]) => this.#makeBlock(index, page));
-      // Les blocs ont été fabriqués à reculons : le fragment les remet dans
-      // l'ordre du texte.
-      const tranche = document.createDocumentFragment();
-      for (const block of [...ajoutes].reverse()) tranche.append(block.root);
-      const before = scroll.scrollHeight;
-      this.#nodes.flow.prepend(tranche);
-      scroll.scrollTop += scroll.scrollHeight - before;
-
-      for (const block of ajoutes) this.#blocks.set(block.index, block);
-      this.#first = ajoutes[ajoutes.length - 1].index;
-      // La tranche, plus la page qui ouvrait le fil : elle annonçait son
-      // chapitre faute de voisin, et se tait si sa nouvelle voisine le porte.
-      this.#syncChapters(this.#first, depart);
-      this.#nodes.lastScroll = scroll.scrollTop;
-      return true;
-    } finally {
-      this.#extending = false;
-    }
-  }
-
-  /**
-   * Monte le reste du livre entre deux respirations, dans les deux sens, tant
-   * qu'il reste quelque chose à monter.
-   *
-   * Le défilement de l'utilisateur passe devant : le tour repasse plus tard si
-   * une extension est déjà en cours (`#extending`), plutôt que d'ouvrir une
-   * seconde course sur les mêmes bornes. Et il passe par `#extendEnd` /
-   * `#extendStart`, pas par un chemin à lui : la compensation de `scrollTop`
-   * n'est écrite qu'une fois.
-   */
-  #startBackfill() {
-    this.#stopBackfill();
-    if (this.#prefs.mode !== 'scroll') return;
-    const token = (this.#backfillToken += 1);
-    let vides = 0;
-
-    const tour = async () => {
-      this.#backfillCancel = null;
-      if (this.#disposed || token !== this.#backfillToken) return;
-      // La seule fin normale : le fil couvre le livre.
-      if (this.#first <= 0 && this.#last >= this.#pageCount - 1) return;
-
-      if (!this.#extending) {
-        // Les deux sens, sans court-circuit : le lecteur ouvre sur la page
-        // reprise, et ce qui la précède compte autant que ce qui la suit.
-        const avance = await this.#extendEnd(BACKFILL_STEP);
-        if (this.#disposed || token !== this.#backfillToken) return;
-        const recule = await this.#extendStart(BACKFILL_STEP);
-        if (this.#disposed || token !== this.#backfillToken) return;
-
-        // Un tour peut ne rien monter sans que le livre soit fini : le geste de
-        // l'utilisateur tenait les bornes pendant qu'on attendait. On réessaie,
-        // mais pas sans fin — une page illisible ferait tourner le remplissage
-        // à vide jusqu'à ce qu'on ferme le livre.
-        vides = avance || recule ? 0 : vides + 1;
-        if (vides >= BACKFILL_GIVE_UP) return;
-      }
-      this.#scheduleBackfill(token, tour);
-    };
-
-    this.#scheduleBackfill(token, tour);
-  }
-
-  #scheduleBackfill(token, tour) {
-    if (this.#disposed || token !== this.#backfillToken) return;
-    // `requestIdleCallback` laisse passer le geste et la peinture : le
-    // remplissage n'arrive que dans les creux. Son `timeout` garantit qu'un
-    // lecteur qui défile sans relâche finit quand même son livre.
-    if (typeof requestIdleCallback === 'function') {
-      const id = requestIdleCallback(tour, { timeout: BACKFILL_TIMEOUT });
-      this.#backfillCancel = () => cancelIdleCallback(id);
-    } else {
-      const id = setTimeout(tour, BACKFILL_PAUSE);
-      this.#backfillCancel = () => clearTimeout(id);
-    }
-  }
-
-  /** Arrête le remplissage : passage en mode page, saut ailleurs, ou départ. */
-  #stopBackfill() {
-    this.#backfillToken += 1;
-    this.#backfillCancel?.();
-    this.#backfillCancel = null;
-  }
-
   /** Synchronise la barre basse, le signet et la progression sur [index]. */
   #setCurrent(index, page, { save = true } = {}) {
     const changed = this.#index !== index || this.#page?.pageId !== page.pageId;
-
-    // Les deux pages concernées, pas toutes celles qui sont montées : ce
-    // passage est appelé à chaque page franchie en défilant, et le fil porte le
-    // livre entier.
-    this.#blocks.get(this.#index)?.root.classList.remove('is-current');
-    this.#blocks.get(index)?.root.classList.add('is-current');
-
     this.#index = index;
     this.#page = page;
 
@@ -1714,15 +1422,15 @@ class Reader {
     this.#nodes.previous.disabled = index === 0;
     this.#nodes.next.disabled = index >= this.#pageCount - 1;
 
-    // Le bouton seul : franchir une page ne change le signet d'aucune autre, et
-    // relire tout le fil à chaque page franchie coûterait le livre entier.
     this.#syncBookmarkButton();
     if (changed) {
       this.#pendingSelection = null;
       this.#pendingPage = null;
       this.#hideSelection();
     }
-    if (this.#prefs.mode === 'page') this.#showChrome();
+    // La page qui arrive ramène les barres : c'est le moment où l'on regarde
+    // où l'on en est.
+    this.#showChrome();
     if (save) this.#scheduleSave(page);
     else this.#save(page);
   }
@@ -1812,34 +1520,6 @@ class Reader {
       if (!isActive && check) check.remove();
     });
     setSetting('reader.font', key);
-  }
-
-  /**
-   * Bascule page ↔ fil continu : le fil est remonté depuis la page courante.
-   *
-   * Il n'y a plus de bouton dans le panneau — le réglage vit dans `/settings` —
-   * mais la touche `V` reste : elle ne coûte rien, elle est documentée par la
-   * fiche « ؟ », et elle écrit le même réglage que l'écran.
-   */
-  #setMode(key) {
-    if (resolveReadingMode(key) !== key || key === this.#prefs.mode) return;
-    // La page imprimée n'a qu'une page à l'écran : le remplissage de fond n'y a
-    // plus d'objet, et le laisser tourner monterait un livre que personne ne
-    // regarde. `#show` le relance si l'on revient au fil.
-    this.#stopBackfill();
-    this.#prefs.mode = key;
-    for (const mode of READING_MODES) {
-      this.#nodes.root.classList.toggle(`reader--${mode.key}`, mode.key === key);
-    }
-    setSetting('reader.mode', key);
-
-    // Le fil est reconstruit autour de la page lue : ni la position ni la
-    // progression ne bougent, seule la façon de tourner change.
-    this.#blocks = new Map();
-    this.#nodes.flow.replaceChildren();
-    this.#first = this.#index;
-    this.#last = this.#index - 1;
-    this.#show(this.#index, { save: false });
   }
 
   // ------------------------------------------------------------- panneaux
@@ -1947,12 +1627,10 @@ class Reader {
 
   // ------------------------------------------------------------ sélection
 
-  /** La page montée qui contient [node], ou `null`. */
+  /** La page montée, si [node] est dans son corps ; `null` sinon. */
   #blockOf(node) {
-    for (const block of this.#blocks.values()) {
-      if (block.body.contains(node)) return block;
-    }
-    return null;
+    const block = this.#block;
+    return block && block.body.contains(node) ? block : null;
   }
 
   #onSelection() {
@@ -2055,10 +1733,6 @@ class Reader {
         event.preventDefault();
         this.#togglePanel('toc');
         return;
-      case 'v':
-        event.preventDefault();
-        this.#setMode(this.#prefs.mode === 'page' ? 'scroll' : 'page');
-        return;
       case '?':
       case '؟':
         event.preventDefault();
@@ -2093,12 +1767,28 @@ class Reader {
     this.#setSize(this.#prefs.size + (event.deltaY < 0 ? 1 : -1));
   }
 
+  /**
+   * Un clic sur le texte. Trois zones, et rien d'autre : le tiers où la ligne
+   * **commence** ramène en arrière, celui où elle **finit** avance, le tiers du
+   * milieu escamote les barres ou referme un panneau.
+   *
+   * Les gardes viennent d'abord, et leur ordre est celui des défauts vécus.
+   */
   #onContentClick(event) {
-    if (event.target.closest('button, a, input, .reader__selection')) return;
+    // Ce qui a déjà son geste : un bouton, un lien, un passage surligné (qui
+    // ouvre sa note), la feuille des couleurs.
+    if (event.target.closest('button, a, input, mark, .reader__selection')) return;
 
-    // Une tape qui **défait** une sélection ne fait que cela. Elle ne rappelle
-    // pas les barres : c'est le geste qu'on fait pour revenir au texte, pas
-    // pour appeler les outils.
+    // Un glissement laisse souvent un `click` derrière lui : la page a déjà
+    // tourné, elle ne doit pas tourner deux fois pour un seul geste.
+    if (this.#swiped) {
+      this.#swiped = false;
+      return;
+    }
+
+    // Une tape qui **défait** une sélection ne fait que cela. Elle ne tourne
+    // pas la page et ne rappelle pas les barres : c'est le geste qu'on fait
+    // pour revenir au texte.
     //
     // L'état vient du `pointerdown`, pas d'ici : le navigateur défait la
     // sélection entre `mousedown` et `mouseup`, et la lire maintenant montre
@@ -2117,19 +1807,85 @@ class Reader {
     if (selection && !selection.isCollapsed) return;
     this.#hideSelection();
     this.#hideHint();
-    // Un panneau ouvert se referme au premier contact avec le texte. Sa croix
-    // est à l'autre bout de l'écran, et revenir au livre est de toute façon le
-    // geste qu'on fait ensuite : l'exiger deux fois n'apprend rien. Le clic
-    // s'arrête là — escamoter les barres dans la foulée ferait deux choses
-    // pour un seul geste.
+
+    // Un panneau ouvert se referme au premier contact avec le texte, où qu'on
+    // touche : sa croix est à l'autre bout de l'écran, et revenir au livre est
+    // de toute façon le geste qu'on fait ensuite. Tourner la page sous un
+    // panneau ouvert ferait deux choses pour un seul geste.
     if (this.#panelsOpen()) {
       this.#closePanels();
       return;
     }
+
+    const zone = this.#zoneOf(event.clientX);
+    if (zone) {
+      this.#move(zone);
+      return;
+    }
+
     this.#nodes.header.classList.toggle('is-hidden');
     this.#nodes.footer.classList.toggle('is-hidden');
   }
 
+  /**
+   * Le tiers de la colonne où tombe [clientX] : `-1` en arrière, `1` en avant,
+   * `0` au milieu. La mesure est physique — le navigateur ne connaît que des
+   * pixels depuis le bord gauche — et c'est `turnZone` qui la rend logique.
+   */
+  #zoneOf(clientX) {
+    const rect = this.#nodes.scroll.getBoundingClientRect();
+    if (!rect.width) return 0;
+    return turnZone((clientX - rect.left) / rect.width, isRtl());
+  }
+
+  /**
+   * Départ d'un glissement.
+   *
+   * Le doigt et le stylet seulement : à la souris, un déplacement horizontal
+   * sur du texte est une sélection, et tourner la page dessus rendrait le
+   * texte insélectionnable. La souris a les trois zones, les deux chevrons et
+   * les flèches du clavier — elle ne manque de rien.
+   *
+   * Un geste qui commence sur une sélection vivante est abandonné d'avance :
+   * les poignées natives de sélection avalent les évènements tactiles
+   * (`docs/spikes/react-native-contre-webview.md`), et ce qu'on croirait lire
+   * serait un geste tronqué.
+   */
+  #onPointerDown(event) {
+    this.#swipeFrom = null;
+    // La trace du glissement précédent s'efface ici, et non au clic : un
+    // glissement n'en laisse pas toujours un, et le drapeau resté levé aurait
+    // avalé le prochain clic — celui d'un geste qui n'a rien à voir.
+    this.#swiped = false;
+    if (!event.isPrimary || event.pointerType === 'mouse') return;
+    if (this.#selectionAtPress) return;
+    this.#swipeFrom = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  }
+
+  /**
+   * Fin d'un glissement. `swipeTurn` dit s'il tourne quelque chose, et de quel
+   * côté : trop court, trop vertical — c'est un défilement dans la page — ou
+   * bien la page suit le sens où le texte s'écoule.
+   */
+  #onPointerUp(event) {
+    const from = this.#swipeFrom;
+    this.#swipeFrom = null;
+    if (!from || event.pointerId !== from.id) return;
+    // Une sélection posée par le geste n'est pas un glissement de page.
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+
+    const sens = swipeTurn(event.clientX - from.x, event.clientY - from.y, isRtl());
+    if (!sens) return;
+    this.#swiped = true;
+    this.#move(sens);
+  }
+
+  /**
+   * Le défilement **dans** une page : une feuille imprimée dépasse souvent la
+   * hauteur de l'écran. Il n'y a rien d'autre à y faire que d'escamoter les
+   * barres en descendant et de les rappeler en remontant.
+   */
   #onScroll(scroll) {
     const top = scroll.scrollTop;
     this.#hideSelection();
@@ -2140,49 +1896,6 @@ class Reader {
       this.#showChrome();
     }
     this.#nodes.lastScroll = top;
-    if (this.#prefs.mode !== 'scroll') return;
-
-    const current = this.#visibleBlock();
-    if (current && current.index !== this.#index) {
-      this.#setCurrent(current.index, current.page);
-    }
-    if (scroll.scrollHeight - top - scroll.clientHeight < NEAR_END) this.#extendEnd();
-    else if (top < NEAR_START) this.#extendStart();
-  }
-
-  /**
-   * La page montée que l'on est en train de lire : celle sous le haut d'écran.
-   *
-   * Par dichotomie, et non par balayage. Le fil porte le livre entier et cette
-   * question se pose à **chaque** évènement de défilement : un
-   * `getBoundingClientRect()` par page monterait à des milliers de lectures de
-   * disposition par geste, et chacune force le navigateur à tout recalculer.
-   * Les blocs sont contigus de `#first` à `#last` et rangés dans l'ordre du
-   * texte : leurs bords croissent, la dichotomie est légitime.
-   */
-  #visibleBlock() {
-    const line = this.#nodes.scroll.getBoundingClientRect().top + 140;
-    let low = this.#first;
-    let high = this.#last;
-    let best = null;
-    while (low <= high) {
-      const middle = (low + high) >> 1;
-      const block = this.#blocks.get(middle);
-      if (!block) break;
-      const rect = block.root.getBoundingClientRect();
-      if (rect.bottom <= line) {
-        low = middle + 1;
-      } else if (rect.top > line) {
-        // Au-dessus de la ligne : on retient la plus haute qui la dépasse, elle
-        // répond quand la lecture est au-dessus de la première page montée.
-        best = block;
-        high = middle - 1;
-      } else {
-        return block;
-      }
-    }
-    // Sinon la ligne est passée sous la dernière page : c'est celle-là.
-    return best ?? this.#blocks.get(this.#last) ?? null;
   }
 
   #showChrome() {

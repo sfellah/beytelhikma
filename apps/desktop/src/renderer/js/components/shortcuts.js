@@ -37,7 +37,6 @@ const SHORTCUTS = [
   { keys: ['B'], label: 'reader.shortcut.bookmark' },
   { keys: ['N'], label: 'reader.shortcut.notes' },
   { keys: ['C'], label: 'reader.shortcut.toc' },
-  { keys: ['V'], label: 'reader.shortcut.mode' },
   // Le plein écran n'existe pas partout : la fiche ne l'annonce que là où il
   // est offert. Une ligne pour une touche absente est une promesse en trop.
   { keys: ['F11'], label: 'reader.shortcut.fullscreen', needs: 'fullscreen' },

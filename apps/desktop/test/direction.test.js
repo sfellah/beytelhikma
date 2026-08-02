@@ -92,8 +92,10 @@ test('la bande des nouveautés défile dans le sens de lecture', () => {
 test('les décalages physiques du lecteur ont leur pendant RTL', () => {
   for (const rule of [
     "[dir='rtl'] .reader__back:hover .icon",
-    "[dir='rtl'] .reader--page .reader__block.is-turned-next",
-    "[dir='rtl'] .reader--page .reader__block.is-turned-previous",
+    // La classe de la façon de lire a disparu avec le fil vertical : il n'en
+    // reste qu'une, et les animations de feuilletage se portent sur le bloc.
+    "[dir='rtl'] .reader__block.is-turned-next",
+    "[dir='rtl'] .reader__block.is-turned-previous",
     "[dir='rtl'] .toc__chapter[open] > summary .icon--chevron",
   ]) {
     assert.ok(css.includes(rule), `règle RTL manquante : ${rule}`);

@@ -156,26 +156,25 @@ tâches.
    tri, bascule grille/liste, progression par livre.
 3. **Fiche livre** — métadonnées présentes uniquement, auteur, sommaire
    hiérarchique cliquable, œuvres de la même discipline.
-4. **Lecteur** — deux façons de parcourir un livre, au choix dans les réglages
-   (`نمط القراءة`) : **صفحة صفحة**, une page imprimée par écran, ou **تمرير
-   متصل**, un seul bloc de texte continu. Le fil ne porte **aucune marque de
-   page** — ni pied imprimé, ni numéro entre deux pages, ni filet, ni marge :
-   le texte de la page N+1 suit celui de la page N comme deux paragraphes du
-   même texte. La découpe est celle du fichier, pas celle du texte, et
-   l'afficher faisait compter les pages au lieu de lire. Seul le titre de
-   chapitre subsiste, et seulement **quand il change** d'une page à la
-   suivante. Le ruban y perd donc les deux chevrons et la fraction
-   « ١٢ / ٢٣٠ » : sans page à l'écran, ils ne désignent plus rien de visible.
-   Il ne garde que ce qui dit où l'on en est — la jauge et le pourcentage. En
-   mode page, il garde tout. Le fil **monte le livre entier et ne démonte
-   rien** : on descend, on descend, et tout est là, y compris derrière soi. Il
-   ne l'attend pas pour autant — on ouvre sur quelques pages autour de la
-   reprise, puis le reste monte dans les creux, par tranches, dans les deux
-   sens ; le remplissage cède la place au geste et s'arrête avec la vue.
-   Un seul bloc à l'œil, donc, pas dans l'arbre : `page_id` continue de porter
-   l'ancrage des annotations. Ce que ça coûte : ~25 nœuds DOM par page, soit
-   ~5 000 pour un livre médian du corpus (206 pages) et ~270 000 au 99ᵉ
-   centile (10 766 pages) — il n'y a aujourd'hui aucune borne. Sélection de texte
+4. **Lecteur** — **une seule façon de parcourir un livre** : la page imprimée,
+   une par écran. Il y a eu un fil vertical, essayé deux fois puis retiré : le
+   corpus est paginé et tout le reste l'est avec lui — le pied imprimé, la
+   fraction du ruban, l'ancrage des notes, le `?page=` — et un fil oblige à
+   retirer un à un les repères qui disent où l'on est. Le mode a disparu, et
+   son réglage avec : un réglage à une seule valeur demande un choix qui n'en
+   est pas un. Ce qui reste du défilement, c'est celui **dans** une page — une
+   feuille imprimée dépasse souvent la hauteur de l'écran.
+   On tourne de trois façons, et les trois suivent le **sens de lecture**,
+   jamais un bord d'écran : au clavier (`←` / `→`, inversées en RTL), au clic
+   sur le **tiers de la colonne** où la ligne commence (en arrière) ou finit
+   (en avant) — le tiers du milieu escamote les barres ou referme un panneau —,
+   et au doigt par un glissement horizontal, qui chasse la page dans le sens où
+   le texte s'écoule : vers la gauche en anglais, vers la droite en arabe. Les
+   deux règles de sens sont des fonctions pures dans `src/shared/page-turn.js`,
+   éprouvées dans les deux directions. Un geste ne tourne rien s'il est plus
+   vertical qu'horizontal, s'il naît sur une sélection, s'il vient d'une souris
+   (où glisser sur du texte est une sélection), ou si un panneau est ouvert.
+   Sélection de texte
    native, taille de police (curseur, boutons, `Ctrl`+molette), face de lecture
    parmi les trois arabes, progression écrite dans `user.sqlite`. L'ambiance
    (ورقي / أبيض / ليلي) n'appartient plus au lecteur : c'est le thème de
@@ -197,8 +196,8 @@ tâches.
 
 Navigation clavier du lecteur : `←` page suivante, `→` page précédente,
 `Début`/`Fin` les deux bouts, `B` marque-page, `N` mes notes, `C` sommaire,
-`V` bascule le mode de lecture, `Ctrl+F` recherche, `F11` plein écran, `؟` la
-fiche des raccourcis, `Échap` ferme le panneau ou revient en arrière. La fiche
+`Ctrl+F` recherche, `F11` plein écran, `؟` la fiche des raccourcis, `Échap`
+ferme le panneau ou revient en arrière. La fiche
 se lit aussi depuis `/settings` — le tactile ne peut pas frapper ces touches, et
 l'outil « ؟ » a donc quitté la barre. Sa liste vit dans
 `js/components/shortcuts.js`, **seule** : c'est elle que l'utilisateur lit.

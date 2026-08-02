@@ -1,94 +1,20 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
   DEFAULT_PAGER_LAYOUT,
-  DEFAULT_READING_MODE,
   PAGER_LAYOUTS,
-  READING_MODES,
   resolvePagerLayout,
-  resolveReadingMode,
-} from '../src/shared/reading-modes.js';
+} from '../src/shared/pager-layouts.js';
+import { SWIPE_MIN, TURN_ZONE, swipeTurn, turnZone } from '../src/shared/page-turn.js';
 
 // Les fins de ligne du dépôt sont normalisées à la lecture : `core.autocrlf`
 // rend des `\r\n` sous Windows, et un test qui cite deux lignes d'affilée
 // échouerait sur la machine d'un contributeur et pas sur celle d'un autre.
 const read = (relative) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
-
-// --------------------------------------------------------- mode de lecture
-
-test('resolveReadingMode rend une clé connue telle quelle', () => {
-  for (const mode of READING_MODES) {
-    assert.equal(resolveReadingMode(mode.key), mode.key);
-  }
-});
-
-test('resolveReadingMode replie tout le reste sur la page imprimée', () => {
-  for (const stored of ['continuous', 'flow', '', ' ', null, undefined, 0, {}]) {
-    assert.equal(resolveReadingMode(stored), DEFAULT_READING_MODE);
-  }
-});
-
-/**
- * Le propriétaire est unique, comme pour les thèmes et les polices. Deux écrans
- * montrent maintenant ce choix — le panneau du lecteur ne le porte plus, mais
- * la touche `V` l'écrit encore — et c'est exactement la configuration dans
- * laquelle les listes recopiées avaient divergé.
- */
-test('aucune vue ne redéclare la liste des modes de lecture', () => {
-  for (const view of [
-    '../src/renderer/js/views/reader.js',
-    '../src/renderer/js/views/settings.js',
-  ]) {
-    const source = read(view);
-    assert.equal(
-      /const (MODES|READING_MODES)\s*=/.test(source),
-      false,
-      `${view} redéclare la liste des modes`,
-    );
-    assert.ok(
-      source.includes('shared/reading-modes.js'),
-      `${view} doit tenir la liste de son propriétaire unique`,
-    );
-  }
-});
-
-/**
- * Le mode se règle dans `/settings`, et le panneau du lecteur ne garde que ce
- * qui se touche en lisant. Sans ce test, un panneau qui le réintroduirait
- * rendrait la section des réglages redondante sans que rien ne le dise.
- */
-test('le panneau du lecteur ne porte plus le mode de lecture', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-  assert.equal(reader.includes('mode-choices'), false, 'le lecteur remonte les cartes de mode');
-  assert.equal(
-    reader.includes("t('reader.modeLabel')"),
-    false,
-    'le lecteur remonte le libellé du mode',
-  );
-
-  const settings = read('../src/renderer/js/views/settings.js');
-  assert.ok(settings.includes("t('reader.modeLabel')"), '/settings doit porter le réglage');
-  assert.ok(
-    settings.includes("marque: 'readingMode'"),
-    'le contrat des captures est `data-reading-mode`',
-  );
-});
-
-/**
- * Les cartes `.mode-choices` tiraient leurs teintes de `--reader-*`, déclarées
- * sous `.reader` seulement. Déplacées telles quelles dans les réglages, elles
- * s'y seraient peintes en transparent : la règle doit disparaître avec elles.
- */
-test('la feuille de style ne garde pas de règle orpheline pour les cartes de mode', () => {
-  const views = read('../src/renderer/styles/views.css');
-  assert.equal(/^\.mode-choices/m.test(views), false, 'règle .mode-choices sans porteur');
-});
-
-// -------------------------------------------------------------- fil continu
 
 /** Le corps d'une méthode, jusqu'à l'accolade fermante de son indentation. */
 const methode = (source, entete) => {
@@ -97,260 +23,257 @@ const methode = (source, entete) => {
   return source.slice(start, source.indexOf('\n  }', start));
 };
 
-/** Le corps d'une règle CSS nommée par son sélecteur exact. */
-const regle = (source, selecteur) => {
-  const start = source.indexOf(`${selecteur} {`);
-  assert.notEqual(start, -1, `règle absente : ${selecteur}`);
-  return source.slice(start, source.indexOf('}', start));
-};
+// --------------------------------------------------- purge du fil vertical
 
 /**
- * Au fil, la page n'est plus une unité qu'on lise : le pied imprimé n'y
- * désigne rien. Il n'est donc **pas dessiné**, plutôt que dessiné puis masqué —
- * caché, il resterait dans l'arbre, dans la sélection et dans le texte copié,
- * au milieu d'une phrase que le fil vient de recoudre.
- */
-test('au fil continu, aucune page ne laisse de pied imprimé', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-  const corps = methode(reader, '#makeBlock(index, page) {');
-
-  assert.ok(
-    /const flow = this\.#prefs\.mode === 'scroll'/.test(corps),
-    '#makeBlock doit savoir dans quel mode il monte',
-  );
-  assert.ok(
-    /const foot = flow \? null : h\(/.test(corps),
-    'le pied imprimé ne doit pas exister au fil',
-  );
-  assert.ok(
-    /if \(foot\) \{/.test(corps),
-    'et son libellé ne doit pas se calculer pour un nœud qu’on ne monte pas',
-  );
-
-  // En mode page, il reste : c'est là qu'il dit où l'on en est sur la feuille.
-  assert.ok(corps.includes("t('reader.pageOf'"), 'la page imprimée garde son « N sur M »');
-  assert.ok(corps.includes("t('reader.printedPage'"), 'et son numéro d’édition');
-});
-
-/**
- * Deux pages du fil se suivent comme deux paragraphes du même texte. Une
- * marge, même discrète, redessinerait la coupure que le fil défait : l'œil
- * compterait les pages au lieu de lire.
- */
-test('au fil continu, aucune marge ne sépare deux pages', () => {
-  const views = read('../src/renderer/styles/views.css');
-  assert.ok(
-    /margin-top:\s*0;/.test(regle(views, '.reader--scroll .reader__block + .reader__block')),
-    'deux blocs du fil doivent se toucher',
-  );
-
-  // Le pied ayant quitté le fil, sa règle d'écart n'a plus de porteur : la
-  // laisser rouvrirait la porte au premier pied qu'on remonterait par mégarde.
-  assert.equal(
-    /\.reader--scroll \.reader__page-foot\s*\{/.test(views),
-    false,
-    'règle d’écart pour un pied que le fil ne dessine plus',
-  );
-});
-
-/**
- * Sans page à l'écran, les deux chevrons et la fraction « ١٢ / ٢٣٠ » ne
- * désignent plus rien de visible. Le ruban n'y garde que ce qui dit *où l'on
- * en est* : la jauge et le pourcentage.
+ * Le fil vertical a existé : un mode de lecture, un réglage dans `/settings`,
+ * une touche `V`, une classe CSS, une capture. Deux tentatives — la page
+ * continue, puis le livre entier monté — et on l'a jeté. Il ne reste qu'une
+ * façon de lire : la page imprimée.
  *
- * Ici une règle CSS et non un `if` au montage : les trois nœuds ont un sens en
- * mode page, et la touche `V` bascule le mode sans reconstruire la barre.
+ * Ce test tient la porte fermée. Ce qui gêne n'est pas le code mort, c'est
+ * qu'un réglage à une seule valeur demande un choix qui n'en est pas un, et
+ * qu'une classe qui ne distingue plus rien survit par habitude jusqu'à ce que
+ * quelqu'un croie qu'elle sert.
  */
-test('au fil continu, le ruban perd les chevrons et la fraction, garde la jauge', () => {
+test('il ne reste aucune trace du fil vertical', () => {
+  const interdits = [
+    'reading-modes',
+    'READING_MODES',
+    'resolveReadingMode',
+    'reader.mode',
+    'reader--scroll',
+    // `\b` et non la sous-chaîne nue : `reader--pager-*` reste, c'est le ruban
+    // de pagination et non la façon de lire.
+    /reader--page\b/,
+    'data-reading-mode',
+    'readingMode',
+    '#showInFlow',
+    '#extendEnd',
+    '#extendStart',
+    '#startBackfill',
+    '#visibleBlock',
+    '#syncChapters',
+    'FLOW_KEEP',
+    'FLOW_STEP',
+    'BACKFILL',
+  ];
+
+  for (const chemin of [
+    '../src/renderer/js/views/reader.js',
+    '../src/renderer/js/views/settings.js',
+    '../src/renderer/js/components/shortcuts.js',
+    '../src/shared/pager-layouts.js',
+    '../src/main/capture.js',
+    '../src/renderer/styles/views.css',
+    '../src/renderer/js/locales/ar.js',
+    '../src/renderer/js/locales/en.js',
+  ]) {
+    const source = read(chemin);
+    for (const motif of interdits) {
+      const present = typeof motif === 'string' ? source.includes(motif) : motif.test(source);
+      assert.equal(present, false, `${chemin} porte encore « ${motif} »`);
+    }
+  }
+
+  // Le module qui portait les deux listes a pris le nom de celle qui reste :
+  // l'ancien aurait promis un choix qui n'existe plus.
+  const modes = fileURLToPath(new URL('../src/shared/reading-modes.js', import.meta.url));
+  assert.equal(existsSync(modes), false, 'le module des façons de lire doit avoir disparu');
+
+  // La touche `V` basculait le mode : elle n'a plus rien à basculer, ni dans
+  // le lecteur ni dans la fiche qui la promettait.
+  assert.equal(
+    read('../src/renderer/js/components/shortcuts.js').includes("keys: ['V']"),
+    false,
+    'la fiche promet une touche qui ne fait plus rien',
+  );
+  assert.equal(
+    read('../src/renderer/js/views/reader.js').includes("case 'v':"),
+    false,
+    'le lecteur écoute encore la touche du mode',
+  );
+});
+
+/**
+ * Les cartes `.mode-choices` tiraient leurs teintes de `--reader-*`, déclarées
+ * sous `.reader` seulement. La règle avait déjà perdu son porteur une fois ;
+ * elle ne doit pas revenir maintenant que le choix lui-même a disparu.
+ */
+test('la feuille de style ne garde pas de règle orpheline pour les cartes de mode', () => {
   const views = read('../src/renderer/styles/views.css');
-  assert.ok(
-    /display:\s*none/.test(regle(views, '.reader--scroll .reader__pager')),
-    'la pagination du ruban doit disparaître au fil',
-  );
-
-  // La jauge et le pourcentage ne sont visés par rien : ce sont eux qui restent.
-  for (const garde of ['.reader__progress', '.reader__percent', '.reader__rail']) {
-    assert.equal(
-      new RegExp(`\\.reader--scroll [^{,]*\\${garde}\\b[^{]*\\{[^}]*display:\\s*none`).test(views),
-      false,
-      `${garde} doit rester au fil`,
-    );
-  }
-
-  // Et le mode page n'est touché par personne : c'est la portée du sélecteur
-  // qui le garantit, pas une seconde règle qui les remonterait.
-  assert.equal(
-    /\.reader--page[^{,]*\.reader__pager\b[^{]*\{[^}]*display:\s*none/.test(views),
-    false,
-    'le ruban de la page imprimée doit garder ses chevrons et sa fraction',
-  );
-
-  // Masqués, ils continuent d'être tenus à jour : au retour à la page imprimée
-  // la fraction est juste sans attendre le prochain mouvement.
-  const reader = read('../src/renderer/js/views/reader.js');
-  const courant = methode(reader, '#setCurrent(index, page, { save = true } = {}) {');
-  assert.ok(courant.includes('this.#nodes.pagerCurrent.textContent'), 'la fraction reste tenue');
-  assert.ok(courant.includes('this.#nodes.previous.disabled'), 'et les chevrons aussi');
+  assert.equal(/^\.mode-choices/m.test(views), false, 'règle .mode-choices sans porteur');
 });
 
 /**
- * Le titre de chapitre se répétait à chaque page : au fil, il reviendrait
- * toutes les vingt lignes et recouperait le texte en pages. Il n'annonce donc
- * que ce qui **commence** — et la comparaison se fait avec le bloc réellement
- * monté juste avant, jamais avec le cache des pages : celui-ci garde des pages
- * qui ont quitté l'écran, et un chapitre resterait tu par un voisin absent.
+ * Des deux listes que portait le module, il n'en reste qu'une, et elle garde
+ * son propriétaire unique : c'est de deux copies qu'étaient nées la police
+ * orpheline et le thème `sepia` que plus aucune règle ne lisait.
  */
-test('le titre de chapitre se compare au bloc voisin monté, pas au cache des pages', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-  const corps = methode(reader, '#syncChapters(from = this.#first, to = this.#last) {');
-
-  assert.ok(
-    /this\.#blocks\.get\(index - 1\)/.test(corps),
-    'la comparaison doit lire le bloc monté juste avant',
-  );
-  assert.equal(
-    /this\.#pages\.get\(/.test(corps),
-    false,
-    'le cache des pages n’est pas ce qui est à l’écran',
-  );
-
-  // Chaque tranche ajoutée doit redemander la décision, sinon la page qui
-  // ouvrait le fil reste muette et l'on ne sait plus dans quel chapitre on lit.
-  // Par tranche, et jamais pour tout le fil : il porte le livre entier.
-  for (const entete of ['async #extendEnd(steps = FLOW_STEP) {', 'async #extendStart(steps = FLOW_STEP) {']) {
-    const corps = methode(reader, entete);
-    assert.ok(/this\.#syncChapters\([^)]+\)/.test(corps), `${entete} doit resynchroniser les titres`);
-    assert.equal(
-      /this\.#syncChapters\(\)/.test(corps),
-      false,
-      `${entete} relit tout le fil à chaque tranche`,
+test('aucune vue ne redéclare la liste des rubans', () => {
+  for (const view of [
+    '../src/renderer/js/views/reader.js',
+    '../src/renderer/js/views/settings.js',
+  ]) {
+    const source = read(view);
+    assert.equal(/const PAGER_LAYOUTS\s*=/.test(source), false, `${view} redéclare la liste`);
+    assert.ok(
+      source.includes('shared/pager-layouts.js'),
+      `${view} doit tenir la liste de son propriétaire unique`,
     );
   }
 });
 
-/**
- * Le fil ne garde plus une tranche : il finit par porter le livre entier. On
- * descend, on descend, et tout est là — y compris derrière soi, sans rien
- * réattendre.
- */
-test('au fil continu, rien ne se démonte derrière : le livre entier finit monté', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-  assert.equal(/#trim\(/.test(reader), false, 'l’élagage démontait ce qu’on venait de lire');
-  assert.equal(/FLOW_KEEP/.test(reader), false, 'plus aucune borne au nombre de pages montées');
-});
+// -------------------------------------------------------- tourner au clic
 
 /**
- * Le reste du livre monte **après** le premier dessin, par tranches, dans les
- * deux sens : le lecteur ouvre sur la page reprise, et ce qui la précède compte
- * autant que ce qui la suit. Attendre le livre entier avant de peindre serait
- * un refus déguisé.
+ * Trois zones, et leur sens vient de la **direction de l'interface**, jamais du
+ * bord de l'écran. `turnZone` reçoit une fraction physique — 0 au bord gauche,
+ * 1 au bord droit, ce que rend le navigateur — et c'est elle qui la rend
+ * logique. Vérifié dans les deux directions : un `left` écrit en dur passerait
+ * la moitié des cas, exactement comme les flèches figées d'avant.
  */
-test('le reste du livre monte en tâche de fond, dans les deux sens', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
+test('les trois zones tournent selon le sens de lecture, pas selon le bord', () => {
+  // En anglais la ligne commence à gauche : le bord gauche ramène en arrière.
+  assert.equal(turnZone(0.05, false), -1);
+  assert.equal(turnZone(0.95, false), 1);
+  // En arabe elle commence à droite : tout s'inverse.
+  assert.equal(turnZone(0.05, true), 1);
+  assert.equal(turnZone(0.95, true), -1);
 
-  const flot = methode(reader, 'async #showInFlow(index, { save = true, jump = true } = {}) {');
-  assert.ok(
-    /await this\.#fill\(\);\s*\r?\n\s*this\.#startBackfill\(\);/.test(flot),
-    'le remplissage part après le premier écran rempli',
-  );
-  assert.equal(
-    /await this\.#startBackfill/.test(reader),
-    false,
-    'attendre le livre entier avant le premier dessin est un refus déguisé',
-  );
-
-  const fond = methode(reader, '#startBackfill() {');
-  assert.ok(fond.includes('this.#extendEnd(BACKFILL_STEP)'), 'la fin doit se remplir');
-  assert.ok(fond.includes('this.#extendStart(BACKFILL_STEP)'), 'le début aussi');
-  assert.equal(
-    /\|\|\s*\(?await this\.#extendStart/.test(fond),
-    false,
-    'un court-circuit garderait le début du livre pour la fin',
-  );
-
-  // Le même chemin, pas un second. La compensation de `scrollTop` n'est écrite
-  // qu'une fois, dans `#extendStart` : un remplissage qui prependrait lui-même
-  // ferait sauter la lecture à chaque tranche ajoutée au-dessus d'elle.
-  for (const interdit of ['prepend', 'scrollTop', 'scrollHeight']) {
-    assert.equal(
-      fond.includes(interdit),
-      false,
-      `le remplissage ne doit pas refaire « ${interdit} » à sa façon`,
-    );
+  // Le tiers du milieu garde le geste qu'il avait, dans les deux directions.
+  for (const rtl of [false, true]) {
+    assert.equal(turnZone(0.5, rtl), 0);
+    assert.equal(turnZone(TURN_ZONE + 0.01, rtl), 0);
+    assert.equal(turnZone(1 - TURN_ZONE - 0.01, rtl), 0);
   }
 
-  // Une seule extension à la fois : le geste de l'utilisateur passe devant.
-  assert.ok(fond.includes('this.#extending'), 'le défilement de l’utilisateur passe devant');
+  // Une colonne sans largeur ne tourne rien plutôt que de tourner au hasard.
+  assert.equal(turnZone(Number.NaN, false), 0);
+});
 
-  // La fin normale est un fil qui couvre le livre. S'arrêter au premier tour
-  // qui n'a rien monté laisserait le livre à moitié là, parce que le geste de
-  // l'utilisateur tenait les bornes pendant qu'on attendait.
+/**
+ * L'ordre des gardes du clic est celui des défauts vécus. Chacune passe
+ * **avant** la zone : sans quoi la tape qui défait une sélection tournerait la
+ * page, et l'on ne pourrait plus rien sélectionner du tout.
+ */
+test('un clic ne tourne la page qu’après toutes les gardes', () => {
+  const corps = methode(read('../src/renderer/js/views/reader.js'), '#onContentClick(event) {');
+  const rang = (motif) => {
+    const index = corps.indexOf(motif);
+    assert.notEqual(index, -1, `garde absente : ${motif}`);
+    return index;
+  };
+  const zone = rang('this.#zoneOf(');
+
+  // Ce qui a déjà son geste : un bouton, un lien, un passage surligné qui
+  // ouvre sa note, la feuille des couleurs.
   assert.ok(
-    /this\.#first <= 0 && this\.#last >= this\.#pageCount - 1/.test(fond),
-    'le remplissage s’arrête sur un livre monté, pas sur un tour vide',
+    corps.includes("closest('button, a, input, mark, .reader__selection')"),
+    'un clic sur un surlignage ouvre sa note, il ne tourne pas la page',
   );
-  assert.ok(fond.includes('BACKFILL_GIVE_UP'), 'et ne tourne pas à vide sur un livre qui résiste');
+  // Le clic résiduel d'un glissement : la page a déjà tourné.
+  assert.ok(rang('this.#swiped') < zone, 'le clic laissé par un glissement passe avant');
+  // La sélection défaite à l'appui, puis celle qui vit encore.
+  assert.ok(rang('this.#selectionAtPress') < zone, 'la garde de sélection passe avant');
+  assert.ok(rang('selection.isCollapsed') < zone, 'et la sélection vivante aussi');
+  // Un panneau ouvert se referme ; il ne tourne pas la page sous lui.
+  assert.ok(rang('this.#panelsOpen()') < zone, 'un panneau ouvert passe avant');
+  // Et le milieu escamote les barres, comme avant.
+  assert.ok(zone < rang("classList.toggle('is-hidden')"), 'le tiers du milieu garde son geste');
+});
+
+// ------------------------------------------------------- tourner au doigt
+
+/**
+ * **La règle en une ligne** : on chasse la page dans le sens où le texte
+ * s'écoule — vers la gauche en anglais, vers la droite en arabe. Les deux sens
+ * sont vérifiés : c'est tout l'intérêt d'avoir sorti la règle du gestionnaire
+ * d'évènements.
+ */
+test('le glissement chasse la page dans le sens où le texte s’écoule', () => {
+  const long = SWIPE_MIN + 20;
+  assert.equal(swipeTurn(-long, 0, false), 1, 'LTR : vers la gauche pour avancer');
+  assert.equal(swipeTurn(long, 0, false), -1, 'LTR : vers la droite pour revenir');
+  assert.equal(swipeTurn(long, 0, true), 1, 'RTL : vers la droite pour avancer');
+  assert.equal(swipeTurn(-long, 0, true), -1, 'RTL : vers la gauche pour revenir');
 });
 
 /**
- * Un `requestIdleCallback` qui se reprogramme seul est exactement la fuite que
- * le routeur vient de corriger : il doit mourir avec la vue, avec le mode, et
- * à chaque nouveau départ. Le jeton compte pour deux — il arrête le tour
- * programmé **et** celui qui est en vol, un tour étant fait d'attentes.
+ * Une page imprimée dépasse souvent la hauteur de l'écran : le défilement
+ * **dans** la page doit rester libre. Un geste plus vertical qu'horizontal ne
+ * tourne donc rien, et un geste trop court non plus.
  */
-test('le remplissage de fond s’arrête avec la vue, avec le mode, et à chaque départ', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-
-  assert.ok(methode(reader, 'dispose() {').includes('this.#stopBackfill()'), 'au démontage');
-  assert.ok(methode(reader, '#setMode(key) {').includes('this.#stopBackfill()'), 'au mode page');
-
-  const fond = methode(reader, '#startBackfill() {');
-  assert.ok(fond.includes('this.#stopBackfill()'), 'un nouveau départ arrête le précédent');
-  assert.ok(fond.includes('this.#disposed'), 'un tour en vol doit se relire démonté');
-  assert.ok(/token !== this\.#backfillToken/.test(fond), 'et se relire périmé');
-
-  const arret = methode(reader, '#stopBackfill() {');
-  assert.ok(/this\.#backfillToken \+= 1/.test(arret), 'l’arrêt périme le tour en vol');
-  assert.ok(/this\.#backfillCancel\?\.\(\)/.test(arret), 'et annule celui qui est programmé');
+test('un glissement vertical ou trop court ne tourne rien', () => {
+  const long = SWIPE_MIN + 20;
+  for (const rtl of [false, true]) {
+    assert.equal(swipeTurn(long, long * 2, rtl), 0, 'c’est un défilement dans la page');
+    assert.equal(swipeTurn(-long, long * 2, rtl), 0);
+    assert.equal(swipeTurn(SWIPE_MIN - 1, 0, rtl), 0, 'trop court pour être un geste');
+    assert.equal(swipeTurn(0, 0, rtl), 0);
+  }
+  // Franchement horizontal, une dérive verticale ne l'annule pas.
+  assert.equal(swipeTurn(-long, long / 4, false), 1);
 });
 
 /**
- * Le fil portant le livre entier, plus rien de ce qui se rejoue à chaque geste
- * ne peut être proportionnel au nombre de pages montées. Mesuré sur le corpus :
- * la médiane est à 206 pages, mais 1,2 % des livres dépassent 10 000 pages.
+ * Le glissement est au doigt. À la souris, un déplacement horizontal sur du
+ * texte **est** une sélection : y tourner la page rendrait le texte
+ * insélectionnable, et la souris a déjà les zones, les chevrons et les flèches.
+ *
+ * Et il abandonne sur une sélection : les poignées natives avalent les
+ * évènements tactiles (`docs/spikes/react-native-contre-webview.md`), ce qu'on
+ * lirait serait un geste tronqué.
  */
-test('rien sur le chemin du défilement ne coûte le livre entier', () => {
+test('le glissement est au doigt, jamais à la souris, jamais sur une sélection', () => {
   const reader = read('../src/renderer/js/views/reader.js');
-  const balaie = /for \(const block of this\.#blocks\.values\(\)\)/;
 
-  // La page lue : un rectangle par page montée, à chaque évènement de
-  // défilement, forcerait des milliers de dispositions par geste.
-  const visible = methode(reader, '#visibleBlock() {');
-  assert.equal(balaie.test(visible), false, '#visibleBlock balaie tout le fil');
-  assert.ok(/low \+ high/.test(visible), 'la page lue se trouve par dichotomie');
-
-  // Franchir une page ne change que deux blocs, et le signet d'aucun.
-  const courant = methode(reader, '#setCurrent(index, page, { save = true } = {}) {');
-  assert.equal(balaie.test(courant), false, '#setCurrent balaie tout le fil');
-  assert.ok(courant.includes('this.#syncBookmarkButton()'), 'le bouton seul suit la page courante');
-
-  // Le chapitre d'une page : au balayage, le corpus donne 54 millions de tours
-  // au 99ᵉ centile de `pages × sommaire`, et 17 milliards sur le plus gros.
-  const chapitre = methode(reader, '#chapterFor(page) {');
-  assert.equal(
-    /for \(const entry of this\.#toc\)/.test(chapitre),
-    false,
-    '#chapterFor balaie tout le sommaire pour chaque page montée',
+  const bas = methode(reader, '#onPointerDown(event) {');
+  assert.ok(
+    bas.includes("event.pointerType === 'mouse'"),
+    'la souris sélectionne, elle ne glisse pas',
   );
+  assert.ok(bas.includes('event.isPrimary'), 'un second doigt n’est pas un second geste');
+  assert.ok(bas.includes('this.#selectionAtPress'), 'un geste né sur une sélection est abandonné');
+  // La trace s'efface au départ du geste suivant : un glissement ne laisse pas
+  // toujours un clic, et le drapeau resté levé avalerait un clic étranger.
+  assert.ok(bas.includes('this.#swiped = false'), 'la trace du glissement s’efface au départ');
 
-  // Poser une teinte sur trois mots ne doit pas rejouer `renderBookHtml` sur
-  // des milliers de pages.
-  const apres = methode(reader, '#afterAnnotationChange(pageId = null) {');
-  assert.ok(apres.includes('block.page.pageId === pageId'), 'seule la page touchée se repeint');
-  assert.equal(
-    reader.includes('#afterAnnotationChange()'),
-    false,
-    'un appelant qui tait sa page fait repeindre tout le fil',
+  const haut = methode(reader, '#onPointerUp(event) {');
+  assert.ok(
+    haut.includes('selection.isCollapsed'),
+    'une sélection posée par le geste n’en est pas un',
+  );
+  assert.ok(haut.includes('swipeTurn('), 'le sens vient de son propriétaire unique');
+
+  // `pointer*` et non `touch*` : le même rendu tourne sous Capacitor.
+  assert.ok(/addEventListener\('pointerup'/.test(reader), 'les évènements sont des pointeurs');
+  assert.ok(/addEventListener\('pointercancel'/.test(reader), 'un geste interrompu doit se ranger');
+});
+
+// -------------------------------------------------- défilement dans la page
+
+/**
+ * Le fil est parti, pas le défilement : une page imprimée dépasse souvent la
+ * hauteur de l'écran. `#onScroll` ne fait plus qu'une chose, et doit la faire.
+ */
+test('la colonne garde son défilement, et le masquage des barres avec', () => {
+  const corps = methode(read('../src/renderer/js/views/reader.js'), '#onScroll(scroll) {');
+  assert.ok(corps.includes("classList.add('is-hidden')"), 'descendre escamote les barres');
+  assert.ok(corps.includes('this.#showChrome()'), 'remonter les rappelle');
+
+  // Allégé, pas jeté : il ne cherche plus quelle page est à l'écran — il n'y
+  // en a qu'une — et n'allonge plus rien.
+  assert.equal(corps.includes('#visibleBlock'), false, 'il n’y a plus de page à chercher');
+  assert.equal(corps.includes('#extend'), false, 'le fil ne s’allonge plus');
+  assert.equal(corps.includes('#setCurrent'), false, 'défiler dans une page ne change pas de page');
+
+  const views = read('../src/renderer/styles/views.css');
+  const start = views.indexOf('.reader__scroll {');
+  assert.notEqual(start, -1, 'la colonne de lecture a disparu');
+  assert.ok(
+    /overflow-y:\s*auto/.test(views.slice(start, views.indexOf('}', start))),
+    'la colonne doit garder son défilement',
   );
 });
 
