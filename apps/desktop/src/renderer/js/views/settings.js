@@ -14,10 +14,13 @@ import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
 import { PAGER_LAYOUTS, resolvePagerLayout } from '../../../shared/pager-layouts.js';
+import { resolveTapZones, TAP_ZONE_MODES } from '../../../shared/page-turn.js';
+import {
+  DEFAULT_FONT_SIZE,
+  MAX_FONT,
+  MIN_FONT,
+} from '../../../shared/reader-size.js';
 import { openShortcuts } from '../components/shortcuts.js';
-
-const MIN_FONT = 16;
-const MAX_FONT = 34;
 
 /**
  * Réglages.
@@ -203,6 +206,21 @@ function readingSection(prefs) {
       }),
       t('settings.pagerHint'),
     ),
+    // Les côtés de la page tournent au doigt, et une main qui tient l'appareil
+    // touche le bord : c'est le seul des gestes du lecteur qu'on déclenche sans
+    // le vouloir. L'éteindre ne coûte rien — le glissement, les chevrons et les
+    // flèches tournent toujours.
+    row(
+      t('settings.tapZonesLabel'),
+      choix({
+        liste: TAP_ZONE_MODES,
+        valeur: resolveTapZones(prefs['reader.tapZones']),
+        label: 'settings.tapZonesLabel',
+        setting: 'reader.tapZones',
+        marque: 'tapZones',
+      }),
+      t('settings.tapZonesHint'),
+    ),
     // La fiche des raccourcis a quitté la barre du lecteur : elle y prenait une
     // place de doigt pour une liste de touches que le tactile ne peut pas
     // frapper. On vient ici pour apprendre l'outil ; c'est là qu'elle se lit.
@@ -254,7 +272,7 @@ function fontsSection(prefs, refresh) {
       ),
     }));
 
-  const size = Number(prefs['reader.fontSize'] ?? 22);
+  const size = Number(prefs['reader.fontSize'] ?? DEFAULT_FONT_SIZE);
   const value = h('span', { class: 'label-md' }, n(size));
   const slider = h('input', {
     type: 'range',

@@ -63,3 +63,28 @@ export function swipeTurn(dx, dy, rtl) {
   const avance = rtl ? dx > 0 : dx < 0;
   return avance ? 1 : -1;
 }
+
+/**
+ * Les côtés tournent-ils la page ?
+ *
+ * Deux tiers de la colonne portent un geste qu'on ne demande pas toujours : au
+ * doigt, une main qui tient l'appareil touche le bord, et la page part sans
+ * qu'on l'ait voulu. Le glissement, lui, ne se déclenche jamais par mégarde —
+ * il reste, et c'est ce qui rend le refus tenable.
+ *
+ * Le réglage vit ici, avec la règle qu'il éteint, et nulle part ailleurs : deux
+ * copies d'une même liste sont ce qui avait produit la police orpheline et le
+ * thème `sepia` que plus aucune règle ne lisait.
+ */
+export const TAP_ZONE_MODES = [
+  { key: 'on', label: 'reader.tapZones.on', hint: 'reader.tapZones.onHint' },
+  { key: 'off', label: 'reader.tapZones.off', hint: 'reader.tapZones.offHint' },
+];
+
+/** Les côtés tournent par défaut : c'est le geste que la maquette annonce. */
+export const DEFAULT_TAP_ZONES = 'on';
+
+/** La valeur relue vaut ce que la liste reconnaît ; sinon, le défaut. */
+export function resolveTapZones(value) {
+  return TAP_ZONE_MODES.some((mode) => mode.key === value) ? value : DEFAULT_TAP_ZONES;
+}

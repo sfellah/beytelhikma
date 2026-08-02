@@ -5,7 +5,7 @@ import { h } from '../dom.js';
 import { n } from '../format.js';
 import { t } from '../i18n.js';
 import { chevronBackward, chevronForward, icon, isRtl } from '../icons.js';
-import { canGoFullscreen } from '../platform.js';
+import { canGoFullscreen, isTouchPrimary } from '../platform.js';
 import { repository, setSetting, settings } from '../repository.js';
 import { back, navigate } from '../router.js';
 import { toast } from '../shell.js';
@@ -19,7 +19,20 @@ import {
   PAGER_LAYOUTS,
   resolvePagerLayout,
 } from '../../../shared/pager-layouts.js';
-import { swipeTurn, turnZone } from '../../../shared/page-turn.js';
+import {
+  DEFAULT_TAP_ZONES,
+  resolveTapZones,
+  swipeTurn,
+  turnZone,
+} from '../../../shared/page-turn.js';
+import {
+  clampSize,
+  DEFAULT_FONT_SIZE,
+  MAX_FONT,
+  MIN_FONT,
+  PINCH_MIN_SPREAD,
+  pinchSize,
+} from '../../../shared/reader-size.js';
 
 /**
  * Direction du **contenu**, qui n'est pas celle de l'interface : le corpus est
@@ -33,8 +46,6 @@ const CONTENT_DIR = 'rtl';
 const USER_DIR = 'auto';
 
 const PAGE_WINDOW = 20;
-const MIN_FONT = 16;
-const MAX_FONT = 34;
 const HINT_DELAY = 4000;
 
 /**
@@ -101,9 +112,10 @@ class Reader {
   #title = '';
   /** Le thème n'est plus une préférence de lecture : il est global (`theme.js`). */
   #prefs = {
-    size: 22,
+    size: DEFAULT_FONT_SIZE,
     font: DEFAULT_READER_FONT,
     pager: DEFAULT_PAGER_LAYOUT,
+    tapZones: DEFAULT_TAP_ZONES,
   };
   #saveTimer = null;
   #hintTimer = null;
@@ -145,6 +157,20 @@ class Reader {
    */
   #swipeFrom = null;
   #swiped = false;
+  /**
+   * Les doigts posés sur la colonne, et le pincement qu'ils font peut-être.
+   *
+   * Le lecteur a besoin des **deux** pointeurs à la fois : un pincement n'est
+   * pas un évènement, c'est la distance entre deux d'entre eux qui change. Le
+   * navigateur, lui, n'en livre qu'un par message — la carte est la seule façon
+   * de tenir l'autre.
+   *
+   * `touch-action: pan-y` interdit au navigateur d'agrandir la page lui-même :
+   * le geste reste donc au lecteur, qui **recompose** le texte au lieu de le
+   * grossir — les lignes se replient, la colonne ne déborde pas de l'écran.
+   */
+  #pointers = new Map();
+  #pinch = null;
   /** Ferme la fiche des raccourcis, tant qu'elle est ouverte. */
   #closeShortcuts = null;
   #keyHandler = (event) => this.#onKey(event);
@@ -218,9 +244,10 @@ class Reader {
       this.#pageCount = count;
       this.#toc = toc;
       this.#prefs = {
-        size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
+        size: clampSize(prefs['reader.fontSize']),
         font: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
         pager: resolvePagerLayout(prefs['reader.pager']),
+        tapZones: resolveTapZones(prefs['reader.tapZones']),
       };
 
       let index = (saved?.sequenceNum ?? 1) - 1;
@@ -455,8 +482,13 @@ class Reader {
       this.#selectionAtPress = Boolean(selection) && !selection.isCollapsed;
       this.#onPointerDown(event);
     });
-    scroll.addEventListener('pointerup', (event) => this.#onPointerUp(event));
-    scroll.addEventListener('pointercancel', () => {
+    scroll.addEventListener('pointermove', (event) => this.#onPointerMove(event));
+    scroll.addEventListener('pointerup', (event) => {
+      this.#endPointer(event);
+      this.#onPointerUp(event);
+    });
+    scroll.addEventListener('pointercancel', (event) => {
+      this.#endPointer(event);
       this.#swipeFrom = null;
     });
     // Trois portes vers la même mesure, toutes antirebondies : `selectionchange`
@@ -549,6 +581,10 @@ class Reader {
           'div',
           {},
           h('label', { class: 'label-md' }, t('reader.sizeLabel')),
+          // Le pincement ne s'annonce que là où il existe : sur un écran tactile.
+          // Une ligne qui promet un geste impossible se lit deux fois avant
+          // qu'on la croie fausse — comme le bouton de plein écran grisé.
+          isTouchPrimary() ? h('p', { class: 'label-sm muted' }, t('reader.pinchHint')) : null,
           h(
             'div',
             { class: 'font-size-control' },
@@ -1499,12 +1535,24 @@ class Reader {
   // ------------------------------------------------------------- réglages
 
   #setSize(value) {
-    const size = clamp(value, MIN_FONT, MAX_FONT);
+    this.#applySize(value);
+    setSetting('reader.fontSize', this.#prefs.size);
+  }
+
+  /**
+   * Poser la taille sans l'écrire.
+   *
+   * Le pincement en produit une par image : l'écrire à chaque pas enverrait des
+   * dizaines d'écritures dans `user.sqlite` pour un seul geste, et `user.sqlite`
+   * s'écrit de côté puis se renomme — c'est le fichier qu'on ne peut pas
+   * retélécharger. Elle s'écrit une fois, quand les doigts se lèvent.
+   */
+  #applySize(value) {
+    const size = clampSize(value);
     this.#prefs.size = size;
     this.#nodes.root.style.setProperty('--reader-size', `${size}px`);
     this.#nodes.sizeValue.textContent = String(size);
     this.#nodes.sizeSlider.value = String(size);
-    setSetting('reader.fontSize', size);
   }
 
   #setFont(key) {
@@ -1833,6 +1881,11 @@ class Reader {
    * pixels depuis le bord gauche — et c'est `turnZone` qui la rend logique.
    */
   #zoneOf(clientX) {
+    // Les côtés peuvent avoir été éteints depuis `/settings`. Le refus est posé
+    // ici et non dans le clic : les trois tiers redeviennent alors un seul, et
+    // toucher le bord escamote les barres au lieu de ne rien faire du tout —
+    // une zone morte demanderait deux fois avant qu'on la croie voulue.
+    if (this.#prefs.tapZones === 'off') return 0;
     const rect = this.#nodes.scroll.getBoundingClientRect();
     if (!rect.width) return 0;
     return turnZone((clientX - rect.left) / rect.width, isRtl());
@@ -1852,6 +1905,21 @@ class Reader {
    * serait un geste tronqué.
    */
   #onPointerDown(event) {
+    // Le doigt est retenu avant toute garde : un second doigt n'est pas un
+    // second glissement, mais c'est lui qui fait le pincement, et les gardes du
+    // glissement l'auraient renvoyé sans le compter.
+    if (event.pointerType !== 'mouse') {
+      // Un doigt levé **hors** de la colonne n'y laisse pas de `pointerup` : il
+      // resterait sur la carte, et le geste suivant croirait voir deux doigts.
+      // Le premier doigt d'un geste est le seul instant sûr pour oublier ceux
+      // qui traînent — et pour écrire la taille que le précédent avait posée.
+      if (event.isPrimary) {
+        this.#endPinch();
+        this.#pointers.clear();
+      }
+      this.#pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.#pointers.size === 2) this.#startPinch();
+    }
     this.#swipeFrom = null;
     // La trace du glissement précédent s'efface ici, et non au clic : un
     // glissement n'en laisse pas toujours un, et le drapeau resté levé aurait
@@ -1879,6 +1947,65 @@ class Reader {
     if (!sens) return;
     this.#swiped = true;
     this.#move(sens);
+  }
+
+  /**
+   * Un doigt se lève, ou le navigateur reprend son pointeur.
+   *
+   * C'est ici que le pincement s'écrit, et une seule fois : dès qu'il ne reste
+   * plus deux doigts, il n'y a plus de rapport à mesurer.
+   */
+  #endPointer(event) {
+    this.#pointers.delete(event.pointerId);
+    if (this.#pointers.size < 2) this.#endPinch();
+  }
+
+  /** Le pincement s'achève, et c'est le seul endroit où sa taille s'écrit. */
+  #endPinch() {
+    if (!this.#pinch) return;
+    this.#pinch = null;
+    setSetting('reader.fontSize', this.#prefs.size);
+  }
+
+  /**
+   * Deux doigts posés : on retient l'écartement de départ **et** la taille de
+   * départ. Le geste se mesure en rapport à ces deux-là, jamais au pas
+   * précédent — cumuler les pas ferait dériver la taille sans que les doigts
+   * bougent, chaque arrondi s'ajoutant au suivant.
+   */
+  #startPinch() {
+    const spread = this.#spread();
+    if (spread < PINCH_MIN_SPREAD) return;
+    this.#pinch = { spread, size: this.#prefs.size };
+    // Un pincement n'est pas un glissement : le geste ne peut pas tourner la
+    // page en même temps qu'il change la lettre.
+    this.#swipeFrom = null;
+    this.#hideSelection();
+  }
+
+  /**
+   * Le pincement en cours. La taille suit les doigts sans rien écrire —
+   * `#endPointer` s'en charge quand ils se lèvent.
+   */
+  #onPointerMove(event) {
+    const point = this.#pointers.get(event.pointerId);
+    if (!point) return;
+    point.x = event.clientX;
+    point.y = event.clientY;
+    if (!this.#pinch) return;
+    const spread = this.#spread();
+    if (!spread) return;
+    // Le `click` que laisse le geste ne doit pas tourner la page, comme celui
+    // que laisse un glissement.
+    this.#swiped = true;
+    this.#applySize(pinchSize(this.#pinch.size, spread / this.#pinch.spread));
+  }
+
+  /** L'écartement des deux premiers doigts posés, en pixels. */
+  #spread() {
+    const [a, b] = [...this.#pointers.values()];
+    if (!a || !b) return 0;
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
   /**

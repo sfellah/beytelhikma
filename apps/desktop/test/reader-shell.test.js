@@ -8,7 +8,23 @@ import {
   PAGER_LAYOUTS,
   resolvePagerLayout,
 } from '../src/shared/pager-layouts.js';
-import { SWIPE_MIN, TURN_ZONE, swipeTurn, turnZone } from '../src/shared/page-turn.js';
+import {
+  DEFAULT_TAP_ZONES,
+  SWIPE_MIN,
+  TAP_ZONE_MODES,
+  TURN_ZONE,
+  resolveTapZones,
+  swipeTurn,
+  turnZone,
+} from '../src/shared/page-turn.js';
+import {
+  DEFAULT_FONT_SIZE,
+  MAX_FONT,
+  MIN_FONT,
+  PINCH_MIN_SPREAD,
+  clampSize,
+  pinchSize,
+} from '../src/shared/reader-size.js';
 
 // Les fins de ligne du dépôt sont normalisées à la lecture : `core.autocrlf`
 // rend des `\r\n` sous Windows, et un test qui cite deux lignes d'affilée
@@ -181,6 +197,144 @@ test('un clic ne tourne la page qu’après toutes les gardes', () => {
   assert.ok(rang('this.#panelsOpen()') < zone, 'un panneau ouvert passe avant');
   // Et le milieu escamote les barres, comme avant.
   assert.ok(zone < rang("classList.toggle('is-hidden')"), 'le tiers du milieu garde son geste');
+});
+
+// --------------------------------------------- les côtés, qu'on peut éteindre
+
+test('resolveTapZones ne reconnaît que les deux réponses', () => {
+  for (const mode of TAP_ZONE_MODES) {
+    assert.equal(resolveTapZones(mode.key), mode.key);
+  }
+  for (const stored of ['oui', '', null, undefined, 0, {}]) {
+    assert.equal(resolveTapZones(stored), DEFAULT_TAP_ZONES);
+  }
+  // Les côtés tournent par défaut : c'est le geste que la maquette annonce.
+  assert.equal(DEFAULT_TAP_ZONES, 'on');
+});
+
+/**
+ * Le refus est posé **dans** `#zoneOf`, et non dans le clic : les trois tiers
+ * redeviennent alors un seul, et toucher le bord escamote les barres au lieu de
+ * ne rien faire du tout. Une zone morte se touche deux fois avant qu'on la
+ * croie voulue — c'est l'argument du bouton de plein écran grisé, rejoué.
+ */
+test('les côtés éteints rendent le tiers du milieu, jamais une zone morte', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const corps = methode(reader, '#zoneOf(clientX) {');
+  assert.ok(corps.includes("this.#prefs.tapZones === 'off'"), 'le réglage doit se lire ici');
+  const refus = corps.indexOf("tapZones === 'off'");
+  assert.ok(refus < corps.indexOf('turnZone('), 'et passer avant la mesure');
+  assert.ok(/return 0;/.test(corps.slice(refus)), 'éteint, le côté vaut le milieu');
+
+  // Une seule liste, deux écrans — la règle qui a coûté la police orpheline.
+  assert.equal(/const TAP_ZONE_MODES\s*=/.test(reader), false, 'le lecteur redéclare la liste');
+  const settings = read('../src/renderer/js/views/settings.js');
+  assert.equal(/const TAP_ZONE_MODES\s*=/.test(settings), false, '/settings redéclare la liste');
+  assert.ok(settings.includes("setting: 'reader.tapZones'"), '/settings doit écrire le réglage');
+});
+
+// ------------------------------------------------------- pincer pour agrandir
+
+/**
+ * Le pincement se mesure en **rapport** d'écartements, jamais en pixels : le
+ * geste doit valoir la même chose sur un téléphone et sur une tablette, et
+ * c'est l'écart relatif que la main perçoit.
+ */
+test('le pincement multiplie la taille de départ par le rapport des écartements', () => {
+  assert.equal(pinchSize(20, 1), 20, 'sans écartement, rien ne bouge');
+  assert.equal(pinchSize(20, 1.5), 30, 'écarter agrandit');
+  assert.equal(pinchSize(30, 0.6), 18, 'resserrer rétrécit');
+
+  // Les bornes tiennent des deux côtés : un geste large ne sort pas de l'échelle.
+  assert.equal(pinchSize(MAX_FONT, 4), MAX_FONT);
+  assert.equal(pinchSize(MIN_FONT, 0.1), MIN_FONT);
+
+  // Deux doigts posés l'un sur l'autre donneraient un rapport qui explose.
+  for (const impossible of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(pinchSize(24, impossible), 24, 'un rapport illisible ne change rien');
+  }
+  assert.ok(PINCH_MIN_SPREAD > 0, 'un pincement doit partir d’un écartement mesurable');
+});
+
+/**
+ * Une taille illisible rend le **défaut**, pas la borne basse : un réglage
+ * absent n'est pas un lecteur qui a demandé la plus petite lettre.
+ */
+test('clampSize borne, et se replie sur le défaut', () => {
+  assert.equal(clampSize(MIN_FONT - 5), MIN_FONT);
+  assert.equal(clampSize(MAX_FONT + 5), MAX_FONT);
+  assert.equal(clampSize('24'), 24, 'le réglage revient de SQLite en chaîne');
+  assert.equal(clampSize(21.6), 22, 'la taille est un entier de pixels');
+  for (const rien of [undefined, null, '', 'grand', Number.NaN]) {
+    assert.equal(clampSize(rien), DEFAULT_FONT_SIZE);
+  }
+});
+
+/**
+ * Les bornes vivaient **en double**, une copie par écran, avec la valeur de
+ * départ écrite en clair à trois endroits. C'est la configuration qui avait
+ * produit la police orpheline et le thème `sepia` mort.
+ */
+test('les deux écrans tiennent les bornes de leur propriétaire unique', () => {
+  for (const view of [
+    '../src/renderer/js/views/reader.js',
+    '../src/renderer/js/views/settings.js',
+  ]) {
+    const source = read(view);
+    assert.equal(/const MIN_FONT\s*=/.test(source), false, `${view} redéclare la borne basse`);
+    assert.equal(/const MAX_FONT\s*=/.test(source), false, `${view} redéclare la borne haute`);
+    assert.ok(source.includes('shared/reader-size.js'), `${view} doit tenir les bornes d’ailleurs`);
+  }
+});
+
+/**
+ * Un pincement produit une taille par image. L'écrire à chaque pas enverrait
+ * des dizaines d'écritures dans `user.sqlite` pour un seul geste — et
+ * `user.sqlite` est le seul fichier qu'on ne puisse pas retélécharger. La
+ * taille se pose sans s'écrire, et s'écrit une fois quand les doigts se lèvent.
+ */
+test('le pincement pose la taille sans l’écrire, et l’écrit une fois', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+
+  const applique = methode(reader, '#applySize(value) {');
+  assert.ok(applique.includes('--reader-size'), 'la taille se pose sur la page');
+  assert.equal(applique.includes('setSetting('), false, 'poser la taille ne l’écrit pas');
+
+  const bouge = methode(reader, '#onPointerMove(event) {');
+  assert.ok(bouge.includes('this.#applySize('), 'le geste pose, il n’écrit pas');
+  assert.ok(bouge.includes('pinchSize('), 'le rapport vient de son propriétaire unique');
+  assert.equal(bouge.includes('setSetting('), false, 'une écriture par image est de trop');
+
+  const leve = methode(reader, '#endPinch() {');
+  assert.ok(leve.includes("setSetting('reader.fontSize'"), 'la taille s’écrit quand on lâche');
+  assert.ok(
+    methode(reader, '#endPointer(event) {').includes('this.#endPinch()'),
+    'un doigt levé achève le pincement',
+  );
+
+  // Un doigt levé hors de la colonne n'y laisse pas de `pointerup` : le premier
+  // doigt du geste suivant est le seul instant sûr pour oublier les traînards,
+  // sans quoi deux gestes de suite feraient un pincement fantôme.
+  const bas = methode(reader, '#onPointerDown(event) {');
+  assert.ok(bas.includes('this.#pointers.clear()'), 'les doigts fantômes doivent s’oublier');
+  assert.ok(bas.includes('this.#endPinch()'), 'et le pincement resté ouvert doit s’écrire');
+
+  // Deux doigts, deux positions : le navigateur n'en livre qu'une par message.
+  assert.ok(/#pointers = new Map\(\)/.test(reader), 'le lecteur doit tenir les deux doigts');
+  assert.ok(/addEventListener\('pointermove'/.test(reader), 'le pincement se mesure en chemin');
+});
+
+/**
+ * Un pincement n'est pas un glissement, et le `click` qu'il laisse derrière lui
+ * ne doit pas tourner la page — le même défaut que le clic résiduel du
+ * glissement, avec deux doigts au lieu d'un.
+ */
+test('un pincement ne tourne aucune page', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const depart = methode(reader, '#startPinch() {');
+  assert.ok(depart.includes('this.#swipeFrom = null'), 'le glissement en cours est abandonné');
+  const bouge = methode(reader, '#onPointerMove(event) {');
+  assert.ok(bouge.includes('this.#swiped = true'), 'le clic résiduel doit être avalé');
 });
 
 // ------------------------------------------------------- tourner au doigt
