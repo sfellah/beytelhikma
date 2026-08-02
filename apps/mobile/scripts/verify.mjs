@@ -372,11 +372,19 @@ controle('www/ n’est pas suivi par git', () => {
 
   // Et non suivi ne suffit pas : sans règle d'exclusion, le premier `git add .`
   // les ferait entrer.
-  const ignore = spawnSync('git', ['check-ignore', '-q', '--', wwwRelatif], { cwd: repoRoot });
+  //
+  // La question porte sur un fichier **dans** `www/`, jamais sur le dossier :
+  // la règle `www/` ne vise que des répertoires, et `check-ignore` interrogé
+  // sur un chemin qui n'existe pas encore ne peut pas savoir que c'en est un.
+  // Le contrôle échouait donc sur tout dépôt fraîchement cloné — c'est-à-dire
+  // en CI, précisément là où il doit servir. Le chemin interrogé est celui que
+  // `git add .` verrait : un fichier engendré.
+  const sonde = `${wwwRelatif}/index.html`;
+  const ignore = spawnSync('git', ['check-ignore', '-q', '--', sonde], { cwd: repoRoot });
   if (ignore.error) return `git indisponible : ${ignore.error.message}`;
   return ignore.status === 0
     ? null
-    : `\`git check-ignore ${wwwRelatif}\` rend ${ignore.status} : aucune règle ne l’exclut. ${rappel}`;
+    : `\`git check-ignore ${sonde}\` rend ${ignore.status} : aucune règle ne l’exclut. ${rappel}`;
 });
 
 console.log(
