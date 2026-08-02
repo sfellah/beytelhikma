@@ -8,10 +8,15 @@ import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { cover } from '../components/cover.js';
+import { curriculumCard } from '../components/curriculum-card.js';
 import { reveal, sectionHead } from '../components/section.js';
 import { asyncView } from '../components/states.js';
 
-/** Accueil : reprise de lecture, nouveautés, disciplines, auteur en vedette. */
+/**
+ * Accueil : reprise de lecture, étagère, cursus, disciplines, siècles,
+ * nouveautés, auteur en vedette — dans cet ordre, qui va de ce qu'on a déjà
+ * ouvert vers ce qu'on n'a pas encore vu.
+ */
 export function homeView(host) {
   const content = renderShell(host, { active: 'home' });
   asyncView(content, load, render);
@@ -19,18 +24,26 @@ export function homeView(host) {
 }
 
 async function load() {
-  const [resume, library, recent, disciplines, eras, undated, featured] = await Promise.all([
-    repository.getContinueReading(),
-    // L'étagère est une bande, pas un inventaire : en demander une page évite
-    // de joindre le catalogue pour chaque livre installé, dont on n'affichera
-    // que quatre. Un de plus que `SHELF_LIMIT` : la reprise en sort.
-    repository.getLibrary({ limit: SHELF_LIMIT + 1, sort: 'recent' }),
-    repository.getRecentBooks({ limit: 12 }),
-    repository.getTopCategories({ limit: DISCIPLINE_LIMIT, sample: DISCIPLINE_SAMPLE }),
-    repository.getEras(),
-    repository.getUndatedCount(),
-    repository.getFeaturedAuthor(),
-  ]);
+  const [resume, library, recent, curricula, disciplines, eras, undated, featured] =
+    await Promise.all([
+      repository.getContinueReading(),
+      // L'étagère est une bande, pas un inventaire : en demander une page évite
+      // de joindre le catalogue pour chaque livre installé, dont on n'affichera
+      // que quatre. Un de plus que `SHELF_LIMIT` : la reprise en sort.
+      repository.getLibrary({ limit: SHELF_LIMIT + 1, sort: 'recent' }),
+      repository.getRecentBooks({ limit: 12 }),
+      // Les cursus sont une liste close et courte : il n'y a pas de page à
+      // demander, et c'est la vue qui n'en montre que quelques-uns. Pas de
+      // `catch` : l'accueil échoue déjà d'un bloc pour toutes ses autres
+      // sections, et rattraper celle-ci ferait disparaître un dépôt cassé sans
+      // que rien ne le dise. Une liste vide est une réponse — sur le jeu
+      // d'exemple, aucun identifiant `sh-*` ne répond et la section s'efface.
+      repository.getCurricula(),
+      repository.getTopCategories({ limit: DISCIPLINE_LIMIT, sample: DISCIPLINE_SAMPLE }),
+      repository.getEras(),
+      repository.getUndatedCount(),
+      repository.getFeaturedAuthor(),
+    ]);
 
   const [page, featuredBooks] = await Promise.all([
     resume?.progress?.pageId
@@ -48,6 +61,7 @@ async function load() {
       .slice(0, SHELF_LIMIT),
     libraryTotal: library.total,
     recent,
+    curricula,
     disciplines,
     eras: eras.filter((era) => era.bookCount > 0),
     undated,
@@ -61,12 +75,17 @@ function render(data) {
   const root = h(
     'div',
     { class: 'home' },
+    // L'ordre va de ce qu'on a déjà ouvert vers ce qu'on n'a pas encore vu :
+    // la reprise, l'étagère, les cursus qu'on suit, puis le fonds — les
+    // disciplines, les siècles, les nouveautés — et l'auteur en vedette.
+    // Les nouveautés étaient en deuxième, avant tout ce qui est à soi.
     heroSection(data),
     // `data-reveal` 1 est libre : le héros compte pour deux blocs visuels.
     shelfSection(data.shelf, data.libraryTotal),
-    recentSection(data.recent),
+    curriculaSection(data.curricula),
     disciplinesSection(data.disciplines),
     erasSection(data.eras, data.undated),
+    recentSection(data.recent),
     featuredSection(data.featured, data.featuredBooks),
   );
   return reveal(root);
@@ -295,6 +314,56 @@ function shelfRow({ book, percent: value, progress }) {
   );
 }
 
+// ------------------------------------------------------------------ cursus
+
+/**
+ * Combien de cursus l'accueil propose. La liste est close et courte — une
+ * poignée de parcours écrits à la main — mais elle n'a pas à tenir tout
+ * l'écran : ce qu'on suit se reprend, ce qu'on ne suit pas se découvre depuis
+ * `/curricula`.
+ */
+const CURRICULA_LIMIT = 3;
+
+/**
+ * Les cursus en cours, les plus avancés d'abord.
+ *
+ * Trier par avancement met en tête celui qu'on est en train de suivre, et
+ * relègue ceux qu'on n'a pas commencés — sans les cacher : le lien du titre
+ * mène à la liste entière, et le sous-titre dit combien il y en a.
+ */
+function curriculaSection(curricula) {
+  if (!curricula?.length) return null;
+  const ordonnes = [...curricula].sort((a, b) => b.percent - a.percent);
+
+  return h(
+    'section',
+    {
+      class: 'section-block',
+      'aria-labelledby': 'curricula-title',
+      'data-reveal': 3,
+    },
+    sectionHead(
+      'curricula-title',
+      t('curricula.title'),
+      t('curricula.subtitle'),
+      curricula.length > CURRICULA_LIMIT
+        ? [
+            h(
+              'a',
+              { class: 'button button--tonal', href: '#/curricula' },
+              h('span', {}, t('home.allCurricula', { count: curricula.length })),
+            ),
+          ]
+        : null,
+    ),
+    h(
+      'div',
+      { class: 'curricula__grid' },
+      ordonnes.slice(0, CURRICULA_LIMIT).map(curriculumCard),
+    ),
+  );
+}
+
 // -------------------------------------------------------------- nouveautés
 
 function recentSection(recent) {
@@ -350,7 +419,7 @@ function recentSection(recent) {
     {
       class: 'section-block recent',
       'aria-labelledby': 'recent-title',
-      'data-reveal': 3,
+      'data-reveal': 6,
     },
     sectionHead(
       'recent-title',
@@ -531,7 +600,7 @@ function featuredSection(featured, featuredBooks) {
     {
       class: 'section-block featured',
       'aria-labelledby': 'featured-title',
-      'data-reveal': 6,
+      'data-reveal': 7,
     },
     sectionHead('featured-title', t('home.featuredTitle'), t('home.featuredHint')),
     authorCard(featured, featuredBooks),

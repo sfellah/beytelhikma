@@ -277,6 +277,7 @@ export default {
   'home.resume': 'أكمل',
   'home.open': 'افتح',
   'home.allNew': 'عرض كل الإصدارات الجديدة',
+  'home.allCurricula': 'كل المسارات ({count})',
   'home.previous': 'السابق',
   'home.next': 'التالي',
   'home.recentTitle': 'المجموعات الحديثة',

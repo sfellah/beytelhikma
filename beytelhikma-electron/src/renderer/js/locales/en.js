@@ -268,6 +268,7 @@ export default {
   'home.resume': 'Resume',
   'home.open': 'Open',
   'home.allNew': 'See all new releases',
+  'home.allCurricula': 'All paths ({count})',
   'home.previous': 'Previous',
   'home.next': 'Next',
   'home.recentTitle': 'Recent additions',

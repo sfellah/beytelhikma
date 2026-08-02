@@ -31,10 +31,16 @@
   grid-column: span 12;
 }
 
+/* Le compte de livres et « toute la bibliothèque » sur **une seule ligne**.
+   Empilés, ils poussaient les cursus et les disciplines sous la ligne de
+   flottaison sur un téléphone, pour deux cartes qui ne disent chacune qu'une
+   chose. Côte à côte, ils tiennent la hauteur de la carte de reprise. */
 .bento__side {
   grid-column: span 12;
   display: grid;
-  gap: var(--space-lg);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+  align-items: stretch;
 }
 
 @media (min-width: 1024px) {
@@ -190,11 +196,14 @@
 
 /* ------------------------------------------------- colonne d'appoint */
 
+/* Les deux cartes partagent une ligne : elles se resserrent d'un cran et le
+   chiffre descend de 30 à 26 px. À deux par ligne sur un téléphone, la carte
+   pleine largeur d'avant aurait laissé un chiffre énorme au-dessus d'un vide. */
 .stat-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
+  gap: var(--space-xs);
+  padding: var(--space-md);
   border-radius: var(--radius-xl);
   background: var(--primary);
   color: var(--on-primary);
@@ -213,22 +222,30 @@
 
 .stat-card__value {
   font-family: var(--font-display);
-  font-size: 30px;
-  line-height: 42px;
+  font-size: 26px;
+  line-height: 34px;
   font-weight: 700;
 }
 
+/* La note dérive de l'encre de la carte, pas d'une teinte fixe. En nuit,
+   `--primary-fixed-dim` valait *exactement* le fond de la carte — mesuré
+   `rgb(149 211 186)` sur `rgb(149 211 186)` : « ٢ قيد القراءة » était écrit à
+   l'encre invisible. Le thème échange les rôles de la palette, une couleur
+   choisie pour le jour ne peut donc pas être citée en dur ici. */
 .stat-card__note {
   margin-top: auto;
-  color: var(--primary-fixed-dim);
+  color: color-mix(in srgb, var(--on-primary) 72%, transparent);
 }
 
+/* Sur une demi-largeur, le libellé et la pastille ne tiennent plus côte à
+   côte : la carte se met debout et la flèche passe sous le texte. */
 .quick-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-lg);
+  gap: var(--space-sm);
+  padding: var(--space-md);
   border-radius: var(--radius-xl);
   background: var(--surface-container-high);
   transition: background-color 0.2s;
@@ -253,8 +270,10 @@
 .quick-card__go {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  align-self: flex-end;
+  margin-top: auto;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: var(--radius-pill);
   background: var(--surface-container-lowest);
