@@ -190,6 +190,124 @@ test('le contrat de données est écrit tel que la page le consomme', async () =
   assert.ok(index.latest.notes.ar.length > 0);
 });
 
+/* ------------------------------------------------------------- Android ---- */
+
+test('sans APK publié, Android est annoncé et aucun lien n’est fabriqué', async () => {
+  // Le cas réel aujourd'hui : l'application Android existe, aucune chaîne ne
+  // publie son APK. La plateforme doit se voir — sinon elle ne se distingue
+  // pas d'une plateforme oubliée — et ne porter aucun lien.
+  const html = await read('fr/download/index.html');
+  assert.match(html, /data-platform="android"/);
+  assert.match(html, /Pas encore publié/);
+  assert.doesNotMatch(html, /\.apk/);
+});
+
+test('l’APK publié est proposé avec l’URL de la Release, jamais une URL devinée', async () => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-apk-'));
+  await build({
+    out: path.join(scratch, 'dist'),
+    dataDir: path.join(HERE, 'fixtures', 'data-apk'),
+    books: 8568,
+  });
+  const html = await fs.readFile(
+    path.join(scratch, 'dist', 'fr', 'download', 'index.html'),
+    'utf8',
+  );
+
+  // La fixture nomme l'artefact `beyt-el-hikma-0.3.0.apk` et le publie sous
+  // `renomme-a-la-main.apk` : seule l'URL de la Release doit paraître.
+  assert.match(html, /renomme-a-la-main\.apk/);
+  assert.doesNotMatch(html, /beyt-el-hikma-0\.3\.0\.apk"/);
+  assert.match(html, /data-platform="android"/);
+  assert.match(html, /Paquet APK/);
+  assert.doesNotMatch(html, /Pas encore publié/);
+  // 47 185 920 octets → 45 Mo.
+  assert.match(html, /45 Mo/);
+  // `.idsig` est un fichier d'outil : il ne se propose pas.
+  assert.doesNotMatch(html, /idsig/);
+
+  const index = JSON.parse(await fs.readFile(path.join(scratch, 'dist', 'releases.json'), 'utf8'));
+  assert.equal(index.latest.assets.filter((asset) => asset.os === 'android').length, 1);
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
+test('l’avertissement de signature de l’APK est dit dans les trois langues', async () => {
+  // Il est dit là où l'on clique, dans la carte Android, et pas en note de bas
+  // de page. Une langue qui l'oublierait laisserait un lecteur devant une
+  // alerte d'Android sans explication.
+  const expected = {
+    fr: [/L’APK n’est pas signé/, /Installer quand même/],
+    en: [/The APK is not signed/, /Install anyway/],
+    ar: [/حزمة APK غير موقَّعة/, /التثبيت على أيّة حال/],
+  };
+  for (const [locale, patterns] of Object.entries(expected)) {
+    const html = await read(`${locale}/download/index.html`);
+    for (const pattern of patterns) assert.match(html, pattern, `manquant en ${locale}`);
+  }
+});
+
+test('l’avertissement vit dans la carte de sa plateforme, pas dans le cahier de côté', async () => {
+  // SmartScreen a longtemps vécu dans l'aside « configuration requise », où il
+  // parlait de Windows à qui téléchargeait un .deb. Les deux avertissements
+  // suivent maintenant la même règle, portée par `PLATFORMS[].notice`.
+  const html = await read('fr/download/index.html');
+  const windows = html.slice(html.indexOf('data-platform="windows"'), html.indexOf('data-platform="linux"'));
+  assert.match(windows, /Windows a protégé votre ordinateur/);
+  const android = html.slice(html.indexOf('data-platform="android"'));
+  assert.match(android, /L’APK n’est pas signé/);
+  assert.doesNotMatch(html.slice(html.indexOf('class="specs"')), /notice/);
+});
+
+test('les trois systèmes portent un tracé, et aucun n’est un logo de marque', async () => {
+  const sprite = await fs.readFile(path.join(HERE, '..', 'assets', 'icons.svg'), 'utf8');
+  for (const name of ['windows', 'linux', 'android']) {
+    assert.match(sprite, new RegExp(`id="i-${name}"`), `tracé manquant : ${name}`);
+  }
+  // Monochromes et pilotés par le contexte : aucune couleur en dur, sinon un
+  // tracé cesserait de suivre l'encre de la page.
+  assert.doesNotMatch(sprite, /fill="#|stroke="#/);
+
+  // Et ils sont bien posés sur les cartes, par `PLATFORMS[].icon`.
+  const html = await read('en/download/index.html');
+  for (const name of ['windows', 'linux', 'android']) {
+    assert.match(html, new RegExp(`href="#i-${name}"`), `tracé non posé : ${name}`);
+  }
+});
+
+test('l’accueil annonce Android au même rang, et dit ce qui n’est pas publié', async () => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-accueil-'));
+  await build({
+    out: path.join(scratch, 'dist'),
+    dataDir: path.join(HERE, 'fixtures', 'data'),
+    books: 8568,
+  });
+  const html = await fs.readFile(path.join(scratch, 'dist', 'en', 'index.html'), 'utf8');
+
+  assert.match(html, /Available for/);
+  for (const name of ['Windows', 'Linux', 'Android']) {
+    assert.match(html, new RegExp(`<span>${name}</span>`), `plateforme absente : ${name}`);
+  }
+  // La fixture ne porte pas d'APK : Android est là, et se dit « bientôt ».
+  assert.match(html, /hero__platform--pending/);
+  assert.match(html, /hero__soon">soon/);
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
+test('sans version publiée, l’accueil ne liste aucune plateforme', async () => {
+  // Le rappel et l'appel disent déjà « première version en préparation » :
+  // répéter le fait trois fois, une par plateforme, ne l'apprend à personne.
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-sans-'));
+  await build({
+    out: path.join(scratch, 'dist'),
+    dataDir: path.join(scratch, 'data'),
+    books: 8568,
+  });
+  const html = await fs.readFile(path.join(scratch, 'dist', 'en', 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /hero__platforms/);
+  assert.match(html, /First release in preparation/);
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
 test('une plateforme requise sans artefact fait échouer le build', async () => {
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-partiel-'));
   const dataDir = path.join(scratch, 'data');

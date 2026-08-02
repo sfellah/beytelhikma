@@ -8,14 +8,27 @@
  * rien quand le script échoue.
  *
  * Les liens viennent des artefacts réellement publiés, jamais d'une URL
- * devinée à partir du numéro de version.
+ * devinée à partir du numéro de version. Une plateforme annoncée dont la
+ * Release ne porte aucun artefact garde donc sa carte, et y dit qu'elle n'est
+ * pas encore publiée : nommer une plateforme sans lien est une réponse, un lien
+ * fabriqué serait un 404 différé.
  */
-import { PLATFORMS, url } from '../config.mjs';
+import { PLATFORMS, platformIcon, url } from '../config.mjs';
 import { formatSize } from '../lib/releases.mjs';
 import { attrs, escapeHtml, icon, safeUrl } from '../lib/html.mjs';
 import { pagePath } from './layout.mjs';
 
-const PLATFORM_ICON = { windows: 'laptop', linux: 'terminal', macos: 'laptop' };
+/**
+ * Un encadré d'avertissement, sobre : il dit une gêne réelle à l'installation,
+ * il ne doit ni se cacher ni crier. `key` désigne le couple `.heading`/`.body`
+ * déclaré par la plateforme dans `config.mjs`.
+ */
+function notice(t, key) {
+  return `<div class="notice">
+        <h3 class="notice__title">${icon('alert')}${escapeHtml(t(`${key}.heading`))}</h3>
+        <p class="notice__body">${escapeHtml(t(`${key}.body`))}</p>
+      </div>`;
+}
 
 function assetRow(asset, { t, locale }) {
   const size = formatSize(asset.size);
@@ -39,13 +52,27 @@ function assetRow(asset, { t, locale }) {
       </li>`;
 }
 
+/**
+ * La carte d'une plateforme : son nom, son tracé, puis ses artefacts — ou, si
+ * la Release n'en porte aucun, la mention qu'elle n'est pas encore publiée.
+ *
+ * L'avertissement vient **après** la liste, contre le lien qu'on vient de lire.
+ * Il est rendu dans les deux cas : ce qu'il décrit est une propriété du build,
+ * pas d'un fichier, et quelqu'un qui attend une plateforme a le droit de savoir
+ * ce qu'il recevra avant de l'attendre.
+ */
 function platformCard(platform, assets, context) {
   const { t } = context;
-  return `<section class="platform"${attrs({ 'data-platform': platform })}>
-      <h2 class="platform__title">${icon(PLATFORM_ICON[platform] ?? 'laptop')}${escapeHtml(t(`platform.${platform}`))}</h2>
-      <ul class="platform__assets">
+  const body = assets.length
+    ? `<ul class="platform__assets">
         ${assets.map((asset) => assetRow(asset, context)).join('\n        ')}
-      </ul>
+      </ul>`
+    : `<p class="platform__pending">${escapeHtml(t('platform.pending'))}</p>`;
+
+  return `<section class="platform"${attrs({ 'data-platform': platform.key })}>
+      <h2 class="platform__title">${icon(platformIcon(platform.key))}${escapeHtml(t(`platform.${platform.key}`))}</h2>
+      ${body}
+      ${platform.notice ? notice(t, platform.notice) : ''}
     </section>`;
 }
 
@@ -62,15 +89,16 @@ function specs(t) {
     )
     .join('\n      ');
 
+  // L'avertissement SmartScreen a quitté ce cahier pour la carte Windows : un
+  // avertissement d'installation appartient à la plateforme qu'il concerne, et
+  // à l'endroit où l'on clique. Dans une colonne de côté intitulée
+  // « configuration requise », il parlait de Windows à qui téléchargeait un
+  // .deb. Une seule règle, portée par `PLATFORMS[].notice`.
   return `<aside class="specs">
     <h2 class="specs__title">${escapeHtml(t('specs.heading'))}</h2>
     <dl class="specs__list">
       ${rows}
     </dl>
-    <div class="notice">
-      <h3 class="notice__title">${icon('alert')}${escapeHtml(t('smartscreen.heading'))}</h3>
-      <p class="notice__body">${escapeHtml(t('smartscreen.body'))}</p>
-    </div>
   </aside>`;
 }
 
@@ -90,15 +118,20 @@ export function download({ locale, t, fmtDate, latest, repoUrl }) {
     byPlatform.get(asset.os).push(asset);
   }
 
+  // Toutes les plateformes annoncées, **qu'elles portent un artefact ou non** :
+  // c'est la seule façon de dire « Android existe, il n'est pas encore
+  // publié ». Filtrer sur la présence d'un artefact la faisait disparaître,
+  // et une plateforme absente ne se distingue pas d'une plateforme oubliée.
+  // Ce qu'une Release porte en plus — un .dmg un jour — suit derrière.
   const ordered = [
-    ...PLATFORMS.map((platform) => platform.key).filter((key) => byPlatform.has(key)),
-    ...[...byPlatform.keys()].filter(
-      (key) => !PLATFORMS.some((platform) => platform.key === key),
-    ),
+    ...PLATFORMS,
+    ...[...byPlatform.keys()]
+      .filter((key) => !PLATFORMS.some((platform) => platform.key === key))
+      .map((key) => ({ key })),
   ];
 
   const cards = ordered
-    .map((platform) => platformCard(platform, byPlatform.get(platform), { t, locale }))
+    .map((platform) => platformCard(platform, byPlatform.get(platform.key) ?? [], { t, locale }))
     .join('\n    ');
 
   return `<section class="lead">

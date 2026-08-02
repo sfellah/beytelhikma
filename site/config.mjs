@@ -67,16 +67,44 @@ export function digitsLocale(locale) {
 }
 
 /**
- * Les plateformes annoncées, dans l'ordre d'affichage.
+ * Les plateformes annoncées, dans l'ordre d'affichage. **Seule liste** : le
+ * tracé, l'exigence et l'avertissement d'installation d'une plateforme se
+ * lisent ici, et le gabarit ne connaît aucune de ces trois choses par lui-même.
+ * Une seconde table dans `templates/download.mjs` a déjà existé — c'est la
+ * configuration qui a produit, ailleurs dans le projet, la police orpheline et
+ * le thème `sepia` mort.
  *
  * `required` fait échouer le build si la dernière version ne porte aucun
  * artefact pour cette plateforme : un bouton qui pointe vers rien est pire
  * qu'un bouton absent, parce qu'il se découvre chez l'utilisateur.
+ *
+ * Android est annoncé et **non exigé**. L'application existe (`apps/mobile`,
+ * Capacitor), mais aucun workflow ne construit encore l'APK : l'exiger ferait
+ * échouer chaque build du site pour une plateforme dont on sait qu'elle n'a pas
+ * d'artefact. Annoncée sans artefact, elle se dit « pas encore publiée » et ne
+ * fabrique aucun lien — la page ne devine jamais une URL, pas même pour une
+ * plateforme qu'elle nomme.
+ *
+ * `notice` désigne un couple de clés `<notice>.heading` / `<notice>.body` posé
+ * **dans la carte de la plateforme**, là où l'on clique — jamais en note de bas
+ * de page, qui est l'endroit où l'on ne lit pas.
  */
 export const PLATFORMS = [
-  { key: 'windows', required: true, icon: 'windows' },
+  { key: 'windows', required: true, icon: 'windows', notice: 'smartscreen' },
   { key: 'linux', required: true, icon: 'linux' },
+  { key: 'android', required: false, icon: 'android', notice: 'apk.unsigned' },
 ];
+
+/**
+ * Le tracé d'une plateforme, y compris celles qu'on n'annonce pas.
+ *
+ * `macos` n'est pas dans la liste — aucun build n'en sort — mais une Release
+ * pourrait en porter un artefact, et une carte sans icône se verrait. Le repli
+ * est un portable : neutre, et jamais faux.
+ */
+export function platformIcon(key) {
+  return PLATFORMS.find((platform) => platform.key === key)?.icon ?? 'laptop';
+}
 
 /** Les pages rendues, une fois par langue. */
 export const PAGES = ['index', 'download', 'releases'];

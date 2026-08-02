@@ -1,0 +1,30 @@
+[
+  {
+    "tag_name": "v0.3.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-08-01T10:00:00Z",
+    "assets": [
+      {
+        "name": "Beyt El Hikma Setup 0.3.0.exe",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/Beyt%20El%20Hikma%20Setup%200.3.0.exe",
+        "size": 98566144
+      },
+      {
+        "name": "beyt-el-hikma-0.3.0.AppImage",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/beyt-el-hikma-0.3.0.AppImage",
+        "size": 104857600
+      },
+      {
+        "name": "beyt-el-hikma-0.3.0.apk",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/renomme-a-la-main.apk",
+        "size": 47185920
+      },
+      {
+        "name": "beyt-el-hikma-0.3.0.apk.idsig",
+        "browser_download_url": "https://github.com/sfellah/beytelhikma/releases/download/v0.3.0/beyt-el-hikma-0.3.0.apk.idsig",
+        "size": 2048
+      }
+    ]
+  }
+]

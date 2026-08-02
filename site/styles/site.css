@@ -437,6 +437,70 @@ html[lang='ar'] .hero__lede {
   margin-block-start: 2.5rem;
 }
 
+/* Les systèmes, sous les appels : un libellé de marge, puis trois noms tracés.
+   Ici l'icône reste — c'est le seul endroit de la page où l'on cherche du
+   regard avant de lire, et un manchot se reconnaît plus vite que le mot
+   « Linux ». Ce qui n'est pas encore publié pâlit et le dit. */
+.hero__available {
+  margin-block-start: 2.25rem;
+}
+
+.hero__available-title {
+  font-family: var(--margin-voice);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .hero__available-title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.hero__platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.75rem;
+  margin: 0.7rem 0 0;
+  padding-inline: 0;
+  list-style: none;
+}
+
+.hero__platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--margin-voice);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.hero__platform .icon {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  color: var(--ink-faint);
+}
+
+.hero__platform--pending {
+  color: var(--ink-faint);
+}
+
+.hero__soon {
+  font-style: normal;
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+html[lang='ar'] .hero__soon {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
 /* Les trois garanties, en pied de page de titre : un filet au-dessus, trois
    colonnes, aucune icône. Ce sont des faits, pas des arguments. */
 .trust {
@@ -718,6 +782,16 @@ html[lang='ar'] .platform__recommended {
   list-style: none;
 }
 
+/* Une plateforme annoncée sans artefact. Pas de bouton grisé : un bouton qui
+   ne fait rien s'essaie deux fois avant qu'on en conclue qu'il est cassé. Une
+   phrase, dans l'encre pâle des métadonnées. */
+.platform__pending {
+  font-family: var(--margin-voice);
+  font-size: 0.9375rem;
+  color: var(--ink-faint);
+  max-inline-size: 52ch;
+}
+
 .asset__link {
   display: flex;
   align-items: baseline;
@@ -843,11 +917,15 @@ html[lang='ar'] .specs__row dt {
   font-size: 0.9375rem;
 }
 
-/* L'avertissement Windows : un encadré sobre. Il dit une gêne réelle, il ne
-   doit ni se cacher ni crier. */
+/* L'avertissement d'installation : un encadré sobre. Il dit une gêne réelle,
+   il ne doit ni se cacher ni crier. Il vit dans la carte de la plateforme qu'il
+   concerne — SmartScreen sous Windows, la signature de débogage sous Android —
+   contre le lien qu'on vient de lire, et non dans une colonne de côté qu'on
+   parcourt après avoir cliqué. */
 .notice {
-  margin-block-start: 2rem;
+  margin-block-start: 1.5rem;
   padding: 1.1rem 1.25rem;
+  max-inline-size: 56ch;
   background: color-mix(in srgb, var(--secondary-container) 45%, var(--paper));
   border-inline-start: 1px solid var(--secondary);
 }

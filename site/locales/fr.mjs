@@ -88,25 +88,31 @@ export default {
 
   'platform.windows': 'Windows',
   'platform.linux': 'Linux',
+  'platform.android': 'Android',
   'platform.macos': 'macOS',
   'platform.unknown': 'votre système',
+  'platform.pending': 'Pas encore publié : la dernière version ne porte aucun fichier pour ce système.',
+  'platform.soon': 'bientôt',
 
   'asset.installer': 'Programme d’installation',
   'asset.portable': 'Version portable',
   'asset.appimage': 'AppImage',
   'asset.deb': 'Paquet .deb',
   'asset.rpm': 'Paquet .rpm',
+  'asset.apk': 'Paquet APK',
   'asset.archive': 'Archive',
   'asset.installer.hint': 'Installe l’application et crée un raccourci.',
   'asset.portable.hint': 'S’exécute sans installation. Ne se met pas à jour toute seule.',
   'asset.appimage.hint': 'Rendre exécutable, puis lancer. Se met à jour toute seule.',
   'asset.deb.hint': 'Debian, Ubuntu et dérivées. Mise à jour par le gestionnaire de paquets.',
   'asset.rpm.hint': 'Fedora, openSUSE et dérivées.',
+  'asset.apk.hint':
+    'S’installe depuis le fichier, sans boutique. Ne se met pas à jour toute seule.',
   'asset.archive.hint': 'À décompresser à la main.',
 
   'specs.heading': 'Configuration requise',
   'specs.os': 'Système',
-  'specs.os.value': 'Windows 10 ou 11 (64 bits) · Linux x86-64',
+  'specs.os.value': 'Windows 10 ou 11 (64 bits) · Linux x86-64 · Android 7.0 ou plus récent',
   'specs.ram': 'Mémoire',
   'specs.ram.value': '4 Go minimum, 8 Go conseillés',
   'specs.disk': 'Disque',
@@ -120,6 +126,14 @@ export default {
     + '« Windows a protégé votre ordinateur ». Cliquez sur « Informations complémentaires », '
     + 'puis sur « Exécuter quand même ». Vérifiez l’empreinte SHA-512 ci-dessus si vous '
     + 'voulez la certitude que le fichier est bien celui publié ici.',
+
+  'apk.unsigned.heading': 'L’APK n’est pas signé',
+  'apk.unsigned.body':
+    'Il porte la clé de débogage d’Android, pas un certificat d’éditeur. À l’installation, '
+    + 'Android annonce donc une source inconnue et demande l’autorisation d’installer depuis '
+    + 'ce fichier ; Play Protect peut la bloquer, et propose alors « Installer quand même ». '
+    + 'Le jour où une clé de publication existera, il faudra désinstaller avant de mettre à '
+    + 'jour : Android refuse de remplacer une application par une autre signature.',
 
   'releases.title': 'Versions de Beyt El Hikma',
   'releases.description': 'Notes de version, du plus récent au plus ancien.',

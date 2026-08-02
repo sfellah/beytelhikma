@@ -31,20 +31,29 @@
   var container = document.querySelector('[data-platforms]');
   if (!container) return;
 
-  // Android se présente comme Linux : proposer une AppImage à un téléphone
-  // serait un lien mort déguisé en recommandation.
-  if (/android|iphone|ipad/i.test(navigator.userAgent || '')) return;
+  // iOS n'a aucun build, et n'en aura pas tant que rien ne le construit : sur
+  // un iPhone, aucune carte n'est la bonne, et en mettre une en avant serait
+  // une recommandation fausse.
+  var agent = String(navigator.userAgent || '');
+  if (/iphone|ipad|ipod/i.test(agent)) return;
 
-  // Aucune détection d'architecture : la seule cible publiée est x86-64, et
-  // deviner `arm64` pour proposer un binaire qui n'existe pas ne rendrait
-  // service à personne.
+  // Aucune détection d'architecture : les cibles publiées sont x86-64 pour le
+  // bureau et une archive unique pour Android. Deviner `arm64` pour proposer un
+  // binaire qui n'existe pas ne rendrait service à personne.
   var hinted = navigator.userAgentData && navigator.userAgentData.platform;
-  var haystack = String(hinted || navigator.userAgent || '').toLowerCase();
+  var haystack = String(hinted || agent).toLowerCase();
   var os = null;
-  if (haystack.indexOf('win') === 0 || haystack.indexOf('windows') !== -1) os = 'windows';
+  // Android **avant** Linux, et l'ordre est tout : un Android se présente comme
+  // Linux, donc tester Linux d'abord enverrait chaque téléphone sur l'AppImage.
+  if (haystack.indexOf('android') !== -1) os = 'android';
+  else if (haystack.indexOf('win') === 0 || haystack.indexOf('windows') !== -1) os = 'windows';
   else if (haystack.indexOf('linux') !== -1 || haystack.indexOf('x11') !== -1) os = 'linux';
   else if (haystack.indexOf('mac') !== -1) os = 'macos';
   if (!os) return;
+
+  // La carte peut être celle d'une plateforme pas encore publiée : la remonter
+  // reste juste. « Voici votre système, et il n'est pas encore sorti » est une
+  // réponse ; laisser chercher au bas de la page n'en est pas une.
 
   var card = container.querySelector('[data-platform="' + os + '"]');
   if (!card) return;

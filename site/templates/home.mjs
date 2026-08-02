@@ -13,7 +13,7 @@
  * dessus de chaque titre, et la grille de quatre cartes identiques. Une
  * capture devient une planche, une fonction devient une entrée de sommaire.
  */
-import { url } from '../config.mjs';
+import { PLATFORMS, url } from '../config.mjs';
 import { attrs, escapeHtml, icon } from '../lib/html.mjs';
 import { pagePath } from './layout.mjs';
 
@@ -32,6 +32,38 @@ function calls(locale, latest, t, defaultPlatform) {
       <a class="button button--primary"${attrs({ href: download, 'data-cta': 'primary' })}>${icon('download')}<span data-cta-label>${escapeHtml(label)}</span></a>
       <a class="link" href="${url(pagePath(locale, 'releases'))}">${escapeHtml(t('home.cta.secondary'))}</a>
     </p>`;
+}
+
+/**
+ * Les plateformes, nommées et tracées, sous les appels.
+ *
+ * Elle ne paraît **que si une version est publiée**. Sans Release, le rappel et
+ * l'appel disent déjà « première version en préparation » ; répéter le même
+ * fait trois fois, une par plateforme, ne l'apprendrait à personne.
+ *
+ * Chacune est marquée d'après les artefacts que la Release porte réellement,
+ * jamais d'après une liste écrite ici : c'est la même règle que les liens de la
+ * page de téléchargement, appliquée à un mot au lieu d'une URL. Android est
+ * donc au même rang que Windows et Linux, et se dit « bientôt » tant que rien
+ * n'en est publié.
+ */
+function platforms(latest, t) {
+  if (!latest) return '';
+
+  const items = PLATFORMS.map((platform) => {
+    const published = latest.assets.some((asset) => asset.os === platform.key);
+    const soon = published
+      ? ''
+      : `<em class="hero__soon">${escapeHtml(t('platform.soon'))}</em>`;
+    return `<li class="hero__platform${published ? '' : ' hero__platform--pending'}">${icon(platform.icon)}<span>${escapeHtml(t(`platform.${platform.key}`))}</span>${soon}</li>`;
+  }).join('\n        ');
+
+  return `<div class="hero__available">
+      <h2 class="hero__available-title">${escapeHtml(t('home.platforms'))}</h2>
+      <ul class="hero__platforms">
+        ${items}
+      </ul>
+    </div>`;
 }
 
 /**
@@ -84,6 +116,7 @@ export function home({ locale, t, latest, books, defaultPlatform }) {
       <h1 class="hero__heading">${escapeHtml(t('home.heading'))}<br /><span class="hero__accent">${escapeHtml(t('home.heading.accent'))}</span></h1>
       <p class="hero__lede">${escapeHtml(t('home.lede', { books }))}</p>
       ${calls(locale, latest, t, defaultPlatform)}
+      ${platforms(latest, t)}
     </div>
     <ul class="trust">
       ${trust}

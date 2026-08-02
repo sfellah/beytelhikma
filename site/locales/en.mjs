@@ -78,25 +78,30 @@ export default {
 
   'platform.windows': 'Windows',
   'platform.linux': 'Linux',
+  'platform.android': 'Android',
   'platform.macos': 'macOS',
   'platform.unknown': 'your system',
+  'platform.pending': 'Not published yet: the latest release carries no file for this system.',
+  'platform.soon': 'soon',
 
   'asset.installer': 'Installer',
   'asset.portable': 'Portable build',
   'asset.appimage': 'AppImage',
   'asset.deb': '.deb package',
   'asset.rpm': '.rpm package',
+  'asset.apk': 'APK package',
   'asset.archive': 'Archive',
   'asset.installer.hint': 'Installs the application and creates a shortcut.',
   'asset.portable.hint': 'Runs without installing. Does not update itself.',
   'asset.appimage.hint': 'Make it executable, then run. Updates itself.',
   'asset.deb.hint': 'Debian, Ubuntu and derivatives. Updated by the package manager.',
   'asset.rpm.hint': 'Fedora, openSUSE and derivatives.',
+  'asset.apk.hint': 'Installs from the file, without a store. Does not update itself.',
   'asset.archive.hint': 'Unpack it yourself.',
 
   'specs.heading': 'System requirements',
   'specs.os': 'System',
-  'specs.os.value': 'Windows 10 or 11 (64-bit) · Linux x86-64',
+  'specs.os.value': 'Windows 10 or 11 (64-bit) · Linux x86-64 · Android 7.0 or later',
   'specs.ram': 'Memory',
   'specs.ram.value': '4 GB minimum, 8 GB recommended',
   'specs.disk': 'Disk',
@@ -109,6 +114,13 @@ export default {
     'The installer is not signed with a commercial certificate. Windows will show '
     + '“Windows protected your PC”. Click “More info”, then “Run anyway”. Check the SHA-512 '
     + 'checksum above if you want certainty that the file is the one published here.',
+
+  'apk.unsigned.heading': 'The APK is not signed',
+  'apk.unsigned.body':
+    'It carries the Android debug key, not a publisher certificate. Android will therefore '
+    + 'report an unknown source and ask you to allow installing from this file; Play Protect '
+    + 'may block it, offering “Install anyway”. Once a publishing key exists you will have to '
+    + 'uninstall before updating: Android refuses to replace an app with a different signature.',
 
   'releases.title': 'Beyt El Hikma releases',
   'releases.description': 'Release notes, newest first.',

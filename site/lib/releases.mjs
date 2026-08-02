@@ -29,6 +29,12 @@ export function classifyAsset(name) {
   if (/\.rpm$/i.test(name)) return { os: 'linux', kind: 'rpm', arch: 'x64' };
   if (/\.dmg$/i.test(name)) return { os: 'macos', kind: 'installer', arch: /arm64/i.test(name) ? 'arm64' : 'x64' };
   if (/\.zip$/i.test(name)) return { os: 'macos', kind: 'archive', arch: /arm64/i.test(name) ? 'arm64' : 'x64' };
+  // L'APK sort d'`assembleRelease` sans découpage par ABI : une seule archive
+  // pour tous les appareils, d'où `universal` et non une architecture devinée.
+  // `.apk.idsig` — la signature v4 qu'écrit `apksigner` à côté — ne tombe dans
+  // aucun motif et rend donc `null`, comme les `.blockmap` d'electron-updater :
+  // c'est un fichier d'outil, pas un lien de page.
+  if (/\.apk$/i.test(name)) return { os: 'android', kind: 'apk', arch: 'universal' };
   return null;
 }
 

@@ -75,25 +75,30 @@ export default {
 
   'platform.windows': 'ويندوز',
   'platform.linux': 'لينكس',
+  'platform.android': 'أندرويد',
   'platform.macos': 'ماك',
   'platform.unknown': 'نظامك',
+  'platform.pending': 'لم يُنشر بعد: ليس في الإصدار الأخير ملفّ لهذا النظام.',
+  'platform.soon': 'قريبًا',
 
   'asset.installer': 'برنامج التثبيت',
   'asset.portable': 'نسخة محمولة',
   'asset.appimage': 'AppImage',
   'asset.deb': 'حزمة deb.',
   'asset.rpm': 'حزمة rpm.',
+  'asset.apk': 'حزمة APK',
   'asset.archive': 'أرشيف',
   'asset.installer.hint': 'يثبّت التطبيق وينشئ اختصارًا.',
   'asset.portable.hint': 'تعمل دون تثبيت، ولا تُحدِّث نفسها.',
   'asset.appimage.hint': 'اجعله قابلًا للتنفيذ ثم شغّله. يُحدِّث نفسه.',
   'asset.deb.hint': 'دبيان وأوبونتو وما تفرّع عنهما. التحديث عبر مدير الحزم.',
   'asset.rpm.hint': 'فيدورا وopenSUSE وما تفرّع عنهما.',
+  'asset.apk.hint': 'تُثبَّت من الملفّ مباشرة، دون متجر. ولا تُحدِّث نفسها.',
   'asset.archive.hint': 'يُفكّ يدويًّا.',
 
   'specs.heading': 'المتطلّبات',
   'specs.os': 'النظام',
-  'specs.os.value': 'ويندوز ١٠ أو ١١ (٦٤ بت) · لينكس x86-64',
+  'specs.os.value': 'ويندوز ١٠ أو ١١ (٦٤ بت) · لينكس x86-64 · أندرويد ٧ فما فوق',
   'specs.ram': 'الذاكرة',
   'specs.ram.value': '٤ غيغابايت حدًّا أدنى، و٨ مستحسنة',
   'specs.disk': 'القرص',
@@ -106,6 +111,13 @@ export default {
     'المثبِّت غير موقَّع بشهادة تجارية، فيعرض ويندوز رسالة «Windows protected your PC». '
     + 'اضغط «More info» ثم «Run anyway». وإن أردت اليقين أنّ الملف هو المنشور هنا، '
     + 'فقارن بصمة SHA-512 أعلاه.',
+
+  'apk.unsigned.heading': 'حزمة APK غير موقَّعة',
+  'apk.unsigned.body':
+    'هي موقَّعة بمفتاح التنقيح الخاصّ بأندرويد، لا بشهادة ناشر. لذلك ينبّهك أندرويد عند '
+    + 'التثبيت إلى أنّ المصدر غير معروف، ويطلب الإذن بالتثبيت من هذا الملفّ؛ وقد يعترضها '
+    + 'Play Protect فيعرض «التثبيت على أيّة حال». ومتى وُجد مفتاح نشر، لزم حذف التطبيق قبل '
+    + 'التحديث: أندرويد لا يستبدل تطبيقًا بتوقيع مختلف.',
 
   'releases.title': 'إصدارات بيت الحكمة',
   'releases.description': 'ملاحظات الإصدارات، من الأحدث إلى الأقدم.',

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { PLATFORMS } from '../config.mjs';
 import {
   buildIndex,
   classifyAsset,
@@ -20,6 +21,44 @@ test('les artefacts se reconnaissent par leur nom', () => {
   assert.equal(classifyAsset('Beyt El Hikma 0.3.0 portable.exe').kind, 'portable');
   assert.equal(classifyAsset('beyt-el-hikma-0.3.0.AppImage').os, 'linux');
   assert.equal(classifyAsset('beyt-el-hikma_0.3.0_amd64.deb').kind, 'deb');
+});
+
+test('l’APK Android se reconnaît par son nom', () => {
+  assert.deepEqual(classifyAsset('beyt-el-hikma-0.3.0.apk'), {
+    os: 'android',
+    kind: 'apk',
+    arch: 'universal',
+  });
+  assert.equal(classifyAsset('app-release.apk').os, 'android');
+  // `apksigner` dépose la signature v4 à côté de l'archive. C'est un fichier
+  // d'outil, comme les `.blockmap` : il ne se propose pas.
+  assert.equal(classifyAsset('beyt-el-hikma-0.3.0.apk.idsig'), null);
+});
+
+test('le lien de l’APK est celui publié, jamais reconstruit depuis son nom', () => {
+  // Même règle et même raison que pour l'installeur Windows : le nom du
+  // fichier et l'URL peuvent diverger, et c'est l'URL qui fait foi.
+  const entry = toEntry({
+    tag_name: 'v0.3.0',
+    published_at: '2026-08-01T10:00:00Z',
+    assets: [
+      {
+        name: 'beyt-el-hikma-0.3.0.apk',
+        browser_download_url: 'https://github.com/o/r/releases/download/v0.3.0/autre-nom.apk',
+        size: 47185920,
+      },
+    ],
+  });
+  assert.equal(entry.assets[0].url, 'https://github.com/o/r/releases/download/v0.3.0/autre-nom.apk');
+  assert.equal(entry.assets[0].kind, 'apk');
+});
+
+test('Android est annoncé sans être exigé', () => {
+  // La plateforme est dans la liste — elle doit donc paraître sur la page —
+  // mais aucune chaîne ne construit encore l'APK : l'exiger ferait échouer
+  // chaque build du site pour un artefact qu'on sait absent.
+  assert.ok(PLATFORMS.some((platform) => platform.key === 'android'));
+  assert.deepEqual(missingPlatforms({ assets: [{ os: 'windows' }, { os: 'linux' }] }), []);
 });
 
 test('les fichiers de mise à jour ne sont pas proposés au visiteur', () => {
