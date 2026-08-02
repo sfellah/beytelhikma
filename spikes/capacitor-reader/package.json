@@ -10,7 +10,8 @@
     "push": "node scripts/fetch-real-data.mjs --push-only",
     "verify": "node scripts/verify.mjs",
     "sync": "npm run prepare:www && npx cap sync android",
-    "android": "npm run sync && npx cap run android"
+    "android": "npm run sync && npx cap run android",
+    "android:release": "npm run sync && node scripts/release-android.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.0",
