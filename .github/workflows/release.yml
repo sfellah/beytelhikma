@@ -106,9 +106,73 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  android:
+    name: android (APK)
+    # Attend `build` : `gh release upload` exige que la Release existe déjà,
+    # et c'est le premier `electron-builder --publish always` qui la crée.
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+
+      # `android/variables.gradle` (engendré, non versionné) réclame l'API 36 :
+      # l'action pose les licences et les outils de base, pas forcément une
+      # plateforme aussi récente.
+      - name: installer la plateforme et les build-tools attendus
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - run: npm ci
+        working-directory: apps/mobile
+
+      - run: npm run seed
+        working-directory: apps/mobile
+
+      - run: node scripts/prepare-www.mjs --sans-sonde
+        working-directory: apps/mobile
+
+      # `android/` est engendré et ignoré par git (voir le README du module) :
+      # sur un clone frais, il n'existe pas encore.
+      - run: npx cap add android && npx cap sync android
+        working-directory: apps/mobile
+
+      # La clé de débogage standard d'Android — celle qu'attend
+      # `release-android.mjs` par défaut, documentée dans le README comme le
+      # choix voulu : changer de signataire casserait la mise à jour des
+      # appareils déjà installés avec cette clé.
+      - name: générer la clé de débogage
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" -validity 10000 \
+            -keyalg RSA -keysize 2048
+
+      - run: node scripts/release-android.mjs
+        working-directory: apps/mobile
+
+      - name: téléverser l'APK
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          apk="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          cp "$apk" "beyt-el-hikma-$version.apk"
+          gh release upload "$TAG" "beyt-el-hikma-$version.apk" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish:
     name: publier la Release
-    needs: [guard, build]
+    needs: [guard, build, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
