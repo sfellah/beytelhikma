@@ -423,6 +423,8 @@ export default {
   'reader.settingsTitle': 'Reading settings',
   'reader.modeLabel': 'Reading mode',
   'reader.pagerLabel': 'Pager',
+  'reader.pagerToVertical': 'Stand the pager upright',
+  'reader.pagerToHorizontal': 'Lay the pager down',
   'reader.pager.horizontal': 'Horizontal',
   'reader.pager.horizontalHint': 'A bar at the foot of the page',
   'reader.pager.vertical': 'Upright',

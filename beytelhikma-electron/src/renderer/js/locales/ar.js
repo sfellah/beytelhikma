@@ -432,6 +432,8 @@ export default {
   'reader.settingsTitle': 'إعدادات القراءة',
   'reader.modeLabel': 'نمط القراءة',
   'reader.pagerLabel': 'شريط التصفُّح',
+  'reader.pagerToVertical': 'اجعل شريط التصفُّح عموديًا',
+  'reader.pagerToHorizontal': 'اجعل شريط التصفُّح أفقيًا',
   'reader.pager.horizontal': 'أفقي',
   'reader.pager.horizontalHint': 'شريط في أسفل الصفحة',
   'reader.pager.vertical': 'عمودي',

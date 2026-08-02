@@ -17,6 +17,7 @@ import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js'
 import {
   DEFAULT_PAGER_LAYOUT,
   DEFAULT_READING_MODE,
+  PAGER_LAYOUTS,
   READING_MODES,
   resolvePagerLayout,
   resolveReadingMode,
@@ -260,6 +261,12 @@ class Reader {
       this.#toggleBookmark(),
     );
 
+    // Le ruban se bascule en lisant : c'est le seul des deux réglages de
+    // `/settings` dont on veut voir l'effet tout de suite, sur la page qu'on a
+    // sous les yeux. L'icône montre la disposition qu'on **obtiendra**, comme
+    // celle du plein écran — pas celle qui est en place, qu'on voit déjà.
+    const pagerButton = tool('pager', 'pagerVertical', '', () => this.#togglePager());
+
     // La sortie garde `data-tool="close"` : c'est le contrat que suivent les
     // captures et les tests, seul son habillage change. Le chevron pointe vers
     // le début de ligne — la droite en RTL, la gauche en LTR — comme tout
@@ -288,16 +295,22 @@ class Reader {
           { class: 'reader__titles' },
           h('h1', { class: 'truncate', dir: CONTENT_DIR }, this.#title),
         ),
+        // Trois groupes, dans l'ordre où l'on s'en sert : **se repérer** dans
+        // le livre (sommaire, recherche), **y laisser une trace** (signet,
+        // notes), **régler l'affichage** (ruban, typographie). Les outils
+        // étaient rangés dans l'ordre où ils avaient été écrits — signet entre
+        // les notes et le sommaire, réglages entre le sommaire et la recherche.
         h(
           'div',
           { class: 'reader__tools' },
-          tool('annotations', 'notes', t('reader.notesTool'), () =>
+          tool('toc', 'toc', t('reader.tocTool'), () => this.#togglePanel('toc')),
+          tool('search', 'search', t('reader.searchTool'), () => this.#togglePanel('search')),
+          bookmarkButton,
+          tool('annotations', 'annotate', t('reader.notesTool'), () =>
             this.#togglePanel('annotations'),
           ),
-          bookmarkButton,
-          tool('toc', 'bookOpen', t('reader.tocTool'), () => this.#togglePanel('toc')),
+          pagerButton,
           tool('settings', 'formatSize', t('reader.settingsTool'), () => this.#togglePanel('settings')),
-          tool('search', 'search', t('reader.searchTool'), () => this.#togglePanel('search')),
           fullscreenButton,
         ),
       ),
@@ -314,22 +327,13 @@ class Reader {
       oninput: (event) => this.#show(Number(event.target.value) - 1),
     });
 
-    // Dressé, le ruban ne feuillette plus vers le début et la fin de *ligne*
-    // mais vers le haut et le bas : les chevrons de direction d'écriture y
-    // désigneraient un geste qu'on ne fait pas. Ceux-là sont figés à dessein.
-    const dresse = this.#prefs.pager === 'vertical';
-    const previous = tool(
-      'previous',
-      dresse ? 'chevronUp' : chevronBackward,
-      t('reader.shortcut.previousPage'),
-      () => this.#move(-1),
+    // Les deux chevrons sont montés couchés puis redressés par `#syncPager`,
+    // qui est le seul à décider de leur tracé : la bascule se fait en lisant,
+    // et une seconde décision ici divergerait au premier clic.
+    const previous = tool('previous', chevronBackward, t('reader.shortcut.previousPage'), () =>
+      this.#move(-1),
     );
-    const next = tool(
-      'next',
-      dresse ? 'chevronDown' : chevronForward,
-      t('reader.shortcut.nextPage'),
-      () => this.#move(1),
-    );
+    const next = tool('next', chevronForward, t('reader.shortcut.nextPage'), () => this.#move(1));
 
     // Trois nœuds plutôt qu'une chaîne : dressé, le ruban empile la page
     // courante, un filet et le total. Une fraction écrite verticalement tient
@@ -416,9 +420,11 @@ class Reader {
       selection,
       fullscreenButton,
       bookmarkButton,
+      pagerButton,
       lastScroll: 0,
       ...refs,
     };
+    this.#syncPager();
     this.#host.replaceChildren(root);
   }
 
@@ -1616,6 +1622,48 @@ class Reader {
   #showShortcuts() {
     this.#closeShortcuts?.();
     this.#closeShortcuts = openShortcuts();
+  }
+
+  /**
+   * Bascule le ruban de pagination, et l'écrit : c'est le même réglage que
+   * celui de `/settings`, deux portes pour une seule valeur — comme la touche
+   * `V` et le mode de lecture.
+   */
+  #togglePager() {
+    this.#setPagerLayout(this.#prefs.pager === 'vertical' ? 'horizontal' : 'vertical');
+  }
+
+  #setPagerLayout(key) {
+    if (resolvePagerLayout(key) !== key || key === this.#prefs.pager) return;
+    this.#prefs.pager = key;
+    for (const layout of PAGER_LAYOUTS) {
+      this.#nodes.root.classList.toggle(`reader--pager-${layout.key}`, layout.key === key);
+    }
+    this.#syncPager();
+    setSetting('reader.pager', key);
+  }
+
+  /**
+   * Ce que la disposition change dans le dessin : les deux chevrons de
+   * feuilletage et l'icône de l'outil.
+   *
+   * Couchés, les chevrons désignent le début et la fin de *ligne* et suivent
+   * donc le sens d'écriture ; dressés, ils désignent le haut et le bas et sont
+   * figés — une flèche de direction d'écriture y annoncerait un geste qu'on ne
+   * fait pas. L'outil, lui, montre la disposition qu'on **obtiendra**, comme
+   * celui du plein écran : celle qui est en place, on la voit déjà.
+   */
+  #syncPager() {
+    const dresse = this.#prefs.pager === 'vertical';
+    this.#nodes.previous.replaceChildren(
+      dresse ? icon('chevronUp', { size: 20 }) : chevronBackward({ size: 20 }),
+    );
+    this.#nodes.next.replaceChildren(
+      dresse ? icon('chevronDown', { size: 20 }) : chevronForward({ size: 20 }),
+    );
+    const button = this.#nodes.pagerButton;
+    button.replaceChildren(icon(dresse ? 'pagerHorizontal' : 'pagerVertical', { size: 20 }));
+    button.title = t(dresse ? 'reader.pagerToHorizontal' : 'reader.pagerToVertical');
   }
 
   #toggleFullscreen() {

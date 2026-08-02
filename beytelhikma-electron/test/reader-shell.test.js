@@ -113,14 +113,21 @@ test('le ruban dressé échange la hauteur contre la largeur', () => {
   };
 
   const scroll = bloc('.reader--pager-vertical .reader__scroll');
-  assert.ok(
-    /padding-right:\s*calc\(var\(--reader-pager-width\)/.test(scroll),
-    'la colonne rend au ruban la largeur qu’il prend',
+  assert.equal(
+    /padding-right/.test(scroll),
+    false,
+    'le ruban est posé sur la page : la colonne ne lui rend aucune largeur',
   );
   assert.ok(
     /padding-bottom:\s*calc\(var\(--space-xxl\)/.test(scroll),
-    'et récupère la hauteur qu’il ne prend plus',
+    'et récupère la hauteur que le bandeau en pied lui prenait',
   );
+
+  // Posé sur la page, il doit laisser voir dessous : un flou masquerait le
+  // début de chaque ligne, là où un bandeau en pied ne masque qu'une marge.
+  const bande = bloc('.reader--pager-vertical .reader__footer');
+  assert.ok(/backdrop-filter:\s*none/.test(bande), 'la bande ne doit pas flouter le texte');
+  assert.ok(/background:\s*color-mix/.test(bande), 'et ne porter qu’un voile');
 
   // Escamoté, il sort par son bord : le bas n'est plus le sien.
   assert.ok(
@@ -152,12 +159,42 @@ test('le rail dressé nomme ses deux sélecteurs', () => {
 
 /**
  * Dressés, les chevrons désignent le haut et le bas. Ceux de direction
- * d'écriture annonceraient un geste qu'on ne fait pas.
+ * d'écriture annonceraient un geste qu'on ne fait pas. Un seul endroit en
+ * décide — la bascule se fait en lisant, et une seconde décision au montage
+ * divergerait au premier clic.
  */
-test('le ruban dressé fige ses chevrons', () => {
+test('un seul endroit décide du tracé des chevrons', () => {
   const reader = read('../src/renderer/js/views/reader.js');
-  assert.ok(reader.includes("'chevronUp'"), 'la page précédente est en haut');
-  assert.ok(reader.includes("'chevronDown'"), 'la page suivante est en bas');
+  const start = reader.indexOf('#syncPager() {');
+  assert.notEqual(start, -1, '#syncPager a disparu');
+  const corps = reader.slice(start, reader.indexOf('\n  }', start));
+  assert.ok(corps.includes("'chevronUp'"), 'la page précédente est en haut');
+  assert.ok(corps.includes("'chevronDown'"), 'la page suivante est en bas');
+
+  assert.equal(
+    reader.split("'chevronUp'").length - 1,
+    1,
+    'le tracé dressé ne doit être décidé qu’une fois',
+  );
+});
+
+/**
+ * Le ruban se bascule aussi en lisant : c'est le seul des deux réglages de
+ * `/settings` dont on veut voir l'effet sur la page qu'on a sous les yeux.
+ * Deux portes, une seule valeur — comme la touche `V` et le mode de lecture.
+ */
+test('la barre du lecteur porte la bascule du ruban', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.ok(reader.includes("tool('pager'"), 'l’outil doit exister');
+  assert.ok(reader.includes("setSetting('reader.pager'"), 'et écrire le réglage partagé');
+
+  // L'icône montre la disposition qu'on obtiendra, comme celle du plein écran.
+  const start = reader.indexOf('#syncPager() {');
+  const corps = reader.slice(start, reader.indexOf('\n  }', start));
+  assert.ok(
+    /dresse \? 'pagerHorizontal' : 'pagerVertical'/.test(corps),
+    'l’outil annonce la disposition suivante, pas celle qu’on voit déjà',
+  );
 });
 
 // ------------------------------------------------------------ plein écran

@@ -1630,10 +1630,15 @@ html:not([dir='rtl']) .scroller--at-start {
   --reader-font: var(--font-body);
   --reader-size: 22px;
   --reader-fill: 0%;
-  /* Largeur du ruban dressé — la même que la hauteur du ruban couché, à ceci
-     près qu'elle vaut aussi comme cible tactile : c'est elle que reprennent la
-     bande, le rail et la réserve de la colonne de lecture. */
-  --reader-pager-width: 48px;
+  /* Largeur du ruban dressé. 44px, pas moins : le ruban est posé sur la page,
+     donc chaque pixel qu'il prend est du texte qu'il voile, mais ses chevrons
+     restent des cibles à atteindre au pouce et 44px est le plancher qu'on
+     s'est donné partout ailleurs. */
+  --reader-pager-width: 44px;
+  /* Hauteur d'une barre. Elle était écrite trois fois — en haut, en bas, et
+     nulle part ailleurs — jusqu'à ce que le ruban dressé ait besoin de savoir
+     où finit la barre haute pour ne pas passer dessous. */
+  --reader-bar-height: 56px;
 
   position: fixed;
   inset: 0;
@@ -1717,7 +1722,7 @@ html:not([dir='rtl']) .scroller--at-start {
   grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
   gap: var(--space-md);
-  height: 56px;
+  height: var(--reader-bar-height);
   max-width: var(--container-max);
   margin-inline: auto;
   padding-inline: var(--space-md);
@@ -1728,7 +1733,7 @@ html:not([dir='rtl']) .scroller--at-start {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  height: 56px;
+  height: var(--reader-bar-height);
   max-width: var(--container-max);
   margin-inline: auto;
   padding-inline: var(--space-md);
@@ -2169,16 +2174,25 @@ html:not([dir='rtl']) .scroller--at-start {
    L'ancrage est **physique**, contre le bord droit, comme celui des panneaux
    du lecteur — qui, eux, sortent par la gauche. Suivre le sens d'écriture ferait
    se croiser les deux sur le même bord dès que l'interface bascule en anglais. */
+/* La bande part **sous** la barre haute, pas du bord de la fenêtre : les deux
+   voiles se recouvraient, et le chevron « page précédente » disparaissait
+   derrière les outils. */
 .reader--pager-vertical .reader__footer {
-  top: 0;
+  top: calc(var(--safe-top) + var(--reader-bar-height));
   bottom: 0;
   inset-inline: auto;
   right: 0;
   width: var(--reader-pager-width);
-  padding-top: var(--safe-top);
+  padding-top: 0;
   padding-bottom: var(--safe-bottom);
   border-top: none;
-  border-left: 1px solid var(--reader-rule);
+  border-left: none;
+  /* Le ruban dressé est **posé sur** la page, pas à côté d'elle : il ne
+     réserve rien et laisse voir le texte derrière lui. D'où un voile léger et
+     sans flou — le flou d'un bandeau en pied ne masque qu'une marge, celui
+     d'une bande verticale masquerait le début de chaque ligne. */
+  background: color-mix(in srgb, var(--reader-bg) 45%, transparent);
+  backdrop-filter: none;
 }
 
 /* Escamoté, il sort par son bord — pas par le bas, qu'il ne touche plus. */
@@ -2272,10 +2286,11 @@ html:not([dir='rtl']) .scroller--at-start {
   background-position: center;
 }
 
-/* La colonne de lecture rend au ruban la largeur qu'il prend, et récupère la
-   hauteur qu'il ne prend plus. */
+/* La colonne ne rend **rien** au ruban : il est posé dessus, translucide, et
+   le texte continue dessous. Elle récupère en revanche la hauteur que le
+   bandeau en pied lui prenait — 160 px de réserve pour un ruban qui n'est plus
+   là. C'est le sens du réglage : dressé, il ne coûte pas de place. */
 .reader--pager-vertical .reader__scroll {
-  padding-right: calc(var(--reader-pager-width) + var(--safe-right));
   padding-bottom: calc(var(--space-xxl) + var(--safe-bottom));
 }
 

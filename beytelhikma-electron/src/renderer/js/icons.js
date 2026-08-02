@@ -237,6 +237,24 @@ const ICONS = {
     ['line', 8, 12, 16, 12],
     ['line', 8, 16, 13, 16],
   ],
+  /* Ce qu'on **écrit** dans un livre, et non un fichier : une feuille et un
+     crayon posé dessus. `notes` — la feuille cornée seule — dit « document »,
+     et c'est ce que le lecteur montrait pour ses surlignages et ses notes. */
+  annotate: [
+    ['path', 'M20 12v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20V5.5A1.5 1.5 0 0 1 5.5 4H13'],
+    ['path', 'M17.6 2.6a2.1 2.1 0 0 1 3 3L13 13.2l-4 1 1-4z'],
+    ['line', 8, 17.5, 14, 17.5],
+  ],
+  /* Où se pose le ruban de pagination : une page, et le ruban en pied ou sur
+     sa tranche. L'icône montre la disposition qu'on obtiendra en cliquant. */
+  pagerHorizontal: [
+    ['rect', 3.5, 4, 17, 16],
+    ['line', 3.5, 15.5, 20.5, 15.5],
+  ],
+  pagerVertical: [
+    ['rect', 3.5, 4, 17, 16],
+    ['line', 16, 4, 16, 20],
+  ],
 };
 
 function shape(spec) {
