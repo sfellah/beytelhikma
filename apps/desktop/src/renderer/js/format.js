@@ -45,8 +45,4 @@ export function ordinal(value) {
   return t('format.century', { ordinal: word === key ? n(number) : word });
 }
 
-export function pageLabel(page) {
-  return page?.printedPageNum ?? page?.sequenceNum ?? 0;
-}
-
 export { n };

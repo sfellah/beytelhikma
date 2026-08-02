@@ -19,12 +19,6 @@ export function sectionHead(id, title, lede, actions = null) {
   );
 }
 
-/** Bloc de page : le filet et la respiration qui séparent deux sections. */
-export function sectionBlock(props, ...children) {
-  const { class: extra = '', ...rest } = props ?? {};
-  return h('section', { class: `section-block ${extra}`.trim(), ...rest }, children);
-}
-
 /**
  * Un seul moment animé par page : chaque bloc marqué monte et se dénette à
  * l'entrée dans le viewport. L'état par défaut reste *visible* — si

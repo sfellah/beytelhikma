@@ -962,37 +962,6 @@ html:not([dir='rtl']) .scroller--at-start {
   text-underline-offset: 4px;
 }
 
-.layer__people {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.person-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--rule-strong);
-  background: var(--surface-container-low);
-  font-family: var(--font-label);
-  font-size: var(--text-label-md);
-  color: var(--on-surface);
-  transition: background-color 0.2s, border-color 0.2s, transform 0.25s;
-}
-
-.person-chip:hover {
-  background: var(--secondary-container);
-  border-color: transparent;
-  transform: translateY(-2px);
-}
-
-.person-chip__year {
-  font-size: var(--text-label-sm);
-  color: var(--on-surface-variant);
-}
-
 @media (min-width: 800px) {
   .layer {
     grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
@@ -1237,15 +1206,6 @@ html:not([dir='rtl']) .scroller--at-start {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-}
-
-.detail__actions-row {
-  display: flex;
-  gap: var(--space-md);
-}
-
-.detail__actions-row .button {
-  flex: 1;
 }
 
 .detail__main {
@@ -3046,17 +3006,6 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--on-primary-container);
 }
 
-.settings__stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-xs);
-}
-
-.settings__preview {
-  margin: 0;
-}
-
 /* Le nom de la police *est* l'échantillon : il se rend dans sa propre face, à
    la taille où l'on peut la juger. À 13 px et 75 % d'opacité, on ne distinguait
    pas un naskh d'un autre — c'est-à-dire qu'on ne choisissait rien. */
@@ -3123,14 +3072,6 @@ html:not([dir='rtl']) .scroller--at-start {
 .segmented__item.is-active {
   background: var(--primary);
   color: var(--on-primary);
-}
-
-.segmented__text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  text-align: start;
 }
 
 .segmented__check {

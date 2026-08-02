@@ -16,9 +16,6 @@ export const SORTS = {
   size: 'r.compressed_size DESC, e.title_ar',
 };
 
-/** Facettes à compteur. */
-export const FACETS = ['categories', 'types', 'centuries', 'status'];
-
 /** Une page de résultats ne dépasse jamais cette taille. */
 const MAX_LIMIT = 200;
 

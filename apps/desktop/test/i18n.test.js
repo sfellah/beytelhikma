@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
 import { LOCALES } from '../src/shared/locale.js';
@@ -79,4 +81,64 @@ test('translate rend la clé quand elle manque, sans lever', () => {
 test('translate laisse en place un paramètre non fourni', () => {
   const catalog = { greet: 'مرحبا {name}' };
   assert.equal(translate(catalog, 'greet', {}, 'ar'), 'مرحبا {name}');
+});
+
+/**
+ * Familles de clés bâties à l'exécution, avec le fichier qui les bâtit.
+ *
+ * L'exemption est **adossée à sa source** : le test vérifie que le gabarit
+ * existe encore dans ce fichier. Une liste d'exceptions nue survivrait au code
+ * qu'elle excuse, et rouvrirait la porte qu'elle prétend garder.
+ */
+const FAMILLES_DYNAMIQUES = [
+  { prefixe: 'format.ordinal.', source: 'src/renderer/js/format.js', gabarit: '`format.ordinal.${' },
+  {
+    prefixe: 'curriculum.',
+    source: 'src/renderer/js/components/curriculum-card.js',
+    gabarit: '`curriculum.${',
+  },
+];
+
+const RACINE = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+
+function sources() {
+  const trouves = [];
+  const parcourir = (dossier) => {
+    for (const entree of fs.readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = path.join(dossier, entree.name);
+      if (entree.isDirectory()) {
+        parcourir(chemin);
+      } else if (/\.(js|cjs|mjs|html)$/.test(entree.name) && !chemin.includes('locales')) {
+        trouves.push(chemin);
+      }
+    }
+  };
+  parcourir(path.join(RACINE, 'src'));
+  return trouves;
+}
+
+test('aucune clé du catalogue n’est orpheline', () => {
+  // Une clé que plus personne n'appelle est un reste : elle a survécu à l'écran
+  // qui l'affichait. Elle ne casse rien — c'est bien le problème. Deux listes
+  // de polices mortes (`reader.font.*`, `settings.font.*`) ont vécu ainsi
+  // pendant que `shared/fonts.js` était déjà la seule source de vérité.
+  const blob = sources()
+    .map((chemin) => fs.readFileSync(chemin, 'utf8'))
+    .join('\n');
+
+  for (const famille of FAMILLES_DYNAMIQUES) {
+    const source = fs.readFileSync(path.join(RACINE, famille.source), 'utf8');
+    assert.ok(
+      source.includes(famille.gabarit),
+      `${famille.source} ne bâtit plus « ${famille.prefixe}… » : l’exemption n’a plus lieu d’être`,
+    );
+  }
+
+  const orphelines = Object.keys(ar).filter(
+    (cle) =>
+      !FAMILLES_DYNAMIQUES.some((famille) => cle.startsWith(famille.prefixe)) &&
+      !blob.includes(`'${cle}'`),
+  );
+
+  assert.deepEqual(orphelines, [], `clés jamais citées : ${orphelines.join(', ')}`);
 });

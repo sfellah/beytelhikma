@@ -623,27 +623,6 @@
   }
 }
 
-.skeleton {
-  border-radius: var(--radius-lg);
-  background: linear-gradient(
-    90deg,
-    var(--surface-container) 25%,
-    var(--surface-container-high) 37%,
-    var(--surface-container) 63%
-  );
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-}
-
-@keyframes shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: 0 0;
-  }
-}
-
 /* -------------------------------------------- sélecteur de collection */
 
 .picker__list {
