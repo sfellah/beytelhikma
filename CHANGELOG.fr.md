@@ -6,6 +6,16 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.4.0] — 2026-08-02
+
+### added
+- Tourner une page se fait maintenant de trois façons : toucher le tiers de l'écran où la ligne commence pour revenir en arrière, celui où elle finit pour avancer, et au doigt ou au stylet, glisser dans le sens où le texte s'écoule.
+- L'application Android embarque désormais le catalogue de livres dans l'APK et propose sa mise à jour au démarrage — le premier lancement ne demande plus de câble.
+- Android prend sa place sur la page de téléchargement et sur l'accueil, aux côtés de Windows et Linux, avec un avertissement : l'APK porte une signature de débogage tant qu'aucune clé d'éditeur n'existe.
+
+### removed
+- Le mode de lecture en fil continu disparaît : le corpus est paginé de bout en bout — pied imprimé, fraction du ruban, ancrage des annotations, lien `?page=` — et un fil oblige à abandonner ces repères un à un. La lecture ne garde qu'un mode : la page imprimée.
+
 ## [0.3.1] — 2026-08-01
 
 ### fixed

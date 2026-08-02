@@ -6,6 +6,16 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.4.0] — 2026-08-02
+
+### added
+- Turning a page now works three ways: tap the third of the screen where the line starts to go back, the third where it ends to go forward, and on touch or stylus, swipe in the direction the text flows.
+- The Android app now ships the book catalogue inside the APK and offers to update it at startup — the first launch no longer needs a cable.
+- Android now has its place on the download page and the home screen, next to Windows and Linux, with a notice that the APK carries a debug signature until a publisher key exists.
+
+### removed
+- The continuous-scroll reading mode is gone: the corpus is paginated end to end — printed footer, pager fraction, annotation anchors, the `?page=` link — and a scrolling thread has to give up those landmarks one by one. Reading keeps a single mode: the printed page.
+
 ## [0.3.1] — 2026-08-01
 
 ### fixed
