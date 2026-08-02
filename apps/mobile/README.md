@@ -16,6 +16,70 @@ Prérequis : un SDK Android (`ANDROID_HOME`), un appareil ou un émulateur, et l
 JDK 21 que réclame Capacitor 8 — le script passe `-Dorg.gradle.java.home` en
 ligne de commande plutôt que de toucher au réglage global de la machine.
 
+## Lancer sur un téléphone ou sur l'émulateur
+
+**Trois choses manquent sur une machine neuve**, et aucune n'est une erreur :
+`node_modules/`, la graine de catalogue et le projet natif. Les trois sont des
+artefacts — `android/` est engendré par Capacitor et ignoré par git, au même
+titre que `www/` et `data/`.
+
+```bash
+npm install                 # sinon `npx cap` répond « could not determine executable to run »
+npm run seed                # sinon prepare-www refuse de produire un www/ sans graine
+npx cap add android         # une seule fois par clone : engendre android/
+```
+
+Ensuite, à chaque changement du rendu :
+
+```bash
+npm run sync                # prepare-www + cap sync android
+```
+
+**Le build passe par `gradlew`, pas par `npx cap run android`.** Deux raisons,
+toutes deux rencontrées sous Windows : `cap run` invoque `gradlew` sans son
+extension et cmd ne le trouve pas, et Gradle cherche un **JDK 21** que le Java
+du système (24) ne satisfait pas — la panne se lit
+« Cannot find a Java installation … matching: {languageVersion=21} ». Le JBR
+livré avec Android Studio est un 21 : on le désigne pour ce build seulement,
+sans toucher au `JAVA_HOME` de la machine.
+
+```bash
+JBR="C:/Program Files/Android/Android Studio/jbr"
+cd android
+JAVA_HOME="$JBR" ./gradlew.bat assembleDebug --console=plain \
+  "-Dorg.gradle.java.home=$JBR" "-Porg.gradle.java.installations.paths=$JBR"
+```
+
+`-Dorg.gradle.java.home` fait tourner Gradle sous le 21 ; `-Porg.gradle.java.installations.paths`
+lui dit **où chercher** la chaîne d'outils que réclament les greffons Capacitor.
+Le second sans le premier ne suffit pas.
+
+Puis l'installation et le lancement, qui ne demandent ni Gradle ni Capacitor :
+
+```bash
+adb devices                                   # relève le numéro de série
+adb -s <série> install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb -s <série> shell monkey -p org.beytelhikma.app -c android.intent.category.LAUNCHER 1
+```
+
+`-s <série>` n'est pas une précaution de style : dès qu'un émulateur tourne à
+côté d'un téléphone branché, `adb` refuse d'agir sans savoir lequel des deux
+vous visez. `install -r` **garde les données** — `user.sqlite`, la progression,
+les annotations — là où une désinstallation les emporte ; il exige en revanche
+la même signature, et la clé de débogage d'Android est celle de la machine qui
+a produit l'installation précédente.
+
+Sur l'**émulateur**, rien ne change après le démarrage de la machine virtuelle :
+
+```bash
+emulator -list-avds
+emulator -avd <nom> &          # puis les mêmes trois commandes adb
+```
+
+Ce qui se lit ensuite : `adb -s <série> logcat -d | grep Capacitor/Console`
+porte les messages du rendu — c'est là que sortent les erreurs JavaScript, la
+sonde n'étant plus qu'un complément.
+
 ## Ce qui est partagé, et ce qui ne l'est pas
 
 `www/` est un **artefact**. `scripts/prepare-www.mjs` l'efface et le refait
