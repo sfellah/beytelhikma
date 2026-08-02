@@ -30,6 +30,18 @@ const wwwDir = path.join(spikeDir, 'www');
 const shimSource = path.join(spikeDir, 'src', 'repository.capacitor.js');
 const probeSource = path.join(spikeDir, 'src', 'probe.js');
 
+/**
+ * La sonde est un **instrument**, pas une fonctionnalité : elle affiche les
+ * temps relevés sur l'appareil pour que l'exemple prouve ce qu'il avance. Un
+ * build de release n'a rien à prouver, et un panneau de mesures posé sur
+ * l'écran d'un lecteur est du bruit — c'est d'ailleurs le seul signe visible
+ * qui distingue les deux montages.
+ *
+ * `www/` est effacé et refait à chaque exécution : ne pas la copier suffit,
+ * aucun reste d'un passage précédent ne survit.
+ */
+const sansSonde = process.argv.includes('--sans-sonde');
+
 // ---------------------------------------------------------------------------
 // CSP : ce que Capacitor réclame, et rien de plus
 // ---------------------------------------------------------------------------
@@ -273,7 +285,9 @@ const exigences = [
   [rendererDir, 'le rendu Electron (beytelhikma-electron/src/renderer/)'],
   [sharedDir, 'les modules partagés (beytelhikma-electron/src/shared/)'],
   [shimSource, 'le shim `src/repository.capacitor.js` — écrit en parallèle, il n’existe pas encore'],
-  [probeSource, 'la sonde `src/probe.js` — écrite en parallèle, elle n’existe pas encore'],
+  ...(sansSonde
+    ? []
+    : [[probeSource, 'la sonde `src/probe.js` — écrite en parallèle, elle n’existe pas encore']]),
 ];
 const manquants = exigences.filter(([chemin]) => !fs.existsSync(chemin));
 if (manquants.length) {
@@ -311,8 +325,12 @@ console.log(`  ${String(copiesPartage).padStart(3)} fichiers  src/shared/   -> w
 fs.copyFileSync(shimSource, path.join(wwwDir, 'js', 'repository.js'));
 console.log('  remplacé   www/js/repository.js  <- src/repository.capacitor.js');
 
-fs.copyFileSync(probeSource, path.join(wwwDir, 'js', 'probe.js'));
-console.log('  ajouté     www/js/probe.js       <- src/probe.js');
+if (sansSonde) {
+  console.log('  écartée    www/js/probe.js       — montage release, la sonde ne part pas');
+} else {
+  fs.copyFileSync(probeSource, path.join(wwwDir, 'js', 'probe.js'));
+  console.log('  ajouté     www/js/probe.js       <- src/probe.js');
+}
 
 // Les modules du dépôt, écrits comme des fabriques sans aucun import : c'est
 // ce qui leur permet d'être servis à plat, sans résolution de spécificateur.
@@ -348,13 +366,15 @@ console.log(
     : '  viewport déjà présent dans le rendu source',
 );
 
-const sonde = injecterSonde(html);
-html = sonde.html;
-console.log(
-  sonde.injecte
-    ? '  injecté    <script src="js/probe.js"> avant js/app.js'
-    : '  sonde déjà présente dans le rendu source : rien à injecter',
-);
+if (!sansSonde) {
+  const sonde = injecterSonde(html);
+  html = sonde.html;
+  console.log(
+    sonde.injecte
+      ? '  injecté    <script src="js/probe.js"> avant js/app.js'
+      : '  sonde déjà présente dans le rendu source : rien à injecter',
+  );
+}
 
 const csp = ajusterCsp(html);
 html = csp.html;
@@ -371,7 +391,7 @@ console.log(`  inchangées : ${csp.inchangees.join(', ')}`);
 // Avertissements — ils ne font pas échouer, mais ils se voient.
 const nus = [
   ...specificateursNus(fs.readFileSync(shimSource, 'utf8')),
-  ...specificateursNus(fs.readFileSync(probeSource, 'utf8')),
+  ...(sansSonde ? [] : specificateursNus(fs.readFileSync(probeSource, 'utf8'))),
 ];
 if (nus.length) {
   console.log('\nAVERTISSEMENT — spécificateurs nus dans le code du spike');
