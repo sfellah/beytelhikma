@@ -141,14 +141,51 @@ Dans une WebView, sans un seul module natif : `fetch` sous CSP, en-tête `Range`
 décompression zstd en WebAssembly, SHA-256 par WebCrypto, écriture par tranches
 de 384 Kio, renommage atomique en dernier geste.
 
-## Les dix écrans
+## Les treize écrans
 
-Tous se montent avec de vraies données : `#/home`, `#/library`, `#/explore`
-(٨٥٦٨ نتيجة), `#/authors` (٣١٨٣ مؤلفًا), `#/downloads`, `#/search`, `#/notes`,
-`#/settings`, `#/book/:id`, `#/reader/:id`.
+Tous se montent avec de vraies données, **sans un pixel de débordement
+horizontal** : `#/home`, `#/library`, `#/explore` (٨٥٦٨ نتيجة), `#/authors`
+(٣١٨٣ مؤلفًا), `#/downloads`, `#/search`, `#/notes`, `#/settings`,
+`#/book/:id`, `#/reader/:id`, `#/collection/:id`, `#/curriculum/:id`.
 
 Les écritures sont vérifiées sur appareil : réglage relu après redémarrage,
 progression, collection créée puis peuplée, surlignage, signet.
+
+L'installation d'une police Google aussi, de bout en bout : feuille récupérée,
+quatre graisses, écritures `arab` et `latn` détectées, `woff2` déposés et
+servis en `https://localhost/_capacitor_file_/…` — donc `font-src 'self'` sans
+un mot de plus. Vérifié jusqu'au rendu : le texte mesure 202 px en Cairo contre
+177 en serif, et `@font-face` dans une `CSSStyleSheet` **construite** est bien
+appliqué, contrairement à ce que je soupçonnais.
+
+`checkCatalogUpdate` atteint le bucket et conclut `upToDate` — la logique de
+`catalog-updater` traverse le portage sans retouche.
+
+## Ce que le portage a révélé de l'interface
+
+Cinq causes distinctes, trouvées par la mesure et corrigées **dans le rendu
+réel** — ce sont de vrais défauts, qui frappent aussi une fenêtre Electron
+étroite. Voir le commit `fix(ui): rendre l'interface tenable au doigt`.
+
+La plus instructive : **`min-width: auto` sur les enfants de flex et de
+grille**, le défaut structurel de cette feuille de style. Quatre écrans
+touchés. Une bande faite pour défiler poussait au lieu de défiler — 1 008 px
+dans une fenêtre de 411 — et la fiche d'un livre s'affichait entièrement
+blanche.
+
+La plus coûteuse à diagnostiquer : la balise `viewport` absente, qu'Electron
+n'a jamais réclamée. Sans elle le WebView rend en 1028 px CSS, ce qui rallume
+les points de rupture *bureau*. Et son dézoom automatique **masquait** le vrai
+débordement : `minimum-scale=1` a été nécessaire pour rendre le défaut visible,
+donc réparable.
+
+La plus utile à l'usage : **la jauge de lecture faisait 4 px de haut**. C'est
+le seul moyen de se déplacer vite dans un livre de mille pages, et il était
+insaisissable au doigt. À la souris on vise, au doigt on couvre — le défaut ne
+pouvait pas se voir sur bureau.
+
+Les facettes d'`/explore` sont devenues un panneau dépliable : avant, zéro
+livre visible sans défiler ; après, deux.
 
 ## CSP : une seule directive ajoutée
 
