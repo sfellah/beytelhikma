@@ -231,6 +231,71 @@ test('l’APK publié est proposé avec l’URL de la Release, jamais une URL de
   await fs.rm(scratch, { recursive: true, force: true });
 });
 
+/* ------------------------------------------- le bouton suit le visiteur ---- */
+
+/**
+ * Le bouton de l'accueil portait « Télécharger pour Windows » à tout le monde,
+ * y compris au visiteur venu d'un téléphone Android, et menait à la page de
+ * téléchargement dans tous les cas.
+ *
+ * Ce qu'il porte maintenant est une **table rendue au build**, libellés déjà
+ * traduits : le script désigne la ligne du système qu'il reconnaît, il ne
+ * compose rien. Sans script, le `href` reste la page de téléchargement, où les
+ * trois plateformes sont écrites — c'est la même règle que les cartes.
+ */
+test('le bouton de l’accueil porte un lien par plateforme publiée', async () => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-cta-'));
+  await build({
+    out: path.join(scratch, 'dist'),
+    dataDir: path.join(HERE, 'fixtures', 'data-apk'),
+    books: 8568,
+  });
+  const html = await fs.readFile(path.join(scratch, 'dist', 'fr', 'index.html'), 'utf8');
+
+  const raw = /data-cta-targets="([^"]*)"/.exec(html);
+  assert.ok(raw, 'la table des liens doit être rendue');
+  const targets = JSON.parse(raw[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+
+  assert.match(targets.android.href, /renomme-a-la-main\.apk$/, 'l’URL est celle publiée');
+  assert.match(targets.android.label, /Android/);
+  assert.match(targets.windows.href, /\.exe$/);
+  assert.match(targets.windows.label, /Windows/);
+
+  // Sans script, le bouton mène à la page qui les nomme toutes : un lien qui
+  // n'existe qu'après exécution d'un script manque le jour où il échoue.
+  assert.match(html, /data-cta="primary"/);
+  assert.match(html, new RegExp(`href="${BASE_PATH}fr/download/"`));
+
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
+test('sans artefact pour une plateforme, le bouton ne fabrique aucun lien', async () => {
+  // La fixture par défaut ne publie pas d'APK : Android ne doit pas figurer
+  // dans la table. Une URL devinée serait un 404 différé, et le repli — la page
+  // de téléchargement — dit « pas encore publié » au lieu de le promettre.
+  const html = await read('fr/index.html');
+  const raw = /data-cta-targets="([^"]*)"/.exec(html);
+  assert.ok(raw, 'la table doit exister dès qu’une version est publiée');
+  const targets = JSON.parse(raw[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  assert.equal(targets.android, undefined);
+  assert.ok(targets.windows && targets.linux, 'les deux plateformes exigées y sont');
+});
+
+test('la détection du système vit dans une seule fonction, Android avant Linux', async () => {
+  // Un Android se présente comme Linux : tester Linux d'abord enverrait chaque
+  // téléphone sur l'AppImage. La règle est dans l'ordre des tests, donc dans
+  // une seule fonction — deux copies divergeraient au premier ajout.
+  const script = await fs.readFile(path.join(HERE, '..', 'assets', 'site.js'), 'utf8');
+  assert.equal(script.split('function detectOs(').length - 1, 1, 'une seule détection');
+  assert.ok(
+    script.indexOf("'android'") < script.indexOf("'linux'"),
+    'Android doit être reconnu avant Linux',
+  );
+  // La table vient de l'API GitHub : un `javascript:` posé dans un `href` par
+  // une donnée de build serait une exécution.
+  assert.match(script, /\^https:\\\/\\\//, 'le lien appliqué doit être un https');
+});
+
 test('l’avertissement de signature de l’APK est dit dans les trois langues', async () => {
   // Il est dit là où l'on clique, dans la carte Android, et pas en note de bas
   // de page. Une langue qui l'oublierait laisserait un lecteur devant une

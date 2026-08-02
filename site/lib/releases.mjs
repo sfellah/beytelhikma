@@ -130,6 +130,38 @@ export function buildIndex(apiReleases, changelog, digestsByTag = new Map()) {
 }
 
 /**
+ * Ce qu'on propose en premier pour une plateforme, par nature d'artefact.
+ *
+ * Une Release en porte plusieurs par système — un installeur et un portable
+ * sous Windows, trois paquets sous Linux — et le bouton unique de l'accueil ne
+ * peut en désigner qu'un. L'ordre est celui de ce qu'on donne à quelqu'un qui
+ * n'a rien demandé de plus : ce qui s'installe, puis ce qui se lance.
+ */
+const PREFERRED_KINDS = {
+  windows: ['installer', 'portable'],
+  linux: ['appimage', 'deb', 'rpm'],
+  android: ['apk'],
+  macos: ['installer', 'archive'],
+};
+
+/**
+ * L'artefact à proposer pour [os], ou `null` si la version n'en porte aucun.
+ *
+ * `null` est une réponse, pas un défaut : le lien retombe alors sur la page de
+ * téléchargement, qui **dit** que la plateforme n'est pas encore publiée. Le
+ * site ne devine jamais une URL — c'est la règle de tout ce module.
+ */
+export function primaryAsset(latest, os) {
+  const candidates = (latest?.assets ?? []).filter((asset) => asset.os === os);
+  if (!candidates.length) return null;
+  for (const kind of PREFERRED_KINDS[os] ?? []) {
+    const found = candidates.find((asset) => asset.kind === kind);
+    if (found) return found;
+  }
+  return candidates[0];
+}
+
+/**
  * Vérifie que la dernière version tient ce que la page promet.
  *
  * Rend la liste des manquements plutôt que de lever : l'appelant décide s'il

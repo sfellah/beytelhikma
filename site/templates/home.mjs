@@ -14,12 +14,41 @@
  * capture devient une planche, une fonction devient une entrée de sommaire.
  */
 import { PLATFORMS, url } from '../config.mjs';
+import { primaryAsset } from '../lib/releases.mjs';
 import { attrs, escapeHtml, icon } from '../lib/html.mjs';
 import { pagePath } from './layout.mjs';
 
 function badge(latest, t) {
   const text = latest ? t('home.badge', { version: latest.version }) : t('home.badge.none');
   return `<p class="badge">${escapeHtml(text)}</p>`;
+}
+
+/**
+ * Le fichier à proposer par plateforme, avec son libellé déjà traduit.
+ *
+ * Le rendu est statique et le visiteur ne l'est pas : la table part dans la
+ * page, et `assets/site.js` y prend la ligne du système qu'il reconnaît. C'est
+ * la même règle que la page de téléchargement — **tout est rendu au build**, le
+ * script ne fait que désigner. Sans lui, le bouton mène à la page de
+ * téléchargement, où les trois plateformes sont écrites : un lien qui n'existe
+ * qu'après exécution d'un script est un lien qui manque le jour où il échoue.
+ *
+ * Les libellés sont traduits ici et non dans le script : `translate` vit côté
+ * build, et recopier trois catalogues dans un fichier de 60 lignes serait la
+ * seconde table que ce projet refuse partout ailleurs.
+ */
+function ctaTargets(latest, t) {
+  if (!latest) return null;
+  const targets = {};
+  for (const platform of PLATFORMS) {
+    const asset = primaryAsset(latest, platform.key);
+    if (!asset) continue;
+    targets[platform.key] = {
+      href: asset.url,
+      label: t('home.cta.primary', { platform: t(`platform.${platform.key}`) }),
+    };
+  }
+  return Object.keys(targets).length ? JSON.stringify(targets) : null;
 }
 
 function calls(locale, latest, t, defaultPlatform) {
@@ -29,7 +58,7 @@ function calls(locale, latest, t, defaultPlatform) {
     : t('home.cta.pending');
 
   return `<p class="hero__calls">
-      <a class="button button--primary"${attrs({ href: download, 'data-cta': 'primary' })}>${icon('download')}<span data-cta-label>${escapeHtml(label)}</span></a>
+      <a class="button button--primary"${attrs({ href: download, 'data-cta': 'primary', 'data-cta-targets': ctaTargets(latest, t) })}>${icon('download')}<span data-cta-label>${escapeHtml(label)}</span></a>
       <a class="link" href="${url(pagePath(locale, 'releases'))}">${escapeHtml(t('home.cta.secondary'))}</a>
     </p>`;
 }
