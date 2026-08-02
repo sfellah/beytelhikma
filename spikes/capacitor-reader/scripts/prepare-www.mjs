@@ -72,8 +72,30 @@ const REGLES_CSP = [
     // `@font-face` en `userfont:` n'est jamais écrite. Le laisser serait
     // inoffensif mais mensonger : un CSP énumère ce que la page a le droit de
     // charger, et cette page-là n'a aucun moyen de charger ça.
-    raison: "userfont: n'existe que dans Electron ; les méthodes de polices ne sont pas portées",
+    raison: "userfont: n'existe que dans Electron ; les fichiers déposés passent par convertFileSrc",
     appliquer: (sources) => sources.filter((source) => source !== 'userfont:'),
+  },
+  {
+    directive: 'connect-src',
+    ajouterSiAbsente: true,
+    // Trois hôtes, trois rôles, et rien d'autre. `default-src 'none'` couvre
+    // `connect-src` et interdit donc tout `fetch` : sans cette directive, ni
+    // les livres ni les polices ne peuvent être téléchargés.
+    //
+    // Le bucket est celui de `DEFAULT_BASE_URL`. Conséquence à connaître :
+    // changer `distribution.base_url` vers un autre hôte depuis les réglages
+    // **ne marchera pas** — un CSP est figé au chargement du document, il ne
+    // suit pas un réglage. Le portage réel devra soit énumérer les hôtes
+    // permis, soit passer les téléchargements côté natif, où le CSP de la page
+    // ne s'applique pas.
+    raison:
+      'le bucket de distribution et les deux hôtes de Google Fonts ; sans cela aucun fetch ne part',
+    appliquer: () => [
+      "'self'",
+      'https://beytelhima-library.s3.eu-west-1.amazonaws.com',
+      'https://fonts.googleapis.com',
+      'https://fonts.gstatic.com',
+    ],
   },
 ];
 
@@ -148,7 +170,14 @@ function ajusterCsp(html) {
 
   const changements = [];
   for (const regle of REGLES_CSP) {
-    const cible = directives.find((directive) => directive.nom === regle.directive);
+    let cible = directives.find((directive) => directive.nom === regle.directive);
+    if (!cible && regle.ajouterSiAbsente) {
+      // `connect-src` n'existe pas dans le CSP du rendu : il est couvert par
+      // `default-src 'none'`, qui interdit donc tout `fetch`. Une directive
+      // ajoutée est un ajout de droit — elle porte sa raison, comme les autres.
+      cible = { nom: regle.directive, sources: [] };
+      directives.push(cible);
+    }
     if (!cible) continue;
     const avant = cible.sources.join(' ');
     const apres = regle.appliquer(cible.sources);
@@ -247,6 +276,29 @@ console.log('  remplacé   www/js/repository.js  <- src/repository.capacitor.js'
 
 fs.copyFileSync(probeSource, path.join(wwwDir, 'js', 'probe.js'));
 console.log('  ajouté     www/js/probe.js       <- src/probe.js');
+
+// Les modules du dépôt, écrits comme des fabriques sans aucun import : c'est
+// ce qui leur permet d'être servis à plat, sans résolution de spécificateur.
+const repoDir = path.join(spikeDir, 'src', 'repo');
+if (fs.existsSync(repoDir)) {
+  const cible = path.join(wwwDir, 'js', 'repo');
+  const n = copierDossier(repoDir, cible);
+  console.log(`  ajouté     www/js/repo/          <- src/repo/ (${n} module(s))`);
+}
+
+// zstd est embarqué, pas résolu. `fzstd` livre un ESM d'un seul tenant, sans
+// import interne : le recopier suffit, et le rendu peut l'importer en relatif.
+// C'est le pendant, côté navigateur, du `zlib.createZstdDecompress` que le
+// processus principal d'Electron obtient de Node.
+const fzstdSource = path.join(spikeDir, 'node_modules', 'fzstd', 'esm', 'index.mjs');
+if (fs.existsSync(fzstdSource)) {
+  const vendor = path.join(wwwDir, 'js', 'vendor');
+  fs.mkdirSync(vendor, { recursive: true });
+  fs.copyFileSync(fzstdSource, path.join(vendor, 'fzstd.js'));
+  console.log('  ajouté     www/js/vendor/fzstd.js <- node_modules/fzstd');
+} else {
+  console.log('  fzstd absent : `npm install fzstd`, sinon les téléchargements ne se décompressent pas');
+}
 
 const indexPath = path.join(wwwDir, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');

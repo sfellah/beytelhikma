@@ -35,6 +35,11 @@
  */
 let arabePromise = null;
 
+import { creerMethodesCatalogue } from './repo/catalogue-plus.js';
+import { creerMethodesPolices } from './repo/polices.js';
+import { creerMethodesTelechargements } from './repo/telechargements.js';
+import { creerMethodesUtilisateur } from './repo/utilisateur.js';
+
 function arabe() {
   arabePromise ??= import(new URL('../shared/arabic.js', import.meta.url).href).catch((erreur) => {
     // Un échec ne se met pas en cache : la recherche suivante doit retenter.
@@ -464,6 +469,92 @@ const all = (chemin, sql, params = []) => interroger(chemin, sql, params);
 async function first(chemin, sql, params = []) {
   const lignes = await interroger(chemin, sql, params);
   return lignes[0] ?? null;
+}
+
+// ------------------------------------------------- la base de l'utilisateur
+
+/**
+ * `user.sqlite` ne passe **pas** par la famille NC, et c'est délibéré.
+ *
+ * Les méthodes NC ouvrent en lecture seule : elles servent à lire des fichiers
+ * étrangers, posés là par quelqu'un d'autre — le catalogue et les livres, que
+ * l'application ne fait que consommer. `user.sqlite` est l'inverse : c'est
+ * notre base, la seule qu'on écrive, et la seule qu'aucun téléchargement ne
+ * puisse reconstruire. Elle emprunte donc l'API ordinaire du greffon, avec son
+ * dossier et sa convention de nom, où elle est en lecture-écriture.
+ *
+ * La conséquence pratique compte : elle vit dans le stockage **interne** de
+ * l'application, hors de portée d'`adb push`, et elle survit à une purge des
+ * fichiers externes.
+ */
+const BASE_UTILISATEUR = 'user';
+
+let utilisateurPromise = null;
+
+async function ouvrirUtilisateur() {
+  utilisateurPromise ??= (async () => {
+    await attendrePont();
+    const plugin = sqlite();
+    const consistance = await plugin.checkConnectionsConsistency({
+      dbNames: [BASE_UTILISATEUR],
+      openModes: ['no-encryption'],
+    });
+    if (!consistance?.result) {
+      await plugin.createConnection({
+        database: BASE_UTILISATEUR,
+        encrypted: false,
+        mode: 'no-encryption',
+        version: 1,
+        readonly: false,
+      });
+    }
+    await plugin.open({ database: BASE_UTILISATEUR, readonly: false });
+    return BASE_UTILISATEUR;
+  })();
+  return utilisateurPromise;
+}
+
+/** Lecture dans `user.sqlite` — `readonly: false`, la connexion l'étant. */
+async function interrogerUtilisateur(sql, params = []) {
+  const base = await ouvrirUtilisateur();
+  const reponse = await sqlite().query({
+    database: base,
+    statement: sql,
+    values: params,
+    readonly: false,
+    isSQL92: true,
+  });
+  const lignes = reponse?.values ?? [];
+  return lignes.length && lignes[0]?.ios_columns ? lignes.slice(1) : lignes;
+}
+
+const allUser = (sql, params = []) => interrogerUtilisateur(sql, params);
+
+async function firstUser(sql, params = []) {
+  return (await interrogerUtilisateur(sql, params))[0] ?? null;
+}
+
+/** Écriture unitaire. Rend le nombre de lignes touchées et le dernier `rowid`. */
+async function executerUtilisateur(sql, params = []) {
+  const base = await ouvrirUtilisateur();
+  const reponse = await sqlite().run({
+    database: base,
+    statement: sql,
+    values: params,
+    transaction: false,
+    readonly: false,
+    isSQL92: true,
+  });
+  return {
+    changes: reponse?.changes?.changes ?? 0,
+    lastId: reponse?.changes?.lastId ?? null,
+  };
+}
+
+/** DDL et lots. `execute` ne prend pas de paramètres : n'y mettre que du SQL fixe. */
+async function executerBrut(sql) {
+  const base = await ouvrirUtilisateur();
+  await sqlite().execute({ database: base, statements: sql, transaction: false, readonly: false });
 }
 
 // ------------------------------------------------------------- le catalogue
@@ -1305,8 +1396,230 @@ const repository = {
   getBooksByAuthor: async () => [],
 };
 
+// ----------------------------------------------------- le canal poussé
+
 /**
- * Tout le reste. Fabriqué en boucle depuis `METHODS`, jamais à la main : une
+ * Abonnés au canal des téléchargements. Dans Electron, c'est le processus
+ * principal qui pousse par IPC ; ici la file vit dans la page, et le canal se
+ * réduit à un ensemble d'abonnés.
+ */
+const abonnes = new Set();
+
+function emettreChangement(jobs) {
+  for (const abonne of abonnes) {
+    try {
+      abonne(jobs);
+    } catch (erreur) {
+      // Un abonné qui lève ne doit pas empêcher les autres d'être servis, ni
+      // interrompre le téléchargement qui vient de progresser.
+      console.warn('[beytelhikma] abonné en échec :', erreur);
+    }
+  }
+}
+
+// ------------------------------------------------------------------- zstd
+
+let fzstdPromise = null;
+
+/**
+ * Décompression zstd **dans la page**. `fzstd` est embarqué par
+ * `prepare-www.mjs` dans `www/js/vendor/`, jamais résolu par spécificateur :
+ * le rendu n'a pas de bundler. L'import est différé pour que `verify.mjs`,
+ * qui charge ce fichier depuis `src/` où le dossier n'existe pas, n'ait jamais
+ * à le résoudre.
+ *
+ * C'est le pendant navigateur du `zlib.createZstdDecompress` que le processus
+ * principal d'Electron obtient de Node — et ce qui évite un module natif.
+ */
+async function decompressZstd(octets) {
+  fzstdPromise ??= import('./vendor/fzstd.js');
+  const { decompress } = await fzstdPromise;
+  return decompress(octets instanceof Uint8Array ? octets : new Uint8Array(octets));
+}
+
+// ------------------------------------------------- fermetures explicites
+
+/**
+ * Referme le catalogue **et oublie la promesse**.
+ *
+ * Sur Android, renommer par-dessus un fichier ouvert réussit sans erreur, et la
+ * connexion continue de lire l'ancien inode : une mise à jour de catalogue
+ * s'écrirait correctement et ne se lirait qu'au redémarrage suivant, sans que
+ * rien ne le signale. Refermer ne suffit donc pas — il faut aussi que le shim
+ * cesse de se croire ouvert, sinon la prochaine lecture sert la promesse
+ * mémorisée et rouvre... rien.
+ */
+async function fermerCatalogue() {
+  const promesse = cataloguePromise;
+  cataloguePromise = null;
+  if (!promesse) return;
+  const chemin = await promesse.catch(() => null);
+  if (chemin) await fermer(chemin);
+}
+
+/** Même raison pour un livre, avant de le supprimer ou de le remplacer. */
+async function fermerLivre(editionId) {
+  const id = assertEditionId(editionId);
+  if (livreCourant !== id) return;
+  const promesse = livrePromise;
+  livreCourant = null;
+  livrePromise = null;
+  if (!promesse) return;
+  const chemin = await promesse.catch(() => null);
+  if (chemin) await fermer(chemin);
+}
+
+// ------------------------------------------------------- outils partagés
+
+/**
+ * Deux modules partagés, chargés **en amorce** et lus en synchrone.
+ *
+ * Ils viennent de `src/shared/`, jamais recopiés : `arabic.js` est le reflet
+ * exact de `normalize_ar` de `tools/_common.py`, et c'est ce contrat qui a
+ * produit les colonnes normalisées du corpus. Une seconde implémentation
+ * divergerait en silence, et la recherche se dégraderait sans qu'aucun test
+ * n'échoue. Même raison pour la liste des cursus, qui vit dans un seul fichier.
+ *
+ * L'import est différé **et** amorcé : différé parce que depuis `src/`, où
+ * `verify.mjs` charge ce fichier, le dossier `shared/` n'existe pas — il n'est
+ * en place que dans `www/`, que `prepare-www.mjs` compose. Amorcé parce que
+ * les modules les consomment en synchrone, avec un repli : rendre `undefined`
+ * une poignée de millisecondes laisse jouer ce repli, rendre une promesse le
+ * casserait.
+ */
+let arabicModule = null;
+let curriculaModule = null;
+
+import(new URL('../shared/arabic.js', import.meta.url).href)
+  .then((module) => {
+    arabicModule = module;
+  })
+  .catch(() => {
+    // Hors de `www/` : les appelants ont tous un repli littéral.
+  });
+
+import(new URL('../shared/curricula.js', import.meta.url).href)
+  .then((module) => {
+    curriculaModule = module;
+  })
+  .catch(() => {});
+
+function arabicSearchPattern(terme, flags = 'g') {
+  return arabicModule ? arabicModule.arabicSearchPattern(terme, flags) : null;
+}
+
+/**
+ * Normalisation arabe, **en synchrone**.
+ *
+ * Le repli rend la chaîne telle quelle plutôt que rien : les appelants
+ * enchaînent aussitôt un `.includes` ou un `.replace`, et leur rendre autre
+ * chose qu'une chaîne les casse — c'est exactement ce qui est arrivé en
+ * câblant `arabe()`, qui rend une **promesse du module** et non la fonction.
+ * Le résultat serait alors moins bon, jamais faux : la comparaison porte sur
+ * des colonnes déjà normalisées par le pipeline, donc un terme non normalisé
+ * trouve moins, il n'invente pas.
+ */
+function normalizeArabic(texte) {
+  if (arabicModule) return arabicModule.normalizeArabic(texte);
+  return String(texte ?? '');
+}
+
+// --------------------------------------------------------- les modules
+
+/**
+ * Ce que les modules reçoivent. Aucun d'eux n'importe quoi que ce soit : ils
+ * sont des fabriques, et c'est ici — le seul endroit — que l'assemblage est
+ * connu. Quatre agents ont pu les écrire en parallèle sans se marcher dessus.
+ */
+const ctx = {
+  RepositoryError,
+  garde,
+  chrono,
+  // catalogue et livres — lecture seule, famille NC
+  catalogue,
+  livre,
+  livreInstalle,
+  fermerCatalogue,
+  fermerLivre,
+  all,
+  first,
+  sonderFts,
+  arabicSearchPattern,
+  /** Lu comme une valeur par `catalogue-plus`, d'où l'accesseur. */
+  get CURRICULA() {
+    return curriculaModule?.CURRICULA;
+  },
+  // `user.sqlite` — lecture-écriture, API ordinaire du greffon
+  allUser,
+  firstUser,
+  executerUtilisateur,
+  executerBrut,
+  // projections reprises verbatim de `book-repository.js`
+  SUMMARY_SELECT,
+  bookSummary,
+  author,
+  page,
+  tocEntry,
+  volume,
+  snippetAround,
+  // appareil et pont
+  racineAppareil,
+  filesystem,
+  sqlite,
+  pont,
+  manifeste,
+  assertEditionId,
+  normalizeArabic,
+  decompressZstd,
+  emettreChangement,
+};
+
+/**
+ * L'ordre compte. Les modules passent **après** le littéral : le shim y garde
+ * des versions inertes — `getLibrary`, `getProgress`, `getSettings`… — qui
+ * n'existaient que pour empêcher les `Promise.all` sans `catch` de
+ * `views/home.js` et `views/reader.js` d'emporter l'écran entier. Maintenant
+ * qu'elles ont de vraies implémentations, celles-ci doivent l'emporter.
+ */
+const methodesUtilisateur = creerMethodesUtilisateur(ctx);
+
+/**
+ * La migration de `user.sqlite` vit dans le module `utilisateur`, qui garde
+ * ses propres accès. Les trois autres écrivent pourtant dans la même base —
+ * `polices` y inscrit ses familles, `telechargements` l'état des installations
+ * — et frapperaient sinon une base non migrée : `installFont` échouerait
+ * **après** avoir déposé ses fichiers, qui resteraient orphelins.
+ *
+ * On ne peut pas poser la garde dans `ouvrirUtilisateur` : la migration écrit
+ * elle-même par `executerBrut`, et s'attendrait donc elle-même. Elle est donc
+ * posée sur les primitives **remises aux autres modules**, et sur elles seules.
+ */
+const assurerSchema = methodesUtilisateur.__assurerSchema;
+delete methodesUtilisateur.__assurerSchema;
+
+// `Object.create` et non un spread : `ctx.CURRICULA` est un **accesseur**, que
+// `{...ctx}` évaluerait une fois pour toutes — donc `undefined`, puisque son
+// module n'est pas encore chargé au moment de l'assemblage. La chaîne de
+// prototypes, elle, relit à chaque accès.
+const ctxGarde = Object.assign(Object.create(ctx), {
+  allUser: async (...args) => (await assurerSchema(), allUser(...args)),
+  firstUser: async (...args) => (await assurerSchema(), firstUser(...args)),
+  executerUtilisateur: async (...args) => (
+    await assurerSchema(), executerUtilisateur(...args)
+  ),
+  executerBrut: async (...args) => (await assurerSchema(), executerBrut(...args)),
+});
+
+Object.assign(
+  repository,
+  creerMethodesCatalogue(ctxGarde),
+  methodesUtilisateur,
+  creerMethodesTelechargements(ctxGarde),
+  creerMethodesPolices(ctxGarde),
+);
+
+/**
+ * Ce qui reste. Fabriqué en boucle depuis `METHODS`, jamais à la main : une
  * liste écrite deux fois est une liste qui diverge, et c'est précisément ce que
  * `verify.mjs` cherche.
  */
@@ -1319,13 +1632,10 @@ for (const nom of METHODS) {
 
 export { repository };
 
-/**
- * Le canal poussé des téléchargements n'existe pas ici : rien ne se télécharge,
- * les fichiers sont poussés par `adb`. On rend quand même une fonction de
- * désabonnement — `shell.js` l'appelle, et `undefined` n'est pas appelable.
- */
-export function onDownloadsChanged(_callback) {
-  return () => {};
+/** S'abonne au canal poussé ; rend la fonction de désabonnement. */
+export function onDownloadsChanged(callback) {
+  abonnes.add(callback);
+  return () => abonnes.delete(callback);
 }
 
 /** Réglages chargés une fois par session, comme dans le rendu d'origine. */

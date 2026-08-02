@@ -98,30 +98,116 @@ Capacitor 8 veut une toolchain 21, d'où `invalid source release: 21`.
 Le contournement est en ligne de commande, dans le script npm, et ne touche pas
 au réglage global : `-Dorg.gradle.java.home=<JBR d'Android Studio>`.
 
-## Périmètre
+## Périmètre : les 67 méthodes
 
-**Porté** — 15 méthodes : accueil, listes, fiche, sommaire, pages, recherche
-dans le livre, réglages en mémoire.
+**Tout est porté.** Aucune ne lève `not-ported`.
 
-**Traversé sans lever** — 7 méthodes rendent la forme *vide* au lieu de lever.
-`views/home.js:22` et `views/reader.js:183` font des `Promise.all` sans `catch` :
-une seule méthode qui lève emporte l'écran entier. Sans cet écart, l'exemple ne
-pouvait ni afficher l'accueil ni ouvrir un livre, donc ne mesurait rien.
+| Module | Méthodes | Ce qu'il couvre |
+| --- | --- | --- |
+| le shim | 13 | accueil, listes, fiche, sommaire, pages, recherche dans le livre |
+| `repo/catalogue-plus.js` | 15 | auteurs, siècles, exploration, facettes, cursus, recherche transversale |
+| `repo/utilisateur.js` | 21 | schéma et migrations de `user.sqlite`, réglages, progression, bibliothèque, collections, annotations |
+| `repo/telechargements.js` | 15 | file séquentielle, `Range`, zstd, SHA-256, renommage, mise à jour du catalogue |
+| `repo/polices.js` | 3 | installation depuis Google Fonts, avec les bornes du modèle |
 
-**Non porté** — 45 méthodes lèvent `RepositoryError('not-ported')`, que les vues
-affichent dans leur état d'erreur.
+Les quatre modules sont des **fabriques sans aucun `import`** : chacune reçoit
+ses dépendances en argument, et `repository.capacitor.js` est le seul endroit
+qui connaisse l'assemblage. C'est ce qui a permis de les écrire en parallèle.
 
-**Hors périmètre** — zstd sur l'appareil, téléchargement depuis le bucket,
-écritures dans `user.sqlite`.
+### `user.sqlite` n'emprunte pas la famille NC
+
+Les méthodes NC ouvrent en lecture seule — elles servent à lire des fichiers
+étrangers, posés là par quelqu'un d'autre : le catalogue et les livres, que
+l'application ne fait que consommer. `user.sqlite` est l'inverse : notre base,
+la seule qu'on écrive, et la seule qu'aucun téléchargement ne reconstruirait.
+Elle emprunte l'API ordinaire du greffon, en lecture-écriture, et vit dans le
+stockage **interne** — hors de portée d'`adb push`, et elle survit à une purge
+des fichiers externes.
+
+### zstd est embarqué, pas résolu
+
+`fzstd` livre un ESM d'un seul tenant sans import interne ; `prepare-www.mjs`
+le recopie dans `www/js/vendor/`. C'est le pendant navigateur du
+`zlib.createZstdDecompress` que le processus principal obtient de Node, et ce
+qui évite un module natif.
+
+## Téléchargement complet, mesuré
+
+`sh-5706` — 48 سؤالا في الصيام, 40 pages, tiré du bucket en **2 589 ms** :
+`queued → downloading → verifying → installed`. Puis 40 pages lisibles,
+49 entrées de sommaire, recherche interne à 15 pages.
+
+Dans une WebView, sans un seul module natif : `fetch` sous CSP, en-tête `Range`,
+décompression zstd en WebAssembly, SHA-256 par WebCrypto, écriture par tranches
+de 384 Kio, renommage atomique en dernier geste.
+
+## Les dix écrans
+
+Tous se montent avec de vraies données : `#/home`, `#/library`, `#/explore`
+(٨٥٦٨ نتيجة), `#/authors` (٣١٨٣ مؤلفًا), `#/downloads`, `#/search`, `#/notes`,
+`#/settings`, `#/book/:id`, `#/reader/:id`.
+
+Les écritures sont vérifiées sur appareil : réglage relu après redémarrage,
+progression, collection créée puis peuplée, surlignage, signet.
+
+## CSP : une seule directive ajoutée
+
+```
+connect-src 'self' https://beytelhima-library.s3.eu-west-1.amazonaws.com
+            https://fonts.googleapis.com https://fonts.gstatic.com;
+```
+
+`default-src 'none'` couvre `connect-src` : sans elle, aucun `fetch` ne part.
+`script-src`, `style-src` et `img-src` **ne bougent pas**.
+
+`font-src` n'a besoin d'aucun mot de plus, contrairement à ce qu'on pourrait
+croire : `convertFileSrc` rend `https://localhost/_capacitor_file_/…`, la même
+origine que le document, donc `'self'` couvre déjà les polices déposées. Seul
+`userfont:` est retiré — ce protocole n'existe que dans Electron.
+
+**Limite à connaître** : un CSP est figé au chargement du document. Changer
+`distribution.base_url` vers un autre hôte depuis les réglages **ne marchera
+pas**. Le portage réel devra soit énumérer les hôtes permis, soit passer les
+téléchargements côté natif, où le CSP de la page ne s'applique pas.
 
 ## Ce qui reste douteux
 
-- **Le repli `LIKE` n'est pas neutre.** Sur un même terme, FTS5 et `LIKE` ne
-  rendent pas le même nombre de pages : FTS5 indexe des jetons, `LIKE` cherche
-  des sous-chaînes. Passer à FTS5 **changerait les résultats**, pas seulement
-  leur vitesse. À trancher avant tout portage réel.
-- **721 ms pour la première requête d'accueil**, contre 131 ms pour ouvrir un
-  catalogue de 28,8 Mo. C'est `getTopCategories` qui coûte, pas l'ouverture.
-- Le liage des paramètres n'est éprouvé que sur les requêtes de cette tranche.
-  Le SQL est plein de `LIMIT ?` : c'est le premier endroit à regarder si une
-  requête ajoutée échoue.
+**Le repli `LIKE` n'est pas neutre.** Mesuré sur le vrai catalogue :
+
+| terme | fts5 | repli |
+| --- | --- | --- |
+| الأصول | 85 | 98 |
+| **نحو** | **7** | **94** |
+| الشافعي | 44 | 64 |
+
+FTS5 indexe des jetons, `LIKE` cherche des sous-chaînes. L'écart n'est pas
+marginal, il est structurel — d'où le choix de la **phrase préfixée**
+(`"terme"*`), qui approche la sous-chaîne sans quitter l'index. Adopter FTS5
+**changerait les résultats de recherche**, pas seulement leur vitesse. C'est un
+arbitrage produit, à trancher avant tout portage réel.
+
+Corollaire : `searchLibrary` (FTS5) et `searchInBook` (phrase exacte) ne
+comptent pas pareil. Un livre annoncé à 38 occurrences peut n'en montrer que 13
+une fois ouvert. À aligner.
+
+**`pages_fts` indexe aussi `footnotes_search`.** Un `MATCH` nu ramenait cinq
+pages sans le terme dans le corps, dont l'extrait retombait sur les 120 premiers
+caractères sans rien de surligné. Filtré sur `{body_search}`.
+
+**L'accueil est passé de 721 ms à 1 926 ms à froid** — logiquement : il appelle
+désormais les vraies `getContinueReading`, `getLibrary`, `getEras`,
+`getUndatedCount`, `getBooksByAuthor` au lieu des versions inertes. Lent, pas
+cassé, et c'est le premier écran à optimiser.
+
+**Le repli sans FTS5 lie jusqu'à 8 487 paramètres.** `exploreBooks({text})` sans
+index produit un `IN (?,?,…)` que `getFacets` refait six fois, chaque valeur
+traversant le pont natif en JSON. C'est ce que la voie FTS5 évite, et ce qui
+casserait en premier si le verdict devenait négatif sur un autre appareil.
+
+**Le pic mémoire d'un téléchargement** est compressé + décompressé simultanément
+(~50 Mo pour les plus gros livres du corpus), le hachage se faisant sur le
+tampon clair avant écriture. Non mesuré sur les gros livres.
+
+**Les migrations `user.sqlite`** posent `PRAGMA user_version` en dernier : une
+migration coupée se rejoue entièrement. Le chemin n'a pas été éprouvé par une
+coupure réelle.
