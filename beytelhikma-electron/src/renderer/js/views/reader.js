@@ -15,8 +15,10 @@ import { errorView, loadingView } from '../components/states.js';
 import { themeChoices } from '../components/theme-choices.js';
 import { arabicSearchPattern, normalizeArabic } from '../../../shared/arabic.js';
 import {
+  DEFAULT_PAGER_LAYOUT,
   DEFAULT_READING_MODE,
   READING_MODES,
+  resolvePagerLayout,
   resolveReadingMode,
 } from '../../../shared/reading-modes.js';
 
@@ -94,7 +96,12 @@ class Reader {
   #toc = [];
   #title = '';
   /** Le thème n'est plus une préférence de lecture : il est global (`theme.js`). */
-  #prefs = { size: 22, font: DEFAULT_READER_FONT, mode: DEFAULT_READING_MODE };
+  #prefs = {
+    size: 22,
+    font: DEFAULT_READER_FONT,
+    mode: DEFAULT_READING_MODE,
+    pager: DEFAULT_PAGER_LAYOUT,
+  };
   #saveTimer = null;
   #hintTimer = null;
   #nodes = {};
@@ -174,6 +181,7 @@ class Reader {
         size: clamp(Number(prefs['reader.fontSize'] ?? 22), MIN_FONT, MAX_FONT),
         font: resolveFont(prefs['reader.font'], 'arab', DEFAULT_READER_FONT),
         mode: resolveReadingMode(prefs['reader.mode']),
+        pager: resolvePagerLayout(prefs['reader.pager']),
       };
 
       let index = (saved?.sequenceNum ?? 1) - 1;
@@ -306,11 +314,35 @@ class Reader {
       oninput: (event) => this.#show(Number(event.target.value) - 1),
     });
 
-    const previous = tool('previous', chevronBackward, t('reader.shortcut.previousPage'), () =>
-      this.#move(-1),
+    // Dressé, le ruban ne feuillette plus vers le début et la fin de *ligne*
+    // mais vers le haut et le bas : les chevrons de direction d'écriture y
+    // désigneraient un geste qu'on ne fait pas. Ceux-là sont figés à dessein.
+    const dresse = this.#prefs.pager === 'vertical';
+    const previous = tool(
+      'previous',
+      dresse ? 'chevronUp' : chevronBackward,
+      t('reader.shortcut.previousPage'),
+      () => this.#move(-1),
     );
-    const next = tool('next', chevronForward, t('reader.shortcut.nextPage'), () => this.#move(1));
-    const pagerLabel = h('span', { class: 'reader__pager-label label-md' });
+    const next = tool(
+      'next',
+      dresse ? 'chevronDown' : chevronForward,
+      t('reader.shortcut.nextPage'),
+      () => this.#move(1),
+    );
+
+    // Trois nœuds plutôt qu'une chaîne : dressé, le ruban empile la page
+    // courante, un filet et le total. Une fraction écrite verticalement tient
+    // dans la largeur d'un pouce, « ٢٣٠ / ١ » non.
+    const pagerCurrent = h('span', { class: 'reader__pager-current' });
+    const pagerTotal = h('span', { class: 'reader__pager-total' });
+    const pagerLabel = h(
+      'span',
+      { class: 'reader__pager-label label-md' },
+      pagerCurrent,
+      h('span', { class: 'reader__pager-sep' }, '/'),
+      pagerTotal,
+    );
     const percent = h('span', { class: 'reader__percent label-sm' });
 
     const footer = h(
@@ -342,7 +374,9 @@ class Reader {
     const root = h(
       'div',
       {
-        class: `reader reader--font-${this.#prefs.font} reader--${this.#prefs.mode}`,
+        class:
+          `reader reader--font-${this.#prefs.font} reader--${this.#prefs.mode}` +
+          ` reader--pager-${this.#prefs.pager}`,
         style: { '--reader-size': `${this.#prefs.size}px` },
       },
       header,
@@ -365,7 +399,8 @@ class Reader {
       root,
       flow,
       pageHead,
-      pagerLabel,
+      pagerCurrent,
+      pagerTotal,
       percent,
       slider,
       previous,
@@ -1423,8 +1458,8 @@ class Reader {
     }
 
     this.#nodes.slider.value = String(index + 1);
-    this.#nodes.pagerLabel.textContent =
-      `${n(index + 1)} / ${n(this.#pageCount)}`;
+    this.#nodes.pagerCurrent.textContent = n(index + 1);
+    this.#nodes.pagerTotal.textContent = n(this.#pageCount);
     const done = Math.round(this.#percent() * 100);
     this.#nodes.percent.textContent = t('format.percent', { value: done });
     // Le rail n'a pas de remplissage natif une fois `appearance: none` posé :
@@ -1752,6 +1787,15 @@ class Reader {
     if (selection && !selection.isCollapsed) return;
     this.#hideSelection();
     this.#hideHint();
+    // Un panneau ouvert se referme au premier contact avec le texte. Sa croix
+    // est à l'autre bout de l'écran, et revenir au livre est de toute façon le
+    // geste qu'on fait ensuite : l'exiger deux fois n'apprend rien. Le clic
+    // s'arrête là — escamoter les barres dans la foulée ferait deux choses
+    // pour un seul geste.
+    if (this.#panelsOpen()) {
+      this.#closePanels();
+      return;
+    }
     this.#nodes.header.classList.toggle('is-hidden');
     this.#nodes.footer.classList.toggle('is-hidden');
   }

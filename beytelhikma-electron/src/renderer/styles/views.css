@@ -1630,6 +1630,10 @@ html:not([dir='rtl']) .scroller--at-start {
   --reader-font: var(--font-body);
   --reader-size: 22px;
   --reader-fill: 0%;
+  /* Largeur du ruban dressé — la même que la hauteur du ruban couché, à ceci
+     près qu'elle vaut aussi comme cible tactile : c'est elle que reprennent la
+     bande, le rail et la réserve de la colonne de lecture. */
+  --reader-pager-width: 48px;
 
   position: fixed;
   inset: 0;
@@ -2091,7 +2095,13 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--reader-muted);
 }
 
+/* « ١ / ٢٣٠ » en trois nœuds : couché, c'est une ligne ; dressé, c'est une
+   fraction empilée, et le trait remplace la barre oblique. */
 .reader__pager-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
   min-width: 88px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -2147,6 +2157,130 @@ html:not([dir='rtl']) .scroller--at-start {
   background: var(--reader-accent);
   box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
   cursor: pointer;
+}
+
+/* --------------------------------------------------- ruban dressé -------
+
+   Le ruban quitte le pied et vient contre le bord. Ce n'est pas une place en
+   plus : le pied s'en va, la bande le remplace, et c'est la largeur qui paie
+   au lieu de la hauteur. Sur un téléphone tenu à la main, c'est la hauteur qui
+   manque.
+
+   L'ancrage est **physique**, contre le bord droit, comme celui des panneaux
+   du lecteur — qui, eux, sortent par la gauche. Suivre le sens d'écriture ferait
+   se croiser les deux sur le même bord dès que l'interface bascule en anglais. */
+.reader--pager-vertical .reader__footer {
+  top: 0;
+  bottom: 0;
+  inset-inline: auto;
+  right: 0;
+  width: var(--reader-pager-width);
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  border-top: none;
+  border-left: 1px solid var(--reader-rule);
+}
+
+/* Escamoté, il sort par son bord — pas par le bas, qu'il ne touche plus. */
+.reader--pager-vertical .reader__footer.is-hidden {
+  transform: translateX(100%);
+}
+
+.reader--pager-vertical .reader__toolbar {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  padding-inline: 0;
+  padding-block: var(--space-md);
+  gap: var(--space-sm);
+}
+
+.reader--pager-vertical .reader__pager,
+.reader--pager-vertical .reader__pager-label {
+  flex-direction: column;
+}
+
+.reader--pager-vertical .reader__pager-label {
+  min-width: 0;
+  gap: 2px;
+}
+
+/* La barre oblique n'a pas de sens empilée : elle devient le trait de la
+   fraction. `font-size: 0` efface le caractère sans retirer le nœud, qui
+   redevient « / » dès qu'on recouche le ruban. */
+.reader--pager-vertical .reader__pager-sep {
+  width: 16px;
+  height: 1px;
+  font-size: 0;
+  background: currentcolor;
+  opacity: 0.45;
+}
+
+/* Le pourcentage disparaît sous 640px parce que la barre couchée n'a plus de
+   place pour lui. Dressée, la bande n'a que cela à mettre sous la jauge : il
+   revient. */
+.reader--pager-vertical .reader__percent {
+  display: block;
+  min-width: 0;
+  text-align: center;
+}
+
+/* `min-height: 0` n'est pas une précaution : sans lui, un élément flexible ne
+   descend pas sous la hauteur minimale de son contenu, et un `input` dressé en
+   réclame plus que la bande n'en a. Le rail dépassait alors l'écran par les
+   deux bouts — la première et la dernière page devenaient injoignables à la
+   glissade. Le rail s'étire ensuite dans ce qui reste, plutôt que de se donner
+   une hauteur : `height: 100%` n'a pas de référent dans une boîte dont la
+   hauteur vient du partage. */
+.reader--pager-vertical .reader__progress {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  justify-content: center;
+  margin-inline: 0;
+  margin-block: var(--space-md);
+}
+
+/* `writing-mode: vertical-rl` suffit à dresser un `input[type=range]` : la
+   valeur croît du haut vers le bas, donc la page 1 reste en haut. Le rail
+   garde une largeur de doigt et ne peint qu'un filet de 4px en son milieu —
+   même procédé que le rail couché sur téléphone.
+
+   Les deux sélecteurs sont nommés : `[dir='rtl'] .reader__rail` repeint le
+   dégradé « vers la gauche » et l'emporterait à égalité de spécificité. C'est
+   exactement la panne du rail couché, rejouée. */
+.reader--pager-vertical .reader__rail,
+[dir='rtl'] .reader--pager-vertical .reader__rail {
+  writing-mode: vertical-rl;
+  /* `writing-mode` dresse le rail, mais c'est `direction` qui décide de quel
+     bout part la valeur : sous une interface arabe, la poignée descendait au
+     bas du rail pour la page 2 sur 230 et remontait à mesure qu'on avançait.
+     Le rail n'est pas du texte — il n'a aucune raison de suivre le sens
+     d'écriture, et la page 1 se lit en haut dans les deux langues. */
+  direction: ltr;
+  width: var(--reader-pager-width);
+  height: auto;
+  min-height: 0;
+  background-image: linear-gradient(
+    to bottom,
+    var(--reader-accent) 0 var(--reader-fill),
+    color-mix(in srgb, var(--reader-rule) 60%, transparent) var(--reader-fill) 100%
+  );
+  background-size: 4px 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* La colonne de lecture rend au ruban la largeur qu'il prend, et récupère la
+   hauteur qu'il ne prend plus. */
+.reader--pager-vertical .reader__scroll {
+  padding-right: calc(var(--reader-pager-width) + var(--safe-right));
+  padding-bottom: calc(var(--space-xxl) + var(--safe-bottom));
+}
+
+.reader--pager-vertical .reader__hint {
+  bottom: calc(var(--space-lg) + var(--safe-bottom));
 }
 
 /* Bulle d'aide au premier écran : elle dit comment escamoter l'interface,

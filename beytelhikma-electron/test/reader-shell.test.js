@@ -4,13 +4,19 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+  DEFAULT_PAGER_LAYOUT,
   DEFAULT_READING_MODE,
+  PAGER_LAYOUTS,
   READING_MODES,
+  resolvePagerLayout,
   resolveReadingMode,
 } from '../src/shared/reading-modes.js';
 
+// Les fins de ligne du dépôt sont normalisées à la lecture : `core.autocrlf`
+// rend des `\r\n` sous Windows, et un test qui cite deux lignes d'affilée
+// échouerait sur la machine d'un contributeur et pas sur celle d'un autre.
 const read = (relative) =>
-  readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
+  readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
 
 // --------------------------------------------------------- mode de lecture
 
@@ -67,7 +73,7 @@ test('le panneau du lecteur ne porte plus le mode de lecture', () => {
   const settings = read('../src/renderer/js/views/settings.js');
   assert.ok(settings.includes("t('reader.modeLabel')"), '/settings doit porter le réglage');
   assert.ok(
-    settings.includes('dataset.readingMode'),
+    settings.includes("marque: 'readingMode'"),
     'le contrat des captures est `data-reading-mode`',
   );
 });
@@ -80,6 +86,78 @@ test('le panneau du lecteur ne porte plus le mode de lecture', () => {
 test('la feuille de style ne garde pas de règle orpheline pour les cartes de mode', () => {
   const views = read('../src/renderer/styles/views.css');
   assert.equal(/^\.mode-choices/m.test(views), false, 'règle .mode-choices sans porteur');
+});
+
+// ------------------------------------------------------------ ruban dressé
+
+test('resolvePagerLayout ne reconnaît que les deux dispositions', () => {
+  for (const layout of PAGER_LAYOUTS) {
+    assert.equal(resolvePagerLayout(layout.key), layout.key);
+  }
+  for (const stored of ['vertical-rl', 'side', '', null, undefined, 0, {}]) {
+    assert.equal(resolvePagerLayout(stored), DEFAULT_PAGER_LAYOUT);
+  }
+});
+
+/**
+ * Dressé, le ruban ne prend **pas** de place en plus : le pied s'en va, la
+ * bande le remplace. Si la colonne de lecture gardait sa réserve basse tout en
+ * cédant sa largeur, le réglage coûterait des deux côtés.
+ */
+test('le ruban dressé échange la hauteur contre la largeur', () => {
+  const views = read('../src/renderer/styles/views.css');
+  const bloc = (selector) => {
+    const start = views.indexOf(`${selector} {`);
+    assert.notEqual(start, -1, `règle absente : ${selector}`);
+    return views.slice(start, views.indexOf('}', start));
+  };
+
+  const scroll = bloc('.reader--pager-vertical .reader__scroll');
+  assert.ok(
+    /padding-right:\s*calc\(var\(--reader-pager-width\)/.test(scroll),
+    'la colonne rend au ruban la largeur qu’il prend',
+  );
+  assert.ok(
+    /padding-bottom:\s*calc\(var\(--space-xxl\)/.test(scroll),
+    'et récupère la hauteur qu’il ne prend plus',
+  );
+
+  // Escamoté, il sort par son bord : le bas n'est plus le sien.
+  assert.ok(
+    /translateX\(100%\)/.test(bloc('.reader--pager-vertical .reader__footer.is-hidden')),
+    'le ruban dressé doit sortir par le côté',
+  );
+});
+
+/**
+ * `[dir='rtl'] .reader__rail` repeint le dégradé « vers la gauche » à la même
+ * spécificité : c'est exactement la panne du rail couché, et elle se rejouerait
+ * si le sélecteur RTL n'était pas nommé ici aussi.
+ */
+test('le rail dressé nomme ses deux sélecteurs', () => {
+  const views = read('../src/renderer/styles/views.css');
+  assert.ok(
+    views.includes(
+      '.reader--pager-vertical .reader__rail,\n[dir=\'rtl\'] .reader--pager-vertical .reader__rail',
+    ),
+    'le rail dressé doit se déclarer pour les deux directions',
+  );
+  const start = views.indexOf('.reader--pager-vertical .reader__rail,');
+  const rule = views.slice(start, views.indexOf('}', start));
+  assert.ok(/writing-mode:\s*vertical-rl/.test(rule), 'le rail doit être dressé');
+  // `writing-mode` dresse, `direction` décide du bout d'où part la valeur :
+  // hérité en RTL, il envoyait la page 2 sur 230 au *bas* du rail.
+  assert.ok(/direction:\s*ltr/.test(rule), 'la page 1 doit rester en haut dans les deux langues');
+});
+
+/**
+ * Dressés, les chevrons désignent le haut et le bas. Ceux de direction
+ * d'écriture annonceraient un geste qu'on ne fait pas.
+ */
+test('le ruban dressé fige ses chevrons', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.ok(reader.includes("'chevronUp'"), 'la page précédente est en haut');
+  assert.ok(reader.includes("'chevronDown'"), 'la page suivante est en bas');
 });
 
 // ------------------------------------------------------------ plein écran
@@ -169,6 +247,32 @@ test('la fiche des raccourcis n’est plus un outil de la barre', () => {
   // Les captures cliquaient l'outil disparu : elles frappent la touche.
   const capture = read('../src/main/capture.js');
   assert.equal(capture.includes("tool('help')"), false, 'la campagne clique un outil disparu');
+});
+
+// --------------------------------------------------- fermeture des panneaux
+
+/**
+ * Un panneau ouvert se referme au premier contact avec le texte : sa croix est
+ * à l'autre bout de l'écran, et revenir au livre est de toute façon le geste
+ * suivant. Le clic s'arrête là — escamoter les barres dans la foulée ferait
+ * deux choses pour un seul geste.
+ */
+test('un clic sur le texte referme le panneau ouvert, et rien de plus', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  // La **définition**, pas l'abonnement : celui-ci vient d'abord dans le fichier.
+  const start = reader.indexOf('#onContentClick(event) {');
+  assert.notEqual(start, -1, '#onContentClick a disparu');
+  const corps = reader.slice(start, reader.indexOf('\n  }', start));
+
+  const fermeture = corps.indexOf('#closePanels()');
+  const barres = corps.indexOf("classList.toggle('is-hidden')");
+  assert.notEqual(fermeture, -1, 'le clic doit refermer les panneaux');
+  assert.notEqual(barres, -1, 'et sinon escamoter les barres');
+  assert.ok(fermeture < barres, 'la fermeture passe avant, et sort');
+  assert.ok(
+    /#closePanels\(\);\s*\r?\n\s*return;/.test(corps),
+    'le clic ne doit pas aussi escamoter les barres',
+  );
 });
 
 // --------------------------------------------------------- marges système

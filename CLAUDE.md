@@ -136,6 +136,16 @@ Les quatre teintes de surlignage sortent des jetons du projet (`HIGHLIGHTS` dans
 
 **Deux modes de lecture** (`reader.mode`, persisté) : `page`, une page imprimée par écran, et `scroll`, un fil continu. Le fil ne garde qu'une tranche bornée de pages autour de la lecture — sql.js charge déjà le livre entier en mémoire. Une annotation s'ancre sur la page qui porte la sélection, pas sur la page « courante » : en fil continu, ce n'est pas la même.
 
+**Le ruban de pagination se couche ou se dresse** (`reader.pager`, persisté). Couché, c'est la barre en pied d'écran de la maquette ; dressé, c'est une bande de 48 px contre le bord — chevrons haut et bas, la page courante sur son total en fraction empilée, la jauge, le pourcentage. Ce n'est **pas** une place en plus : le pied s'en va, la bande le remplace, et c'est la largeur qui paie au lieu de la hauteur. Sur un téléphone tenu à la main, c'est la hauteur qui manque.
+
+Trois pièges, chacun rencontré et chacun tenu par un test :
+
+- L'ancrage est **physique**, contre le bord droit, comme celui des panneaux — qui, eux, sortent par la gauche. Suivre le sens d'écriture ferait se croiser les deux sur le même bord en anglais. Escamoté, le ruban sort donc par `translateX(100%)` et non par le bas, qu'il ne touche plus.
+- `writing-mode: vertical-rl` dresse le rail, mais c'est `direction` qui décide du bout d'où part la valeur : hérité en RTL, il envoyait la page 2 sur 230 au *bas* du rail. Le rail n'est pas du texte — il porte `direction: ltr`, et la page 1 se lit en haut dans les deux langues.
+- `min-height: 0` sur la jauge n'est pas une précaution : sans lui, un `input` dressé réclame plus de hauteur que la bande n'en a, et le rail dépassait l'écran par les deux bouts — la première et la dernière page devenaient injoignables à la glissade.
+
+**Un clic sur le texte referme le panneau ouvert**, et s'arrête là : la croix est à l'autre bout de l'écran, revenir au livre est de toute façon le geste suivant, et escamoter les barres dans la foulée ferait deux choses pour un seul geste.
+
 **Le mode se règle dans `/settings`, pas dans le panneau du lecteur.** Les trois autres réglages de ce panneau — taille, ambiance, face — se touchent *en lisant* ; celui-ci se pose une fois et vaut pour tous les livres, `reader.mode` n'ayant jamais été un réglage par livre. Sur un téléphone il tenait en plus le haut d'une feuille déjà à l'étroit. La liste vit dans `src/shared/reading-modes.js`, **seule** : deux écrans la montrent maintenant, et c'est exactement la configuration qui avait produit la police orpheline et le `sepia` mort. La touche `V` du lecteur écrit le même réglage — deux portes, une seule valeur. Le contrat des captures est `data-reading-mode`, comme `data-tool` l'est pour la barre.
 
 Les outils de la barre haute s'accrochent par `data-tool` : les infobulles portent leur raccourci et changent, l'attribut est le contrat que `src/main/capture.js` et les tests suivent.

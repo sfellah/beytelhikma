@@ -13,7 +13,12 @@ import { segmented } from '../components/segmented.js';
 import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
-import { READING_MODES, resolveReadingMode } from '../../../shared/reading-modes.js';
+import {
+  PAGER_LAYOUTS,
+  READING_MODES,
+  resolvePagerLayout,
+  resolveReadingMode,
+} from '../../../shared/reading-modes.js';
 import { openShortcuts } from '../components/shortcuts.js';
 
 const MIN_FONT = 16;
@@ -155,7 +160,8 @@ function languageSection() {
 }
 
 /**
- * Comment on parcourt un livre — page imprimée, ou fil continu.
+ * Comment on parcourt un livre — page imprimée ou fil continu, ruban couché ou
+ * dressé.
  *
  * Ce choix se faisait dans le panneau du lecteur, entre la taille de la lettre
  * et l'ambiance. Il n'y avait pas sa place : les trois autres réglages de ce
@@ -167,25 +173,57 @@ function languageSection() {
  * écrit le même réglage : deux portes, une seule valeur.
  */
 function readingSection(prefs) {
-  const choices = segmented({
-    ariaLabel: t('reader.modeLabel'),
-    value: resolveReadingMode(prefs['reader.mode']),
-    options: READING_MODES.map((mode) => ({ value: mode.key, label: t(mode.label) })),
-    onPick: (key) => setSetting('reader.mode', key),
-  });
-
-  // Contrat de la campagne de captures, comme `data-tool` pour la barre du
-  // lecteur et `data-locale-choice` juste au-dessus : le libellé suit la
-  // langue, l'attribut ne bouge pas.
-  for (const [index, button] of [...choices.children].entries()) {
-    button.dataset.readingMode = READING_MODES[index].key;
-  }
+  /**
+   * Un choix segmenté sur une liste de `reading-modes.js`.
+   *
+   * Le `dataset` est le contrat de la campagne de captures, comme `data-tool`
+   * pour la barre du lecteur : le libellé suit la langue, l'attribut ne bouge
+   * pas. L'indice porte la seconde ligne de l'option — c'est le seul endroit
+   * où « كما في المطبوع » se lit encore, et le contrôle segmenté n'a pas de
+   * place pour une explication sous le mot.
+   */
+  const choix = ({ liste, valeur, label, setting, marque }) => {
+    const node = segmented({
+      ariaLabel: t(label),
+      value: valeur,
+      options: liste.map((entry) => ({ value: entry.key, label: t(entry.label) })),
+      onPick: (key) => setSetting(setting, key),
+    });
+    for (const [index, button] of [...node.children].entries()) {
+      button.dataset[marque] = liste[index].key;
+      button.title = t(liste[index].hint);
+    }
+    return node;
+  };
 
   return group(
     'reading',
     t('settings.reading'),
     t('settings.readingHint'),
-    row(t('reader.modeLabel'), choices, t('settings.readingModeHint')),
+    row(
+      t('reader.modeLabel'),
+      choix({
+        liste: READING_MODES,
+        valeur: resolveReadingMode(prefs['reader.mode']),
+        label: 'reader.modeLabel',
+        setting: 'reader.mode',
+        marque: 'readingMode',
+      }),
+      t('settings.readingModeHint'),
+    ),
+    // Le ruban dressé ne prend pas de place en plus : le pied s'en va, la bande
+    // le remplace, et c'est la largeur qui paie au lieu de la hauteur.
+    row(
+      t('reader.pagerLabel'),
+      choix({
+        liste: PAGER_LAYOUTS,
+        valeur: resolvePagerLayout(prefs['reader.pager']),
+        label: 'reader.pagerLabel',
+        setting: 'reader.pager',
+        marque: 'pagerLayout',
+      }),
+      t('settings.pagerHint'),
+    ),
     // La fiche des raccourcis a quitté la barre du lecteur : elle y prenait une
     // place de doigt pour une liste de touches que le tactile ne peut pas
     // frapper. On vient ici pour apprendre l'outil ; c'est là qu'elle se lit.
