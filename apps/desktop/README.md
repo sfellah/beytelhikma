@@ -158,10 +158,20 @@ tâches.
    hiérarchique cliquable, œuvres de la même discipline.
 4. **Lecteur** — deux façons de parcourir un livre, au choix dans les réglages
    (`نمط القراءة`) : **صفحة صفحة**, une page imprimée par écran, ou **تمرير
-   متصل**, le fil continu où les pages s'enchaînent et où le pied imprimé ne
-   fait plus que séparer. Le fil ne garde qu'une tranche de pages autour de la
-   lecture (`FLOW_KEEP`) : sql.js tient déjà tout le livre en mémoire, un fil
-   sans fin ferait enfler la page autant que le processus. Sélection de texte
+   متصل**, un seul bloc de texte continu. Le fil ne porte **aucune marque de
+   page** — ni pied imprimé, ni numéro entre deux pages, ni filet, ni marge :
+   le texte de la page N+1 suit celui de la page N comme deux paragraphes du
+   même texte. La découpe est celle du fichier, pas celle du texte, et
+   l'afficher faisait compter les pages au lieu de lire. Seul le titre de
+   chapitre subsiste, et seulement **quand il change** d'une page à la
+   suivante. Le ruban y perd donc les deux chevrons et la fraction
+   « ١٢ / ٢٣٠ » : sans page à l'écran, ils ne désignent plus rien de visible.
+   Il ne garde que ce qui dit où l'on en est — la jauge et le pourcentage. En
+   mode page, il garde tout. Le fil ne garde qu'une tranche de pages autour de
+   la lecture (`FLOW_KEEP`) : sql.js tient déjà tout le livre en mémoire, un
+   fil sans fin ferait enfler la page autant que le processus — un seul bloc à
+   l'œil, donc, pas dans l'arbre, et `page_id` continue de porter l'ancrage des
+   annotations. Sélection de texte
    native, taille de police (curseur, boutons, `Ctrl`+molette), face de lecture
    parmi les trois arabes, progression écrite dans `user.sqlite`. L'ambiance
    (ورقي / أبيض / ليلي) n'appartient plus au lecteur : c'est le thème de

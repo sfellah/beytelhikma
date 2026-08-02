@@ -1306,13 +1306,21 @@ class Reader {
 
   /**
    * Monte une page : titre de chapitre quand il change, corps, notes de bas de
-   * page, puis le pied imprimé — qui sert aussi de séparateur en fil continu.
+   * page, et — en mode page seulement — le pied imprimé.
+   *
+   * Le pied n'est pas dessiné puis masqué au fil : il n'y est plus l'affichage
+   * d'une valeur qu'on aurait choisi de taire, c'est un nœud qui n'a rien à
+   * dire. Caché, il resterait dans l'arbre, dans la sélection et dans le texte
+   * copié — au milieu d'une phrase que le fil vient de recoudre. Les blocs sont
+   * entièrement reconstruits à chaque bascule de mode (`#setMode`) : ne pas le
+   * dessiner ne coûte donc rien au retour à la page imprimée.
    */
   #makeBlock(index, page) {
+    const flow = this.#prefs.mode === 'scroll';
     const body = h('article', { class: 'reader__page', dir: CONTENT_DIR });
     const footnotes = h('aside', { class: 'reader__footnotes', dir: CONTENT_DIR });
     const chapter = h('h2', { class: 'reader__chapter', dir: CONTENT_DIR });
-    const foot = h('div', { class: 'reader__page-foot label-sm' });
+    const foot = flow ? null : h('div', { class: 'reader__page-foot label-sm' });
     const ribbon = h(
       'span',
       { class: 'reader__block-mark', title: t('reader.markedPage'), 'aria-hidden': 'true' },
@@ -1329,16 +1337,13 @@ class Reader {
       foot,
     );
 
-    const block = { index, page, root, body, chapter, footnotes, foot };
-
-    // Le titre de chapitre ne se répète pas d'une page à l'autre dans le fil :
-    // il n'annonce que ce qui commence.
+    // Le titre est retenu sur le bloc : c'est `#syncChapters` qui décide de le
+    // montrer, et il lui faut celui du **voisin monté**, pas une valeur qu'il
+    // recalculerait.
     const title = this.#chapterFor(page);
-    const previous = this.#pages.get(index - 1);
-    const repeated =
-      this.#prefs.mode === 'scroll' && previous && this.#chapterFor(previous) === title;
+    const block = { index, page, root, body, chapter, footnotes, foot, title };
     chapter.textContent = title ?? '';
-    chapter.style.display = title && !repeated ? '' : 'none';
+    chapter.style.display = title ? '' : 'none';
 
     if (page.footnotes) {
       footnotes.replaceChildren(document.createTextNode(page.footnotes));
@@ -1349,14 +1354,37 @@ class Reader {
     // `printed` est le numéro imprimé dans l'édition papier, `index` la
     // position dans le fichier : les deux diffèrent presque toujours, on ne
     // les mélange donc jamais dans un même « N sur M ».
-    const printed = page.printedPageNum ?? page.sequenceNum;
-    foot.textContent =
-      t('reader.pageOf', { index: index + 1, total: this.#pageCount }) +
-      t('reader.printedPage', { printed });
+    if (foot) {
+      const printed = page.printedPageNum ?? page.sequenceNum;
+      foot.textContent =
+        t('reader.pageOf', { index: index + 1, total: this.#pageCount }) +
+        t('reader.printedPage', { printed });
+    }
 
     root.classList.toggle('is-bookmarked', this.#isBookmarked(page.pageId));
     this.#paintBlock(block);
     return block;
+  }
+
+  /**
+   * Décide, pour chaque page montée, si son titre de chapitre se voit.
+   *
+   * Au fil continu il n'annonce que ce qui **commence** : répété toutes les
+   * vingt lignes, il redécouperait en pages le texte que le fil vient de
+   * recoudre. La comparaison se fait avec le bloc **réellement monté** juste
+   * avant — le fenêtrage démonte et remonte les bords du fil, et une variable
+   * de parcours (ou le cache des pages, qui garde des pages qu'on ne voit
+   * plus) dirait « déjà annoncé » d'un chapitre dont la première page a quitté
+   * l'écran. En mode page, chaque page rouvre son chapitre : c'est le seul
+   * repère de la feuille.
+   */
+  #syncChapters() {
+    const flow = this.#prefs.mode === 'scroll';
+    for (const block of this.#blocks.values()) {
+      const previous = flow ? this.#blocks.get(block.index - 1) : null;
+      const repete = Boolean(previous) && previous.title === block.title;
+      block.chapter.style.display = block.title && !repete ? '' : 'none';
+    }
   }
 
   // ------------------------------------------------------------- affichage
@@ -1384,6 +1412,7 @@ class Reader {
     this.#first = index;
     this.#last = index;
     this.#nodes.flow.replaceChildren(block.root);
+    this.#syncChapters();
     if (turn) {
       block.root.classList.add(turn > 0 ? 'is-turned-next' : 'is-turned-previous');
     }
@@ -1408,6 +1437,7 @@ class Reader {
       this.#first = index;
       this.#last = index;
       this.#nodes.flow.replaceChildren(block.root);
+      this.#syncChapters();
       this.#nodes.scroll.scrollTop = 0;
       this.#nodes.lastScroll = 0;
       this.#setCurrent(index, page, { save });
@@ -1452,7 +1482,12 @@ class Reader {
         this.#last = next;
         grew = true;
       }
-      if (grew) this.#trim('start');
+      if (grew) {
+        this.#trim('start');
+        // Après l'élagage : la page devenue première du fil n'a plus de voisin
+        // montée avant elle, et doit reprendre son titre de chapitre.
+        this.#syncChapters();
+      }
       return grew;
     } finally {
       this.#extending = false;
@@ -1482,6 +1517,9 @@ class Reader {
       }
       if (grew) {
         this.#trim('end');
+        // Une page ajoutée en tête peut porter le chapitre de celle qui la
+        // suivait : c'est elle qui l'annonce désormais, et sa voisine se tait.
+        this.#syncChapters();
         this.#nodes.lastScroll = scroll.scrollTop;
       }
       return grew;

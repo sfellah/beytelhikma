@@ -88,6 +88,143 @@ test('la feuille de style ne garde pas de règle orpheline pour les cartes de mo
   assert.equal(/^\.mode-choices/m.test(views), false, 'règle .mode-choices sans porteur');
 });
 
+// -------------------------------------------------------------- fil continu
+
+/** Le corps d'une méthode, jusqu'à l'accolade fermante de son indentation. */
+const methode = (source, entete) => {
+  const start = source.indexOf(entete);
+  assert.notEqual(start, -1, `méthode absente : ${entete}`);
+  return source.slice(start, source.indexOf('\n  }', start));
+};
+
+/** Le corps d'une règle CSS nommée par son sélecteur exact. */
+const regle = (source, selecteur) => {
+  const start = source.indexOf(`${selecteur} {`);
+  assert.notEqual(start, -1, `règle absente : ${selecteur}`);
+  return source.slice(start, source.indexOf('}', start));
+};
+
+/**
+ * Au fil, la page n'est plus une unité qu'on lise : le pied imprimé n'y
+ * désigne rien. Il n'est donc **pas dessiné**, plutôt que dessiné puis masqué —
+ * caché, il resterait dans l'arbre, dans la sélection et dans le texte copié,
+ * au milieu d'une phrase que le fil vient de recoudre.
+ */
+test('au fil continu, aucune page ne laisse de pied imprimé', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const corps = methode(reader, '#makeBlock(index, page) {');
+
+  assert.ok(
+    /const flow = this\.#prefs\.mode === 'scroll'/.test(corps),
+    '#makeBlock doit savoir dans quel mode il monte',
+  );
+  assert.ok(
+    /const foot = flow \? null : h\(/.test(corps),
+    'le pied imprimé ne doit pas exister au fil',
+  );
+  assert.ok(
+    /if \(foot\) \{/.test(corps),
+    'et son libellé ne doit pas se calculer pour un nœud qu’on ne monte pas',
+  );
+
+  // En mode page, il reste : c'est là qu'il dit où l'on en est sur la feuille.
+  assert.ok(corps.includes("t('reader.pageOf'"), 'la page imprimée garde son « N sur M »');
+  assert.ok(corps.includes("t('reader.printedPage'"), 'et son numéro d’édition');
+});
+
+/**
+ * Deux pages du fil se suivent comme deux paragraphes du même texte. Une
+ * marge, même discrète, redessinerait la coupure que le fil défait : l'œil
+ * compterait les pages au lieu de lire.
+ */
+test('au fil continu, aucune marge ne sépare deux pages', () => {
+  const views = read('../src/renderer/styles/views.css');
+  assert.ok(
+    /margin-top:\s*0;/.test(regle(views, '.reader--scroll .reader__block + .reader__block')),
+    'deux blocs du fil doivent se toucher',
+  );
+
+  // Le pied ayant quitté le fil, sa règle d'écart n'a plus de porteur : la
+  // laisser rouvrirait la porte au premier pied qu'on remonterait par mégarde.
+  assert.equal(
+    /\.reader--scroll \.reader__page-foot\s*\{/.test(views),
+    false,
+    'règle d’écart pour un pied que le fil ne dessine plus',
+  );
+});
+
+/**
+ * Sans page à l'écran, les deux chevrons et la fraction « ١٢ / ٢٣٠ » ne
+ * désignent plus rien de visible. Le ruban n'y garde que ce qui dit *où l'on
+ * en est* : la jauge et le pourcentage.
+ *
+ * Ici une règle CSS et non un `if` au montage : les trois nœuds ont un sens en
+ * mode page, et la touche `V` bascule le mode sans reconstruire la barre.
+ */
+test('au fil continu, le ruban perd les chevrons et la fraction, garde la jauge', () => {
+  const views = read('../src/renderer/styles/views.css');
+  assert.ok(
+    /display:\s*none/.test(regle(views, '.reader--scroll .reader__pager')),
+    'la pagination du ruban doit disparaître au fil',
+  );
+
+  // La jauge et le pourcentage ne sont visés par rien : ce sont eux qui restent.
+  for (const garde of ['.reader__progress', '.reader__percent', '.reader__rail']) {
+    assert.equal(
+      new RegExp(`\\.reader--scroll [^{,]*\\${garde}\\b[^{]*\\{[^}]*display:\\s*none`).test(views),
+      false,
+      `${garde} doit rester au fil`,
+    );
+  }
+
+  // Et le mode page n'est touché par personne : c'est la portée du sélecteur
+  // qui le garantit, pas une seconde règle qui les remonterait.
+  assert.equal(
+    /\.reader--page[^{,]*\.reader__pager\b[^{]*\{[^}]*display:\s*none/.test(views),
+    false,
+    'le ruban de la page imprimée doit garder ses chevrons et sa fraction',
+  );
+
+  // Masqués, ils continuent d'être tenus à jour : au retour à la page imprimée
+  // la fraction est juste sans attendre le prochain mouvement.
+  const reader = read('../src/renderer/js/views/reader.js');
+  const courant = methode(reader, '#setCurrent(index, page, { save = true } = {}) {');
+  assert.ok(courant.includes('this.#nodes.pagerCurrent.textContent'), 'la fraction reste tenue');
+  assert.ok(courant.includes('this.#nodes.previous.disabled'), 'et les chevrons aussi');
+});
+
+/**
+ * Le titre de chapitre se répétait à chaque page : au fil, il reviendrait
+ * toutes les vingt lignes et recouperait le texte en pages. Il n'annonce donc
+ * que ce qui **commence** — et la comparaison se fait avec le bloc réellement
+ * monté juste avant, jamais avec le cache des pages : celui-ci garde des pages
+ * qui ont quitté l'écran, et un chapitre resterait tu par un voisin absent.
+ */
+test('le titre de chapitre se compare au bloc voisin monté, pas au cache des pages', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const corps = methode(reader, '#syncChapters() {');
+
+  assert.ok(
+    /this\.#blocks\.get\(block\.index - 1\)/.test(corps),
+    'la comparaison doit lire le bloc monté juste avant',
+  );
+  assert.equal(
+    /this\.#pages\.get\(/.test(corps),
+    false,
+    'le cache des pages n’est pas ce qui est à l’écran',
+  );
+
+  // Le fenêtrage démonte et remonte les deux bords du fil : chaque mouvement
+  // doit redemander la décision, sinon la page devenue première du fil reste
+  // muette et l'on ne sait plus dans quel chapitre on lit.
+  for (const entete of ['async #extendEnd() {', 'async #extendStart() {']) {
+    assert.ok(
+      methode(reader, entete).includes('this.#syncChapters()'),
+      `${entete} doit resynchroniser les titres`,
+    );
+  }
+});
+
 // ------------------------------------------------------------ ruban dressé
 
 test('resolvePagerLayout ne reconnaît que les deux dispositions', () => {
