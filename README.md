@@ -20,7 +20,7 @@ catalogue local, aucun compte, aucun serveur.
 
 ## Ce que c'est
 
-Une application Electron qui installe un catalogue de 8 568 ouvrages sur la
+Une application de bureau qui installe un catalogue de 8 568 ouvrages sur la
 machine et laisse télécharger les livres un par un. Explorer, chercher et lire
 ne demandent **aucune connexion** ; seul le téléchargement d'un livre en
 réclame une.
@@ -30,29 +30,40 @@ RTL, l'interface se met en arabe ou en anglais. Ces deux directions sont
 distinctes et le restent — une page de livre arabe reste RTL sous une interface
 anglaise.
 
+Le même rendu tourne sur Android, sous Capacitor, sur SQLite natif : le portage
+tient en **un seul fichier remplacé** — celui qui touche le pont — et rien du
+routeur, des vues, des thèmes ou du RTL n'est dupliqué.
+
 ## L'arborescence
 
 | Dossier | Rôle |
 | --- | --- |
-| `apps/desktop/` | l'application — processus principal, préchargement, rendu. Voir son [README](apps/desktop/README.md). |
+| `apps/desktop/` | l'application de bureau (Electron) — processus principal, préchargement, rendu. Voir son [README](apps/desktop/README.md). |
+| `apps/mobile/` | l'application Android (Capacitor) — le même rendu, sur SQLite natif. Voir son [README](apps/mobile/README.md). |
 | `site/` | le site de présentation et de téléchargement : trois pages × trois langues, générées sans dépendance. |
 | `tools/` | la chaîne de données Python — import du corpus Shamela, génération du jeu d'exemple, publication vers S3. |
-| `docs/superpowers/specs/` | les notes de conception, une par décision structurante. |
-| `docs/maquettes/` | les maquettes HTML de référence. |
+| `docs/` | le modèle de données, le système visuel, les maquettes, les notes de conception et les spikes. |
 
-Trois documents portent le reste : [`docs/DATAMODEL.md`](DATAMODEL.md) pour le
-schéma des trois bases, [`docs/DESIGN.md`](DESIGN.md) pour le système visuel,
-[`CLAUDE.md`](CLAUDE.md) pour les règles d'architecture et leurs raisons.
+Trois documents portent le reste : [`docs/DATAMODEL.md`](docs/DATAMODEL.md) pour
+le schéma des trois bases, [`docs/DESIGN.md`](docs/DESIGN.md) pour le système
+visuel, [`CLAUDE.md`](CLAUDE.md) pour les règles d'architecture et leurs raisons.
 
 ## Démarrer
 
 ```bash
-# l'application
+# l'application de bureau
 cd apps/desktop
 npm install
 npm run seed        # récupère le catalogue publié depuis le bucket
 npm start
 npm test
+
+# l'application Android — un appareil ou un émulateur connecté
+cd apps/mobile
+npm install
+npm run verify      # parité des 67 méthodes du pont, hors appareil
+npm run data        # bucket -> .sqlite -> adb push  (~30 Mo)
+npm run android
 
 # le site — aucune dépendance à installer
 cd site
@@ -118,11 +129,18 @@ gh workflow run release.yml -f tag=v0.4.0   # rejouer un tag existant
 Publié : le catalogue (8 568 éditions, `catalog_version` 2) sur
 `beytelhima-library` en `eu-west-1`, et le site.
 
+Les trois findings de sécurité qui bloquaient l'ouverture du dépôt sont
+corrigés et tenus par des tests : la garde `will-navigate` (`src/main/navigation.js`),
+la validation d'`edition_id` avant tout `path.join` (`src/main/edition-id.js`),
+et le SHA-256 du catalogue vérifié **avant** le `rename`
+(`src/main/catalog-updater.js`).
+
 Reste à faire, dans cet ordre :
 
-1. **Trois findings de sécurité**, avant de rendre le dépôt public — garde
-   `will-navigate` absente, `edition_id` non validé avant `path.join`,
-   catalogue installé sans vérification de son SHA-256.
+1. **La mise à jour du catalogue au démarrage.** Le chemin complet est en place
+   et testé — pointeur, décision, installation vérifiée — mais rien n'appelle
+   `checkCatalogUpdate` à l'ouverture. Le seul déclencheur est le bouton de
+   `/settings`, et `declineCatalogUpdate` n'a donc aucun appelant.
 2. **Le câblage `electron-updater`.** La configuration de publication est en
    place et les workflows produisent déjà `latest.yml` ; le module côté
    application reste à écrire. Ni la cible portable ni le `.deb` ne peuvent se
@@ -130,6 +148,9 @@ Reste à faire, dans cet ordre :
 3. **La signature Windows.** Sans certificat, SmartScreen affiche un
    avertissement à chaque installation ; la page de téléchargement le dit et
    donne l'empreinte SHA-512.
+4. **L'application Android n'a pas de chaîne de publication.** `npm run
+   android:release` produit une archive signée de la clé de débogage ; aucun
+   workflow ne la construit, et rien ne la distribue.
 
 ## Licence
 

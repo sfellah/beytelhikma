@@ -4,17 +4,33 @@ Guidance pour Claude Code sur ce projet.
 
 ## Projet
 
-**Beyt El Hikma** — application de bureau Electron de bibliothèque numérique et de lecture de livres. Multilingue : arabe (RTL), français et anglais (LTR). L'implémentation vit dans `apps/desktop/` (voir son `README.md`). Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique.
+**Beyt El Hikma** — bibliothèque numérique et lecteur de livres, en arabe (RTL) et en anglais (LTR). Deux applications, un seul rendu :
+
+| Dossier | Ce que c'est |
+| --- | --- |
+| `apps/desktop/` | l'application Electron — processus principal, préchargement, rendu. Voir son `README.md`. |
+| `apps/mobile/` | l'application Android (Capacitor) — **le même rendu**, régénéré depuis `apps/desktop/src/renderer/` par `prepare-www.mjs`, sur SQLite natif. Un seul fichier diffère : celui qui touche le pont. |
+| `site/` | le site de téléchargement, généré sans dépendance. |
+| `tools/` | la chaîne de données Python. |
+| `docs/` | modèle de données, système visuel, maquettes, specs, spikes. |
+
+Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique, et le mobile en dérive au lieu de le dupliquer.
 
 ## Commandes
 
 ```bash
-# application (depuis apps/desktop/)
+# application de bureau (depuis apps/desktop/)
 npm install           # dépendances
 npm start             # lancer l'app
 npm test              # suite de tests (node --test)
 npm run seed          # récupère la graine de catalogue depuis le bucket
 npm run release:win   # tests + graine + installeur NSIS et portable
+
+# application Android (depuis apps/mobile/)
+npm run verify        # parité des 67 méthodes du pont, hors appareil
+npm run data          # bucket -> .sqlite -> adb push (~30 Mo)
+npm run android       # prepare:www + cap sync + build + lancement
+npm run android:release  # sans la sonde, aligné et signé
 
 python tools/gen_sample_data.py   # (depuis la racine) régénère les bases d'exemple -> apps/desktop/assets/sample/
 python tools/gen_brand_assets.py  # (depuis la racine) régénère les assets de marque depuis logo.png
@@ -80,7 +96,15 @@ L'installation vérifie le SHA-256 **avant** le `rename`, qui est le dernier ges
 
 L'empreinte est **exigée**, pas seulement comparée quand elle est là. `if (pointer.sha256 && …)` laissait installer sans contrôle tout pointeur qui n'en portait pas — or c'est le catalogue qui devient ensuite la source de vérité. Le refus est prononcé deux fois : `decideUpdate` ne propose même pas, et `installCatalog` s'arrête **avant** la requête, pour ne pas tirer quarante mégaoctets qu'on refusera.
 
+**Un refus tait une proposition, jamais une question posée.** `checkCatalogUpdate({ ignoreDeclined: true })` est ce que passe le bouton de `/settings`, et `installCatalogUpdate` avec lui — le clic *est* l'acceptation. Sans cette option, l'écran répondait « catalogue à jour » sur une version explicitement refusée, et plus rien ne permettait de l'installer.
+
+**Le verdict porte sa raison, et les raisons ne se valent pas.** Un `if (action !== 'offer')` nu annonçait « à jour » à une application hors ligne — c'est-à-dire une vérification qui n'a jamais eu lieu. `VERDICT_MESSAGES` (dans `views/settings.js`) distingue `upToDate` de `noPointer`, `malformed` et `schemaTooNew`. Le silence reste la règle pour une vérification *automatique* ; il ne l'est plus pour une question posée à la main.
+
 Reste à câbler : rien n'appelle `checkCatalogUpdate` au démarrage. Le seul déclencheur est le bouton de `/settings`, et `declineCatalogUpdate` — le refus par version, testé — n'a donc aucun appelant.
+
+**La bibliothèque source se cherche en remontant, elle ne se compte pas en `..`.** `resolveLibrarySource` essaie `dist/shamela` sur quatre ancêtres. Le chemin écrit en dur a désigné `apps/dist/shamela` le jour où l'application est passée de `beytelhikma-electron/` à `apps/desktop/` — et rien n'a cassé : on retombe sur les cinq livres d'exemple, en croyant lire le corpus.
+
+**Le routeur démonte avant de monter, et une vue dépassée ne s'inscrit jamais.** `resolve()` est `async` : deux navigations rapprochées se chevauchent, et la seconde passait son `dispose` sur un `current` encore nul. La première vue n'était alors jamais démontée — le lecteur, qui écoute les flèches et `Ctrl+F` sur `document`, continuait de les avaler sur l'écran suivant. Un numéro de génération tranche : la vue qui arrive en retard est démontée au lieu d'être inscrite. Symétriquement, `Reader.start()` relit `#disposed` après chaque attente, sinon elle posait ses écouteurs après coup. `test/router.test.js` tient la règle avec trois vues bouchonnées.
 
 **La publication se fait par tranches, et le manifeste est ce qui survit.** `release_library.py --batch-size N` (100 par défaut) importe une tranche, la monte, efface ses `.sqlite` et `.sqlite.zst`, puis recommence : le corpus complet pèse ~55 Go convertis, le pic disque tombe à ~1,3 Go. Trois règles le rendent possible :
 
@@ -259,6 +283,10 @@ Ce qui est converti : tout ce qui se lit. Ce qui ne l'est **jamais** : ce qui se
 
 Comme le thème, la locale et la police d'interface se posent depuis un **miroir `localStorage` lu en synchrone** avant le premier rendu : `user.sqlite` arrive par IPC après, et sans miroir une interface anglaise s'ouvrirait en RTL arabe puis basculerait à chaque lancement.
 
+**Une clé que plus personne n'appelle est un reste.** `test/i18n.test.js` échoue sur toute clé du catalogue qu'aucune source ne cite. Deux familles sont bâties à l'exécution (`format.ordinal.*`, `curriculum.*`) et exemptées — mais **l'exemption est adossée à son gabarit** : le test vérifie que le fichier qui la bâtit contient encore le littéral. Une liste d'exceptions nue survivrait au code qu'elle excuse. Ce sont deux listes de polices mortes (`reader.font.*`, `settings.font.*`) qui ont motivé ce contrôle : elles ont vécu des mois après que `shared/fonts.js` soit devenu la seule source de vérité.
+
+**Le sens de lecture décide du signe, jamais une constante.** La bande des nouveautés de l'accueil défilait de `+step` en dur : correct en RTL, inerte en anglais, où « suivant » ne bougeait pas d'un pixel. `test/direction.test.js` interdit `left: step()` et `left: -step()` dans l'accueil.
+
 `test/no-hardcoded-strings.test.js` interdit tout nouveau littéral arabe dans le rendu. Trois exceptions, justifiées dans le test : `locales/ar.js` est le catalogue, la table de `icons.js` est indexée par libellé de catégorie du catalogue (clés de données), et le `؟` du lecteur est une touche du clavier. Sans ce test, la prochaine vue en réintroduirait et le défaut ne se verrait qu'en changeant de langue — c'est-à-dire jamais pendant le développement.
 
 Ne jamais coder en dur des alignements gauche/droite : propriétés CSS logiques (`margin-inline-start`, `text-align: start`, `inset-inline-end`…). Les **flèches de sens de lecture** passent par `arrowForward` / `arrowBackward` de `icons.js` : figées, elles désignent l'inverse de ce qu'elles font dès que l'interface bascule.
@@ -281,8 +309,19 @@ Les fichiers sont servis par le schéma `userfont:`, qui ne sort jamais de `user
 
 `user.sqlite` est en version de schéma **3** depuis la table `user_fonts` (migration additive).
 
+## L'application Android
+
+`apps/mobile/` est le **même rendu**, pas une seconde interface. `scripts/prepare-www.mjs` efface `www/` et le refait entièrement depuis `apps/desktop/src/renderer/` et `apps/desktop/src/shared/` : une copie régénérée ne peut pas dériver, et c'est la seule façon de ne pas rejouer `MIRROR_DIRS`, le `sepia` mort et la liste de polices déclarée deux fois.
+
+Un seul fichier diffère : `src/renderer/js/repository.js`, remplacé par `src/repository.capacitor.js` et ses quatre modules `src/repo/*` — **67 méthodes, aucune `not-ported`**. Les modules sont des fabriques sans aucun `import` : chacune reçoit ses dépendances en argument.
+
+`npm run verify` compare `preload.cjs`, `repository.js` et le shim, et tourne en CI **sans appareil ni `npm ci`** : les trois modules Capacitor sont bouchonnés. Il vérifie aussi que les deux applications posent le **même `user_version`** — le numéro est écrit en dur des deux côtés, faute d'un module que le mobile puisse partager avec le processus principal d'Electron, et deux clients sur une même racine se marcheraient dessus.
+
+Ce que la plateforme change, et qui reste à trancher : **FTS5 existe sur Android** (le greffon embarque SQLCipher) et pas sous `sql.js`. Les résultats ne sont donc pas les mêmes des deux côtés — `نحو` rend 7 occurrences en FTS5 contre 94 en `LIKE`. C'est un arbitrage produit, pas une optimisation. Mesures et pièges : `docs/spikes/capacitor-mesures.md`.
+
 ## Conventions
 
 - Pas de contenu statique dans l'UI : toute donnée passe par le repository.
 - Composants partagés réutilisables dans `src/renderer/js/components/`.
-- `npm test` (depuis `apps/desktop/`) doit être vert avant de conclure une tâche.
+- Avant de conclure une tâche : `npm test` depuis `apps/desktop/`, `npm run verify` depuis `apps/mobile/`, `node --test "test/**/*.test.js"` depuis `site/`, et `python -m unittest discover -s shamela/tests -t .` depuis `tools/`.
+- Une valeur qui vient du corpus et repart dans un attribut HTML passe par `escape_attr` (`tools/shamela/text.py`), jamais par `escape` seul : un `"` dans un `id` refermait l'attribut et le reste passait pour du balisage.

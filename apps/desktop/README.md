@@ -1,9 +1,12 @@
-# Beyt El Hikma — Electron
+# Beyt El Hikma — application de bureau
 
 Application Electron **بيت الحكمة** (bibliothèque numérique arabe et lecteur),
 calquée sur les maquettes de `../../docs/maquettes/`. Modèle de données de
-`../../docs/DATAMODEL.md` : local-first, aucune API. Née comme portage d'un client
-Flutter aujourd'hui retiré, elle est l'implémentation unique.
+`../../docs/DATAMODEL.md` : local-first, aucune API.
+
+Son rendu est aussi celui de l'application Android : `../mobile/` le régénère
+depuis `src/renderer/` au lieu d'en tenir une copie. Un seul fichier diffère de
+ce côté-là — celui qui touche le pont.
 
 ## Démarrer
 
@@ -29,15 +32,18 @@ Trois bases SQLite, conformément à `../../docs/DATAMODEL.md` :
 `resolveLibrarySource()` retient le premier dossier contenant un `catalog.sqlite` :
 
 1. `BEYTELHIKMA_LIBRARY` — pour pointer une bibliothèque arbitraire ;
-2. `../dist/shamela/` — la sortie de `../tools/import_shamela.py` (corpus réel) ;
-3. `assets/sample/` — les 5 livres factices de `../tools/gen_sample_data.py`, pour
-   qu'un dépôt fraîchement cloné démarre sans avoir lancé l'import.
+2. `dist/shamela/` — la sortie de `../../tools/import_shamela.py` (corpus réel),
+   **cherchée en remontant** depuis l'application jusqu'à la racine du dépôt :
+   compter les niveaux a déjà cassé une fois, quand l'application est passée de
+   `beytelhikma-electron/` à `apps/desktop/` ;
+3. `assets/sample/` — les 5 livres factices de `../../tools/gen_sample_data.py`,
+   pour qu'un dépôt fraîchement cloné démarre sans avoir lancé l'import.
 
 Ne jamais éditer `assets/sample/` à la main : modifier le générateur puis recopier.
 
 ```bash
-python ../tools/import_shamela.py --books-per-category 10  # 397 livres -> ../dist/shamela
-npm start                                                  # les utilise automatiquement
+python ../../tools/import_shamela.py --books-per-category 10  # 397 livres -> dist/shamela
+npm start                                                     # les utilise automatiquement
 ```
 
 Au premier accès, `AppDatabase` copie **le catalogue seul** dans
@@ -65,10 +71,15 @@ Changer `distribution.base_url` suffit donc à servir la même bibliothèque dep
 un autre bucket, sans rien retélécharger de ce qui est installé. La résolution
 vit dans `src/shared/distribution.js`, et nulle part ailleurs.
 
-Au démarrage, `catalog-updater.js` lit `catalog/latest.json` sur le bucket et
-compare les versions. Cinq branches de décision sur six sont silencieuses : hors
-ligne, pointeur illisible, schéma trop récent, déjà à jour, version refusée. Une
+`catalog-updater.js` lit `catalog/latest.json` sur le bucket et compare les
+versions. Cinq branches de décision sur six sont silencieuses : hors ligne,
+pointeur illisible, schéma trop récent, déjà à jour, version refusée — une
 application hors ligne a déjà tout ce qu'il lui faut pour explorer.
+
+**Rien ne l'appelle encore au démarrage** : le seul déclencheur est le bouton de
+`/settings`, qui repose la question sans tenir compte d'un refus passé
+(`checkCatalogUpdate({ ignoreDeclined: true })`) — un refus tait une
+proposition, pas une question posée.
 
 **Limite connue** : `sql.js` charge chaque livre intégralement en mémoire. Les
 120 livres de la sélection par défaut plafonnent à ~18 Mo, mais le corpus complet
@@ -111,17 +122,23 @@ ignore le sens d'écriture — ils sont donc ancrés au bord **physique droit**,
 celui où la barre haute pose ses outils en RTL, et le texte leur cède la place
 plutôt que de se lire par-dessous (`.reader.has-panel`).
 
-Les polices de la maquette (Playfair Display, Source Serif 4, Inter) sont
-servies par Google Fonts, indisponible hors ligne : les piles retombent sur les
-serifs arabes du système (Amiri, Traditional Arabic…). Déposer les `.ttf` dans
-`assets/fonts/` et déclarer les `@font-face` suffirait à retrouver la maquette
-au pixel près. Même chose pour les icônes : Material Symbols est remplacé par
-un jeu SVG local (`js/icons.js`).
+Six familles sont **embarquées**, jamais servies depuis le réseau : trois arabes
+(Amiri, Noto Naskh Arabic, IBM Plex Sans Arabic) et trois latines (Literata,
+EB Garamond, Source Serif 4). Elles vivent dans `src/renderer/assets/fonts/`,
+déposées par `../../tools/fetch_fonts.py`, et la liste tient dans
+`src/shared/fonts.js` — **une seule**, deux écrans la lisent. `app.font.<script>`
+peint l'interface, `reader.font` le texte du livre.
+
+Une police Google supplémentaire s'**installe** au lieu de se lier :
+`src/main/font-installer.js` dépose ses `woff2` dans `userData/fonts/`, servis
+par le schéma `userfont:`. Ouvrir la CSP vers Google ferait appeler un tiers à
+chaque démarrage et perdre ses polices à un lecteur hors ligne. Même principe
+pour les icônes : un jeu SVG local (`js/icons.js`).
 
 ## Marque
 
-`src/renderer/assets/brand/` est dérivé de `../logo.png` par
-`python ../tools/gen_brand_assets.py` — ne rien y éditer à la main, relancer le
+`src/renderer/assets/brand/` est dérivé de `../../logo.png` par
+`python ../../tools/gen_brand_assets.py` — ne rien y éditer à la main, relancer le
 générateur. Il découpe le lockup en deux : le **symbole** (`mark.png`) sert
 partout où la place est carrée (rail, barre supérieure) pendant que le nom
 « بيت الحكمة » reste du texte à côté, net et sélectionnable ; le **lockup**
@@ -145,9 +162,10 @@ tâches.
    fait plus que séparer. Le fil ne garde qu'une tranche de pages autour de la
    lecture (`FLOW_KEEP`) : sql.js tient déjà tout le livre en mémoire, un fil
    sans fin ferait enfler la page autant que le processus. Sélection de texte
-   native, taille de police (curseur, boutons, `Ctrl`+molette), ambiances
-   ورقي / أبيض / ليلي, police serif ou sans, progression écrite dans
-   `user.sqlite`. Le menu de sélection surligne (quatre teintes de la palette du
+   native, taille de police (curseur, boutons, `Ctrl`+molette), face de lecture
+   parmi les trois arabes, progression écrite dans `user.sqlite`. L'ambiance
+   (ورقي / أبيض / ليلي) n'appartient plus au lecteur : c'est le thème de
+   l'application, posé sur `<html>` et partagé avec tous les écrans. Le menu de sélection surligne (quatre teintes de la palette du
    projet), commente et cherche le passage ; un panneau liste les annotations du
    livre, filtrables par type, et un bouton pose une marque-page — le signet se
    voit alors sur la page comme dans la barre haute.
@@ -167,8 +185,9 @@ Navigation clavier du lecteur : `←` page suivante, `→` page précédente,
 `Début`/`Fin` les deux bouts, `B` marque-page, `N` mes notes, `C` sommaire,
 `V` bascule le mode de lecture, `Ctrl+F` recherche, `F11` plein écran, `؟` la
 fiche des raccourcis, `Échap` ferme le panneau ou revient en arrière. La fiche
-(`؟`) est la source à tenir à jour : c'est elle que l'utilisateur lit, la
-constante `SHORTCUTS` de `views/reader.js` en est le texte.
+se lit aussi depuis `/settings` — le tactile ne peut pas frapper ces touches, et
+l'outil « ؟ » a donc quitté la barre. Sa liste vit dans
+`js/components/shortcuts.js`, **seule** : c'est elle que l'utilisateur lit.
 
 ### Pagination
 
