@@ -14,6 +14,7 @@ import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
 import { READING_MODES, resolveReadingMode } from '../../../shared/reading-modes.js';
+import { openShortcuts } from '../components/shortcuts.js';
 
 const MIN_FONT = 16;
 const MAX_FONT = 34;
@@ -185,6 +186,14 @@ function readingSection(prefs) {
     t('settings.reading'),
     t('settings.readingHint'),
     row(t('reader.modeLabel'), choices, t('settings.readingModeHint')),
+    // La fiche des raccourcis a quitté la barre du lecteur : elle y prenait une
+    // place de doigt pour une liste de touches que le tactile ne peut pas
+    // frapper. On vient ici pour apprendre l'outil ; c'est là qu'elle se lit.
+    row(
+      t('reader.shortcutsTitle'),
+      action('help', t('settings.showShortcuts'), () => openShortcuts()),
+      t('settings.shortcutsHint'),
+    ),
   );
 }
 

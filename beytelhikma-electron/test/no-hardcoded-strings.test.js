@@ -24,14 +24,15 @@ const ROOT = fileURLToPath(new URL('../src/renderer/js', import.meta.url));
  * - `icons.js` indexe ses pictogrammes par libellé de catégorie du catalogue
  *   (`التفسير`, `الحديث`…). Ce sont des **clés de données**, comparées à ce que
  *   rend `catalog.sqlite` ; les traduire casserait la correspondance.
- * - `؟` dans le lecteur est la **touche** du clavier arabe, comparée dans un
- *   `case` et affichée comme touche dans la fiche des raccourcis. Ce n'est pas
+ * - `؟` est la **touche** du clavier arabe : comparée dans un `case` par le
+ *   lecteur, affichée comme touche par la fiche des raccourcis. Ce n'est pas
  *   une phrase.
  */
 const ALLOWED = {
   'locales/ar.js': null, // fichier entier
   'icons.js': null, // table de catégories, clés de données
   'views/reader.js': new Set(['؟']),
+  'components/shortcuts.js': new Set(['؟']),
 };
 
 const ARABIC = /[؀-ۿ]/;

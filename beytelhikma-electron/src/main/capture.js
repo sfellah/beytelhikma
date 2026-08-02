@@ -119,7 +119,12 @@ const READER_STATES = [
      field.dispatchEvent(new Event('input', { bubbles: true }));`,
   ],
   ['reader-annotations', tool('annotations')],
-  ['reader-shortcuts', tool('help')],
+  // La fiche des raccourcis a quitté la barre : la touche est le seul geste du
+  // lecteur qui l'ouvre encore, et `/settings` porte le bouton.
+  [
+    'reader-shortcuts',
+    `document.dispatchEvent(new KeyboardEvent('keydown', { key: '؟', bubbles: true }))`,
+  ],
   [
     'reader-selection',
     `const paragraph = document.querySelector('.reader__page p');

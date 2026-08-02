@@ -128,13 +128,47 @@ test('le lecteur ne monte le plein écran que là où il existe', () => {
     'le bouton doit être monté sous condition, pas désactivé',
   );
   assert.ok(
-    reader.includes("needs: 'fullscreen'"),
-    'la ligne F11 de la fiche doit dire de quoi elle dépend',
-  );
-  assert.ok(
     /event\.key === 'F11' && this\.#fullscreen/.test(reader),
     'la touche F11 ne doit pas être avalée là où elle ne sert à rien',
   );
+
+  const fiche = read('../src/renderer/js/components/shortcuts.js');
+  assert.ok(
+    fiche.includes("needs: 'fullscreen'"),
+    'la ligne F11 de la fiche doit dire de quoi elle dépend',
+  );
+  assert.ok(
+    fiche.includes('canGoFullscreen()'),
+    'et la fiche doit interroger le même juge que la barre',
+  );
+});
+
+/**
+ * La fiche des raccourcis a quitté la barre du lecteur : elle y prenait une
+ * place de doigt pour une liste de touches que le tactile ne peut pas frapper.
+ * Un seul propriétaire de la liste, deux appelants — la touche `؟` en lecture,
+ * le bouton de `/settings` — comme pour les thèmes et les modes.
+ */
+test('la fiche des raccourcis n’est plus un outil de la barre', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.equal(
+    reader.includes("tool('help'"),
+    false,
+    'la barre du lecteur ne doit plus porter l’outil « ؟ »',
+  );
+  assert.equal(
+    /const SHORTCUTS\s*=/.test(reader),
+    false,
+    'le lecteur ne doit plus détenir la liste',
+  );
+  assert.ok(reader.includes('openShortcuts'), 'la touche « ؟ » doit passer par le propriétaire');
+
+  const settings = read('../src/renderer/js/views/settings.js');
+  assert.ok(settings.includes('openShortcuts'), '/settings doit porter le bouton');
+
+  // Les captures cliquaient l'outil disparu : elles frappent la touche.
+  const capture = read('../src/main/capture.js');
+  assert.equal(capture.includes("tool('help')"), false, 'la campagne clique un outil disparu');
 });
 
 // --------------------------------------------------------- marges système
