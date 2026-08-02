@@ -17,14 +17,52 @@ const SUGGESTED = [
   ['publishers', 'facet.publisher', 'facet.publisherSearch'],
 ];
 
+/** Clés de [query] qui restreignent réellement la liste. */
+const FILTRANTES = ['categories', 'types', 'centuries', 'status', 'authors', 'publishers'];
+
+/** Combien de filtres sont posés — c'est ce que le résumé doit annoncer. */
+function countActive(query) {
+  let total = 0;
+  for (const key of FILTRANTES) {
+    const value = query?.[key];
+    if (Array.isArray(value)) total += value.length;
+    else if (value != null && value !== '') total += 1;
+  }
+  if (query?.years) total += 1;
+  return total;
+}
+
 /**
  * Panneau de filtres. [onChange] reçoit un fragment de requête à fusionner ;
  * le panneau ne détient aucun état, il se redessine à partir de [query].
+ *
+ * C'est un `<details>` et non plus un `<aside>`, parce que le panneau **précède
+ * les résultats dans le flux**. Sur un écran large il occupe sa colonne et cela
+ * ne coûte rien ; sur un téléphone il les repoussait si loin qu'il fallait
+ * défiler à travers six disciplines, deux types et quinze siècles avant de voir
+ * un seul livre.
+ *
+ * Replié, il garde sa place — au-dessus, là où on va chercher un filtre — sans
+ * rien coûter, et son résumé dit combien sont posés, ce qu'une colonne déroulée
+ * ne disait pas non plus. Sur large, `open` est posé d'office et le CSS masque
+ * le résumé : la colonne latérale ne change pas d'un pixel.
  */
 export function facetPanel({ facets, query, onChange }) {
+  const large = !globalThis.matchMedia?.('(max-width: 900px)')?.matches;
+  const actifs = countActive(query);
+
   return h(
-    'aside',
-    { class: 'facets' },
+    'details',
+    { class: 'facets', open: large },
+    h(
+      'summary',
+      { class: 'facets__summary' },
+      icon('filter'),
+      h('span', { class: 'facets__summary-label' }, t('explore.filters')),
+      actifs > 0
+        ? h('span', { class: 'facets__badge' }, `${n(actifs)} ${t('explore.filtersActive')}`)
+        : null,
+    ),
     LISTS.map(([key, label]) => listFacet(key, label, facets[key] ?? [], query, onChange)),
     SUGGESTED.map(([key, label, placeholder]) =>
       suggestFacet(key, label, placeholder, facets, query, onChange),

@@ -1198,6 +1198,22 @@ html:not([dir='rtl']) .scroller--at-start {
   border: 1px solid var(--rule);
 }
 
+/* Sur téléphone la couverture prend toute la largeur, donc toute la hauteur
+   d'un écran : le bouton « lire » tombait sous la ligne de flottaison, et la
+   seule chose qu'on venait faire demandait de défiler. Plafonnée, elle reste
+   la pièce dominante sans être la seule. */
+@media (max-width: 900px) {
+  .detail__cover {
+    /* `width` et non `max-width`, `align-self` et non `margin-inline: auto` :
+       la couverture est **composée**, elle ne porte aucune image dont on
+       hériterait une largeur. Dans une colonne flex, une marge automatique
+       désactive l'étirement, et l'élément retombe alors sur la largeur de son
+       contenu — mesurée à 34 px. */
+    width: min(58vw, 260px);
+    align-self: center;
+  }
+}
+
 .detail__actions {
   display: flex;
   flex-direction: column;
@@ -1388,6 +1404,18 @@ html:not([dir='rtl']) .scroller--at-start {
 .detail__relations {
   display: grid;
   gap: var(--space-xl);
+}
+
+/* Un enfant de grille vaut `min-width: auto` par défaut, c'est-à-dire « jamais
+   plus étroit que mon contenu ». La bande de livres qu'il porte est pourtant
+   faite pour défiler (`.scroller`, `overflow-x: auto`) : sans cette ligne elle
+   ne défile pas, elle pousse — six cartes mesuraient 1 008 px dans une fenêtre
+   de 411, et toute la page partait de travers.
+
+   Invisible tant que la fenêtre est large, donc invisible pendant tout le
+   développement. C'est sur téléphone que ça s'est vu. */
+.detail__relations > * {
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------- cursus */
@@ -2402,12 +2430,68 @@ html:not([dir='rtl']) .scroller--at-start {
 
 /* ------------------------------------------------------------ facettes */
 
+/* `<details>` : le panneau se replie sur téléphone, où il précède les résultats
+   dans le flux. Sur large il est ouvert d'office et son résumé est masqué —
+   `display: flex` sur un `<details>` ouvert dispose ses enfants comme avant. */
 .facets {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
   width: 280px;
   flex: none;
+}
+
+.facets__summary {
+  display: none;
+}
+
+/* Le marqueur par défaut est un triangle collé au bord ; on le remplace par
+   l'icône et le chevron du reste de l'interface. */
+.facets__summary::-webkit-details-marker,
+.facets__summary::marker {
+  display: none;
+  content: '';
+}
+
+@media (max-width: 900px) {
+  .facets {
+    width: 100%;
+    gap: var(--space-md);
+  }
+
+  .facets__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    /* 48 px : une cible qu'on atteint au pouce sans viser. */
+    min-height: 48px;
+    padding: 0 var(--space-md);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-pill);
+    background: var(--surface-container);
+    color: var(--on-surface);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .facets__summary-label {
+    font-weight: 600;
+  }
+
+  /* Le compte des filtres posés : replié, c'est la seule chose qui dise que
+     la liste affichée n'est pas la liste entière. */
+  .facets__badge {
+    margin-inline-start: auto;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.82em;
+  }
+
+  .facets[open] .facets__summary {
+    margin-bottom: var(--space-sm);
+  }
 }
 
 .facet {
@@ -2914,10 +2998,15 @@ html:not([dir='rtl']) .scroller--at-start {
   white-space: nowrap;
 }
 
+/* `min-width: 0` pour la même raison que `.detail__relations > *` : un élément
+   de flex refuse par défaut de descendre sous la largeur de son contenu. Le
+   champ et son bouton réclamaient 524 px là où la ligne en offrait 322, et
+   c'est la page entière qui débordait — pas seulement ce couple. */
 .settings__inline {
   display: flex;
   gap: var(--space-sm);
   flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .settings__field {
@@ -3655,4 +3744,86 @@ html:not([dir='rtl']) .scroller--at-start {
 .lead-card__bio-toggle:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+/* ------------------------------------------------------- cibles tactiles */
+
+/* Un doigt n'est pas un curseur : il ne vise pas, il couvre. Ces trois familles
+   étaient les seules à rester sous le seuil tenable une fois mesurées sur
+   appareil — 36 px pour les outils du lecteur, 32 px pour le titre d'une ligne
+   de tableau, 16 px pour ses cases.
+ *
+ * On agrandit la **cible**, pas la ligne : les rangées faisaient déjà 48 et
+ * 97 px, c'est bien ce qu'on touche qui était trop petit. */
+@media (max-width: 900px) {
+  .reader__tool {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* La barre du lecteur est une grille `1fr auto 1fr` : ses éléments valent
+     `min-width: auto`, donc la rangée d'outils débordait sa piste et passait
+     **sous le titre**, qui devenait illisible. Le titre disparaît ici plutôt
+     que de se disputer la place : la page l'affiche déjà en tête, et sur
+     411 px les treize outils valent mieux qu'un titre écrasé. */
+  .reader__bar > * {
+    min-width: 0;
+  }
+
+  .reader__titles {
+    display: none;
+  }
+
+  .books-table__title {
+    min-height: 44px;
+  }
+
+  /* Une case à cocher ne se redimensionne pas par `width` seule dans tous les
+     moteurs : `accent-color` mis à part, c'est `transform` qui porte, mais il
+     ne réserve pas de place. On agrandit donc la boîte, et la ligne du tableau
+     absorbe la différence. */
+  .books-table input[type='checkbox'],
+  .downloads input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* Les listes déroulantes tombaient à 34 px — la hauteur d'un texte, pas
+     celle d'un contrôle qu'on ouvre au pouce. L'étiquette qui les enveloppe
+     est elle-même la cible : elle suit. */
+  .downloads__select,
+  .downloads__filter,
+  .pagination__size,
+  .pagination__size select,
+  .explore__select,
+  .explore__sort select {
+    min-height: 44px;
+  }
+
+  .reader__back,
+  .reader__selection-item {
+    min-height: 44px;
+  }
+
+  /* La jauge de lecture faisait **4 px de haut** : un trait qu'on ne peut pas
+     saisir au doigt, alors que c'est le seul moyen de se déplacer vite dans un
+     livre de mille pages.
+   *
+   * On ne l'épaissit pas — son dégradé est peint sur l'élément lui-même, et
+   * l'agrandir donnerait une barre de 44 px. On borne le dégradé à 4 px centrés
+   * et on laisse la boîte grandir : le trait reste fin, la prise devient
+   * franche.
+   *
+   * `[dir='rtl']` est nommé explicitement : la règle RTL plus haut pose le
+   * dégradé par le **raccourci** `background`, qui remet `background-size` à
+   * `auto`, et sa spécificité l'emporte sur un simple `.reader__rail`. Sans
+   * cette seconde adresse, le dégradé remplissait les 44 px — un pavé au lieu
+   * d'un filet. */
+  .reader__rail,
+  [dir='rtl'] .reader__rail {
+    height: 44px;
+    background-size: 100% 4px;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
 }

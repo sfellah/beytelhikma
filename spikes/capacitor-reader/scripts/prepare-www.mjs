@@ -153,6 +153,43 @@ function injecterSonde(html) {
   };
 }
 
+/**
+ * Pose la balise `viewport`, que le rendu n'a pas.
+ *
+ * Electron n'en a jamais eu besoin : sa fenêtre donne une largeur CSS égale à
+ * sa largeur réelle. Un WebView Android, lui, applique **sa** largeur par
+ * défaut — mesurée à 1028 px CSS sur un téléphone de 1221 px physiques.
+ *
+ * La conséquence n'a rien de cosmétique, et ne ressemble pas à un problème de
+ * balise manquante : à 1028 px, les points de rupture **bureau** s'activent.
+ * La colonne latérale se voit réserver 621 px alors qu'une autre règle la
+ * masque, il ne reste que 407 px de contenu poussés sur le côté, et la fiche
+ * d'un livre s'affiche entièrement blanche. Les facettes d'`/explore`
+ * mangeaient l'écran pour la même raison.
+ *
+ * `viewport-fit=cover` en plus : sans lui, la barre de navigation basse se
+ * pose sous l'encoche et sous la barre gestuelle du système.
+ */
+// `minimum-scale=1` n'est pas un détail. Sans lui, le WebView Android
+// « rétrécit pour faire tenir » dès qu'un élément déborde un instant, et ne
+// revient jamais : le viewport passait de 411 à 569 px sur `/settings` et à
+// 1028 px sur la fiche d'un livre. Or à 1028 px les points de rupture bureau
+// s'activent, la colonne latérale réserve sa place tout en étant masquée, et
+// la page paraît blanche. Le remède masquait donc la cause. Interdire le
+// dézoom rend le débordement visible — c'est-à-dire réparable.
+const BALISE_VIEWPORT =
+  '<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover" />';
+
+function injecterViewport(html) {
+  if (/<meta\s+name="viewport"/i.test(html)) return { html, injecte: false };
+  const ancre = /(<meta\s+charset="[^"]*"\s*\/?>)/i.exec(html);
+  if (!ancre) throw new Error('index.html : aucun <meta charset> où accrocher le viewport');
+  return {
+    html: html.replace(ancre[1], `${ancre[1]}\n    ${BALISE_VIEWPORT}`),
+    injecte: true,
+  };
+}
+
 /** Applique `REGLES_CSP` au `<meta http-equiv="Content-Security-Policy">`. */
 function ajusterCsp(html) {
   const motif = /(<meta\s+http-equiv="Content-Security-Policy"[\s\S]*?content=")([^"]*)(")/;
@@ -302,6 +339,14 @@ if (fs.existsSync(fzstdSource)) {
 
 const indexPath = path.join(wwwDir, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
+
+const viewport = injecterViewport(html);
+html = viewport.html;
+console.log(
+  viewport.injecte
+    ? '  injecté    <meta name="viewport"> — sans lui le WebView rend en 1028 px CSS'
+    : '  viewport déjà présent dans le rendu source',
+);
 
 const sonde = injecterSonde(html);
 html = sonde.html;

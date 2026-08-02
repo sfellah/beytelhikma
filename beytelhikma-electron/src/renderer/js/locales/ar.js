@@ -184,6 +184,8 @@ export default {
   'detail.tagAuthor': 'المؤلف',
   'detail.tagCategory': 'الباب',
   'explore.title': 'الاستكشاف',
+  'explore.filters': 'المرشِّحات',
+  'explore.filtersActive': 'مرشِّح مُفعَّل',
   'explore.sort.title': 'العنوان',
   'explore.sort.recent': 'الأحدث',
   'explore.sort.pages': 'عدد الصفحات',

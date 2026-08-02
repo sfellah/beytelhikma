@@ -175,6 +175,8 @@ export default {
   'detail.tagAuthor': 'Author',
   'detail.tagCategory': 'Field',
   'explore.title': 'Explore',
+  'explore.filters': 'Filters',
+  'explore.filtersActive': 'active',
   'explore.sort.title': 'Title',
   'explore.sort.recent': 'Most recent',
   'explore.sort.pages': 'Page count',

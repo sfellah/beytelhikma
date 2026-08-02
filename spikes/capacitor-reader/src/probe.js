@@ -42,9 +42,14 @@ const CSS = `
   pointer-events: none;
 }
 
+/* En bas, et non en haut : en haut le panneau couvrait la barre de titre et la
+   recherche, c'est-à-dire les commandes qu'on veut justement atteindre pour
+   naviguer. En bas il ne couvre que la barre de navigation, dont il s'écarte
+   par une marge — et il est replié au départ, donc il ne masque rien tant
+   qu'on ne le demande pas. */
 .probe {
   position: absolute;
-  inset-block-start: 8px;
+  inset-block-end: calc(96px + env(safe-area-inset-bottom, 0px));
   inset-inline-start: 8px;
   pointer-events: auto;
   /* Des chiffres qu'on recopie dans un rapport : latins, alignés à gauche,
@@ -216,7 +221,11 @@ function monter() {
   const bouton = document.createElement('button');
   bouton.className = 'probe__toggle';
   bouton.type = 'button';
-  bouton.textContent = 'replier';
+  // Replié au départ : la sonde sert à relever des chiffres, pas à occuper
+  // l'écran. Dépliée d'office, elle empêchait de juger la mise en page, qui
+  // est justement ce qu'on est venu regarder.
+  panneau.classList.add('probe--replie');
+  bouton.textContent = 'déplier';
   bouton.addEventListener('click', () => {
     const replie = panneau.classList.toggle('probe--replie');
     bouton.textContent = replie ? 'déplier' : 'replier';
