@@ -104,6 +104,11 @@ function action(host, cle) {
   return host.querySelector('.action-bar').querySelector(`[data-action="${cle}"]`);
 }
 
+/** La croix de la barre : la sortie, qui n'est pas une action de la rangée. */
+function croix(host) {
+  return host.querySelector('.action-bar__dismiss');
+}
+
 /* ------------------------------------------------------- la carte se coche */
 
 test('un livre installé se coche : sa case n’est pas désactivée', () => {
@@ -232,9 +237,13 @@ test('la pastille ne dit qu’une chose : tirer, ou vider', async () => {
   await pause(PESEE);
 
   const boutons = host.querySelector('.action-bar__row').childNodes;
-  assert.equal(boutons.length, 2, 'la pastille porte plus que le tirage et le vidage');
+  assert.equal(boutons.length, 1, 'la pastille porte plus que le tirage');
   assert.ok(action(host, 'download'), 'le tirage manque');
-  assert.ok(action(host, 'clear'), 'le vidage manque');
+  // Le vidage a quitté la rangée pour la croix : ce n'est pas une action sur ce
+  // qui est choisi, et son libellé prenait la place de celui du tirage — qui,
+  // lui, porte un compte et une taille et ne se devine pas.
+  assert.equal(croix(host).hidden, false, 'le vidage manque');
+  assert.equal(croix(host).getAttribute('aria-label'), t('explore.clearSelection'));
   // Ranger dans une collection en est parti : ce n'est pas le geste qu'on fait
   // après avoir coché vingt livres du catalogue. On les prend, puis on les
   // range depuis `/collections` ou la fiche du livre, qui ont ce qu'il faut.
@@ -358,7 +367,7 @@ test('effacer vide la sélection sans quitter le mode', async () => {
 
   clic(carte(host, 'الرسالة'));
   await pause(PESEE);
-  clic(action(host, 'clear'));
+  clic(croix(host));
   await pause(PESEE);
 
   // Le mode reste ouvert — la bande le prouve — mais la pastille se retire :

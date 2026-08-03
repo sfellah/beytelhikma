@@ -176,16 +176,26 @@ test('la barre de lot flotte, comme celle de l’exploration', () => {
   assert.match(styles, /\.downloads\[data-selecting\] \{[^}]*padding-block-end/);
 });
 
-test('les trois actions du lot restent en place, refus compris', () => {
-  // Une action qui disparaît déplace les deux autres sous le doigt entre deux
-  // tapes : elle se désactive et porte sa raison à la place de son libellé.
+test('les deux actions du lot restent en place, refus compris', () => {
+  // Une action qui disparaît déplace l'autre sous le doigt entre deux tapes :
+  // elle se désactive et porte sa raison à la place de son libellé.
   const bloc = view.slice(view.indexOf('#drawBulk('), view.indexOf('async #confirmDelete('));
-  for (const key of ['download', 'delete', 'clear']) {
+  for (const key of ['download', 'delete']) {
     assert.match(bloc, new RegExp(`key: '${key}'`), `l’action « ${key} » a disparu de la barre`);
   }
   assert.match(bloc, /reason: t\('downloads\.nothingToDownload'\)/);
   assert.match(bloc, /reason: t\('downloads\.nothingToDelete'\)/);
   assert.doesNotMatch(bloc, /length > 0 &&/, 'aucune action ne doit s’effacer');
+});
+
+test('annuler la sélection est la croix, pas une troisième action', () => {
+  // À trois actions sur un téléphone de 407 dp, les libellés se lisaient
+  // « ت… », « لا… » et « إلغاء ال… ». La sortie du mode n'agit pas sur ce qui
+  // est choisi : elle sort de la rangée et devient une croix.
+  const bloc = view.slice(view.indexOf('#drawBulk('), view.indexOf('async #confirmDelete('));
+  assert.doesNotMatch(bloc, /key: 'clear'/, 'l’annulation est restée une action de la rangée');
+  assert.match(bloc, /dismiss: \{\s*label: t\('downloads\.clearSelection'\)/);
+  assert.match(bloc, /this\.#selection\.clear\(\)/, 'la croix ne vide plus la sélection');
 });
 
 test('la table ne pose aucun alignement physique', () => {

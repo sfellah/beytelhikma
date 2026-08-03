@@ -338,6 +338,8 @@ export default {
   'downloads.column.book': 'Book',
   'downloads.column.field': 'Field',
   'downloads.column.pages': 'Pages',
+  // En fiches, la colonne disparaît : le nombre porte alors son unité.
+  'downloads.pagesUnit': 'pages',
   'downloads.column.size': 'Size',
   'downloads.column.actions': 'Actions',
   'downloads.read': 'Read',

@@ -347,6 +347,8 @@ export default {
   'downloads.column.book': 'الكتاب',
   'downloads.column.field': 'التخصص',
   'downloads.column.pages': 'الصفحات',
+  // En fiches, la colonne disparaît : le nombre porte alors son unité.
+  'downloads.pagesUnit': 'صفحة',
   'downloads.column.size': 'الحجم',
   'downloads.column.actions': 'إجراءات',
   'downloads.read': 'قراءة',

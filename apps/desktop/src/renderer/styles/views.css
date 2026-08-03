@@ -3376,10 +3376,26 @@ html:not([dir='rtl']) .scroller--at-start {
     gap: var(--space-md);
   }
 
+  /* `flex-wrap: nowrap` n'est pas une précaution : c'est **la** ligne qui
+     empêchait l'écran de déborder de côté, et elle manquait.
+   *
+   * L'entête devient une colonne ici, mais gardait le `wrap` de la règle de
+   * bureau, où il sert à faire tomber la barre d'outils sous le titre. Une
+   * colonne qui enroule est une boîte **multi-lignes** : la taille transverse
+   * d'une ligne — sa largeur — n'est plus celle du conteneur, c'est celle du
+   * plus large de ses enfants pris à son contenu maximal. L'entête prenait donc
+   * 366 px sur un écran de 361, et 472 px dès qu'Android grossit le texte d'un
+   * tiers : la page entière se mettait à glisser sous le doigt, titre coupé au
+   * bord. Mesuré à 407 dp, la largeur de l'appareil qui l'a signalé.
+   *
+   * `min-width: 0` avec elle : l'entête est l'enfant d'une colonne, et son
+   * `auto` la ramènerait au contenu par l'autre chemin. */
   .explore__header {
     flex-direction: column;
+    flex-wrap: nowrap;
     align-items: stretch;
     gap: var(--space-sm);
+    min-width: 0;
   }
 
   .explore__title {
@@ -4009,11 +4025,15 @@ html:not([dir='rtl']) .scroller--at-start {
   flex-wrap: wrap;
 }
 
+/* La règle des barres d'outils : un conteneur qui porte un champ ou un
+   `<select>` se rétrécit, donc il porte `min-width: 0`. Sans lui, son minimum
+   automatique est celui de son contenu, et c'est la page qui cède. */
 .downloads__search-box,
 .notes__search-box {
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .authors__search-box .icon,
@@ -4025,10 +4045,21 @@ html:not([dir='rtl']) .scroller--at-start {
   pointer-events: none;
 }
 
+/* `flex: 0 1 18rem` et non `width: 18rem` : une largeur **souhaitée**, pas un
+ * plancher. Le champ est l'enfant d'une boîte en flex, et une largeur fixe y
+ * remonte : la boîte prend 18 rem à son tour, `max-width: 100%` se mesure alors
+ * sur elle et ne borne plus rien. À la taille de texte d'Android agrandie d'un
+ * tiers, 18 rem valent 374 px sur une rangée de 361 — la page se met à défiler
+ * de côté, et l'on doit la glisser pour lire le titre. Mesuré à 407 dp.
+ *
+ * `min-width: 0` va avec : sans lui, le minimum automatique d'un enfant de flex
+ * est celui de son contenu, et le champ retrouverait un plancher par ce chemin.
+ */
 .authors__search,
 .downloads__search,
 .notes__search {
-  width: 18rem;
+  flex: 0 1 18rem;
+  min-width: 0;
   max-width: 100%;
   padding-block: 9px;
   padding-inline: 38px 12px;
@@ -4051,6 +4082,45 @@ html:not([dir='rtl']) .scroller--at-start {
   align-items: center;
   gap: var(--space-sm);
   color: var(--outline);
+}
+
+/* Sur téléphone, la barre de gestion prend le traitement d'`/explore`, qu'elle
+   n'avait jamais reçu : le titre garde sa ligne, le champ la sienne, et les
+   deux listes se partagent la suivante à parts égales.
+ *
+ * `flex-wrap: nowrap` sur l'entête est la ligne qui compte, et c'est celle
+ * qu'`/explore` avait oubliée : une colonne qui enroule est une boîte
+ * multi-lignes, et sa largeur cesse alors d'être celle de l'écran pour devenir
+ * celle du plus large de ses enfants. */
+@media (max-width: 900px) {
+  .downloads__manage-head {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-sm);
+    min-width: 0;
+  }
+
+  .downloads__toolbar {
+    min-width: 0;
+  }
+
+  /* Le champ prend la rangée entière : à côté des deux listes, il tombait sous
+     la largeur où l'on relit ce qu'on tape. */
+  .downloads__search-box {
+    flex: 1 1 100%;
+  }
+
+  /* À parts égales : ni le statut ni le tri n'est le contrôle principal. */
+  .downloads__filter {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .downloads__select {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 /* La barre de lot flotte (`.action-bar`) : l'écran se réserve sa hauteur, sinon
@@ -4236,6 +4306,195 @@ html:not([dir='rtl']) .scroller--at-start {
   background: none;
   border: 1px dashed var(--outline-variant);
   color: var(--outline);
+}
+
+/* Deux mots que la table n'a pas besoin de dire — l'en-tête les dit déjà — et
+   dont la fiche ne peut pas se passer : ce que coche la case de tête, et ce que
+   compte le nombre de pages. Ils sont posés **une fois** dans le rendu, et c'est
+   la feuille qui décide s'ils se voient : un second gabarit en JS dériverait du
+   premier, c'est la leçon de la police orpheline. */
+.books-table__pick-text,
+.books-table__unit {
+  display: none;
+}
+
+/* ---------------------------------------- la même table, repeinte en fiches
+
+   Sept colonnes — case, livre, champ, pages, taille, statut, actions — réclament
+   près de 880 px pour tenir : 40 + 192 + 122 + 72 + 122 + 160 + 136, cellules et
+   marges comprises. En deçà, `.books-table__scroll` défile **de côté**, et
+   « الحالة » est six colonnes plus loin : sur un téléphone de 407 dp on ne voit
+   que la case et le titre, et rien ne distingue un livre installé d'un livre
+   absent. Une table qu'il faut pousser de côté ne se pousse jamais.
+
+   Le seuil est 900 px, celui du régime au doigt déjà déclaré plus bas, et non un
+   second point de rupture : il couvre par construction toute la plage où les
+   sept colonnes ne tiennent pas, et deux seuils voisins à tenir en accord, c'est
+   exactement la configuration qui a produit le thème mort.
+
+   Le balisage ne change pas — même `<table>`, mêmes cellules, même ordre : les
+   `grid-area` réordonnent ce que le DOM garde tel quel. */
+@media (max-width: 900px) {
+  /* Le statut sort de la boîte à défilement latéral : c'est tout le défaut. */
+  .books-table__scroll {
+    overflow-x: visible;
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .books-table {
+    display: block;
+    border-collapse: separate;
+  }
+
+  /* L'en-tête garde sa seule commande — cocher la page — et perd ses libellés :
+     chaque fiche porte les siens. */
+  .books-table thead,
+  .books-table thead tr {
+    display: block;
+  }
+
+  .books-table thead th:not(.books-table__pick) {
+    display: none;
+  }
+
+  .books-table th.books-table__pick {
+    position: static;
+    display: block;
+    width: auto;
+    padding-block: var(--space-xs);
+    background: none;
+    border-bottom: none;
+  }
+
+  .books-table thead .books-table__check {
+    justify-content: start;
+    gap: var(--space-sm);
+  }
+
+  .books-table__pick-text,
+  .books-table__unit {
+    display: inline;
+  }
+
+  .books-table__unit {
+    margin-inline-start: 4px;
+    color: var(--outline);
+  }
+
+  /* Une fiche par livre, et plusieurs de front dès qu'il y a la place. Le
+     plancher est borné par 100 % : sans cette borne, la piste déborderait au
+     lieu de retomber sur une colonne, et ce serait la page entière qui
+     défilerait de côté — le défaut qu'on répare. */
+  .books-table tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+    gap: var(--space-sm);
+  }
+
+  /* Le statut **en tête** de fiche, avant le titre : c'est la question qu'on
+     pose à cet écran, elle se lit sans un geste. */
+  .books-table tbody tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'state state state pick'
+      'book  book  book  book'
+      'pages size  field acts';
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--rule);
+    /* Le filet de présence quitte la première cellule pour le bord de la fiche.
+       Il est posé sur **toutes** les fiches, teint sur les seules présentes :
+       n'en donner qu'à celles-là décalerait les autres de deux pixels. */
+    border-inline-start: 3px solid var(--rule);
+    border-radius: var(--radius-xl);
+    background: var(--surface-container-lowest);
+  }
+
+  .books-table tbody tr.is-present {
+    border-inline-start-color: var(--primary);
+  }
+
+  .books-table tbody tr.is-selected {
+    border-color: var(--primary);
+  }
+
+  .books-table tbody td,
+  .books-table tbody tr td:first-child {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .books-table tbody td:nth-child(1) {
+    grid-area: pick;
+    justify-self: end;
+  }
+
+  .books-table tbody td:nth-child(2) {
+    grid-area: book;
+  }
+
+  .books-table tbody td:nth-child(3) {
+    grid-area: field;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .books-table tbody td:nth-child(4) {
+    grid-area: pages;
+  }
+
+  .books-table tbody td:nth-child(5) {
+    grid-area: size;
+  }
+
+  .books-table tbody td:nth-child(6) {
+    grid-area: state;
+    justify-self: start;
+  }
+
+  .books-table tbody td:nth-child(7) {
+    grid-area: acts;
+  }
+
+  /* Les mesures se lisent au fil de la ligne : alignées à la fin, elles se
+     colleraient à leur voisine au lieu de leur en-tête, qui n'existe plus.
+   *
+   * Et elles se replient. `white-space: nowrap` convenait à une colonne, qui
+   * élargit la table ; dans une fiche, la piste ne s'élargit pas — le mot
+   * déborderait la fiche, et la page défilerait de côté. Même raison pour la
+   * pastille : elle porte le message d'échec, dont la longueur ne se devine
+   * pas. */
+  .books-table tbody .books-table__num {
+    text-align: start;
+    white-space: normal;
+  }
+
+  .books-table tbody .books-table__badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .books-table tbody .books-table__actions {
+    width: auto;
+  }
+
+  /* Le titre est la ligne qu'on lit : il se replie au lieu d'être coupé, la
+     fiche n'ayant plus de colonne voisine à protéger. */
+  .books-table__title {
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: var(--text-title-md);
+  }
 }
 
 /* Chemins de « عن التطبيق » : une seule colonne, la valeur prend la largeur. */
@@ -4703,10 +4962,13 @@ html:not([dir='rtl']) .scroller--at-start {
   margin-bottom: var(--space-md);
 }
 
+/* Même règle que `.downloads__search-box` : le conteneur d'un champ se
+   rétrécit. */
 .authors__search-box {
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .authors__index {

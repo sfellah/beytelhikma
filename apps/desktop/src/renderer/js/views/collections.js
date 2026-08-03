@@ -488,25 +488,25 @@ export function collectionDetailView(host, params) {
      */
     const bar = actionBar({ label: t('collections.manage') });
     bar.update({
-      actions: [
-        {
-          key: 'done',
-          icon: 'check',
-          variant: 'filled',
-          label: t('collections.manageDone'),
-          onPick: () => {
-            clearTimeout(pick.timer);
-            // Le jeton avance et l'hôte s'en va : une requête déjà partie ne
-            // dessinera pas dans un nœud qui n'est plus à l'écran.
-            pick.token += 1;
-            pick.results = null;
-            pick.open = false;
-            // Les décomptes de l'entête viennent de SQL : on relit la
-            // collection au lieu de tenir un compte de notre côté.
-            refresh();
-          },
+      // Cette barre ne porte **que** la sortie du mode : rien n'y agit sur les
+      // livres, tout se fait dans la liste. C'est donc la croix, pas une
+      // action — elle ne se désactive pas et ne bouge pas de place, et son
+      // libellé reste lisible au lecteur d'écran.
+      dismiss: {
+        label: t('collections.manageDone'),
+        onPick: () => {
+          clearTimeout(pick.timer);
+          // Le jeton avance et l'hôte s'en va : une requête déjà partie ne
+          // dessinera pas dans un nœud qui n'est plus à l'écran.
+          pick.token += 1;
+          pick.results = null;
+          pick.open = false;
+          // Les décomptes de l'entête viennent de SQL : on relit la
+          // collection au lieu de tenir un compte de notre côté.
+          refresh();
         },
-      ],
+      },
+      actions: [],
     });
     bar.setVisible(true);
 

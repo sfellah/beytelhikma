@@ -475,6 +475,12 @@ class DownloadsScreen {
               this.#refresh();
             },
           }),
+          // En fiches, la ligne d'en-tête perd ses libellés de colonnes : sans
+          // ce mot, il ne resterait au-dessus de la liste qu'une case seule,
+          // qu'on ne coche pas sans savoir ce qu'elle coche. En table, l'en-tête
+          // le dit déjà — le mot est posé une fois, c'est la feuille qui décide
+          // s'il se voit.
+          h('span', { class: 'books-table__pick-text' }, t('downloads.selectPage')),
         ),
       ),
       h('th', {}, t('downloads.column.book')),
@@ -567,10 +573,17 @@ class DownloadsScreen {
         row.authorName && h('p', { class: 'label-sm muted truncate' }, row.authorName),
       ),
       h('td', { class: 'label-sm muted' }, row.categoryLabel ?? '—'),
+      // En fiches, le nombre de pages quitte sa colonne et rejoint une ligne de
+      // mesures : « ٣٢٠ · ٤٫٢ م.ب · فقه ». Un nombre nu n'y dit plus ce qu'il
+      // compte — l'unité est posée une fois, en table elle est masquée par la
+      // feuille, l'en-tête la portant déjà.
       h(
         'td',
         { class: 'books-table__num label-sm' },
         row.pageCount ? n(row.pageCount) : '—',
+        // Ternaire et non `&&` : `pageCount` vaut 0 sur un livre sans mesure, et
+        // `0 &&` rendrait un « 0 » nu à côté du tiret.
+        row.pageCount ? h('span', { class: 'books-table__unit' }, t('downloads.pagesUnit')) : null,
       ),
       h('td', { class: 'books-table__num label-sm' }, size ? formatBytes(size) : '—'),
       h('td', {}, statusCell),
@@ -641,11 +654,23 @@ class DownloadsScreen {
       (row) => row.downloadStatus !== 'installed' && !BUSY.has(row.downloadStatus),
     );
 
-    // Trois actions, **toujours les trois** : une action qui disparaît déplace
-    // les deux autres sous le doigt entre deux tapes. Désactivée, elle porte sa
-    // raison à la place de son libellé — le refus se lit avant la tape.
+    // Deux actions, **toujours les deux** : une action qui disparaît déplace
+    // l'autre sous le doigt entre deux tapes. Désactivée, elle porte sa raison
+    // à la place de son libellé — le refus se lit avant la tape.
+    //
+    // La troisième est partie dans la croix : annuler la sélection n'est pas
+    // une action sur ce qui est choisi, c'est la sortie du mode. À trois, sur
+    // un téléphone de 407 dp, les libellés se lisaient « ت… », « لا… » et
+    // « إلغاء ال… ».
     this.#nodes.bulk.update({
       label: t('downloads.selectedCount', { count: selected.length }),
+      dismiss: {
+        label: t('downloads.clearSelection'),
+        onPick: () => {
+          this.#selection.clear();
+          this.#refresh();
+        },
+      },
       actions: [
         {
           key: 'download',
@@ -670,14 +695,6 @@ class DownloadsScreen {
           reason: t('downloads.nothingToDelete'),
           disabled: installed.length === 0,
           onPick: () => this.#confirmDelete(installed),
-        },
-        {
-          key: 'clear',
-          label: t('downloads.clearSelection'),
-          onPick: () => {
-            this.#selection.clear();
-            this.#refresh();
-          },
         },
       ],
     });

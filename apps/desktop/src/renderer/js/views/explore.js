@@ -519,6 +519,10 @@ export function exploreView(host, params) {
   function paintActions({ count, bytes, pending = false }) {
     bar.update({
       label: t('explore.selected', { count: state.selection.size }),
+      // Vider la sélection n'est pas une action sur ce qui est choisi : c'est
+      // s'en défaire. Une croix, donc, à côté du décompte qu'elle remet à zéro,
+      // et le libellé de tirage garde toute sa place — il porte une taille.
+      dismiss: { label: t('explore.clearSelection'), onPick: clearSelection },
       actions: [
         {
           key: 'download',
@@ -534,13 +538,6 @@ export function exploreView(host, params) {
           disabled: !state.selection.size || (!pending && count === 0),
           reason: state.selection.size ? t('explore.allInstalled') : t('explore.selectSome'),
           onPick: () => downloadSelection(),
-        },
-        {
-          key: 'clear',
-          icon: 'close',
-          label: t('explore.clearSelection'),
-          disabled: !state.selection.size,
-          onPick: clearSelection,
         },
       ],
     });
