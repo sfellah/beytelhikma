@@ -225,6 +225,11 @@ jobs:
     name: publier le site
     needs: publish
     uses: ./.github/workflows/site.yml
+    # Sans ce drapeau, le workflow appelé se croit déclenché par le push du tag
+    # — dont le `head_commit` est le commit `chore(release):` — et sa propre
+    # garde l'écarte. Voir la description de l'entrée.
+    with:
+      depuis_la_release: true
     permissions:
       contents: read
       pages: write

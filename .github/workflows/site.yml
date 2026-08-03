@@ -17,6 +17,19 @@ on:
       - '.github/workflows/site.yml'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      depuis_la_release:
+        description: >-
+          Vrai quand la chaîne de publication nous appelle, après la Release.
+          Un workflow appelé **hérite** du contexte de l'évènement déclencheur :
+          il voit `event_name: push` et le `head_commit` du tag, c'est-à-dire
+          le commit `chore(release):`. La garde ci-dessous, écrite pour écarter
+          le push direct, écartait donc aussi l'appel — et `verify-site`, qui
+          en dépend, était sauté avec lui. Rien ne rougissait, et le site
+          restait sur la version d'avant, exactement la panne que la garde
+          prétend éviter.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,7 +59,11 @@ jobs:
     # tag — arrivent séparément, et rien ne garantit lequel le premier. Un tag
     # qu'on cherche peut n'être pas encore là. Une version publiée sous un autre
     # libellé ne fait que redéployer le site pour rien, ce qui est bénin.
+    #
+    # `inputs.depuis_la_release` d'abord : c'est le seul signal qui distingue
+    # l'appel du push, les deux portant le même évènement.
     if: >-
+      inputs.depuis_la_release ||
       github.event_name != 'push' ||
       !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
