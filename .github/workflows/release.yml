@@ -145,6 +145,15 @@ jobs:
       - run: npx cap add android && npx cap sync android
         working-directory: apps/mobile
 
+      # Sans cette étape, l'APK publié porte l'icône et l'écran de démarrage de
+      # Capacitor. `android/` vient d'être engendré à la ligne au-dessus, avec
+      # ses ressources par défaut ; c'est ce script qui y pose les nôtres,
+      # depuis `resources/android/`, seul endroit que git suive. Rien
+      # n'échouerait sans lui — c'est précisément pourquoi il est nommé ici et
+      # pas laissé au hasard d'un `npm run sync` que la CI n'appelle pas.
+      - run: node scripts/prepare-android.mjs
+        working-directory: apps/mobile
+
       # La clé de débogage standard d'Android — celle qu'attend
       # `release-android.mjs` par défaut, documentée dans le README comme le
       # choix voulu : changer de signataire casserait la mise à jour des
