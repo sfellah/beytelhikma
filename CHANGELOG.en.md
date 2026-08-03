@@ -6,6 +6,18 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.5.1] — 2026-08-03
+
+### added
+- Settings now end with the app version, the platform and the engine, next to what the library holds. These are the first three lines of any bug report.
+- The downloads table says at a glance whether you already have a book: a mark at the start of the row, and a badge that carries a drawing as well as its word — a tick for present, a dash for absent. Absence gets its own outline rather than the neutral badge, which read the same as "unknown".
+
+### changed
+- The bulk action bars now float above the screen instead of scrolling away with the page: you tick a book at the fortieth row and the actions are still under your thumb. This applies to the downloads table and to composing a collection, where "Done" used to sit in the header.
+
+### fixed
+- The Android app announced version "1.0 (1)" — the template written once by the build tooling, which nobody was updating since the native project is regenerated. The version now comes from the project itself, and both apps carry the same number.
+
 ## [0.5.0] — 2026-08-03
 
 ### added

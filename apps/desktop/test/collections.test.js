@@ -199,6 +199,26 @@ test('sortir du mode d’édition relit les décomptes en base', () => {
   );
 });
 
+test('« terminé » flotte, il ne défile pas hors de l’écran', () => {
+  // Posé dans l'entête, le seul geste qui sorte du mode partait hors champ dès
+  // qu'on descendait dans les résultats. C'est la barre d'`/explore`, la même.
+  const bloc = view.slice(view.indexOf('function managePage('), view.indexOf('async function loadPicks()'));
+  assert.match(bloc, /actionBar\(/);
+  assert.match(bloc, /bar\.setVisible\(true\)/, 'la sortie du mode est offerte sans condition');
+  assert.ok(
+    !/collection-page__actions[\s\S]{0,400}collections\.manageDone/.test(bloc),
+    'le bouton ne doit plus vivre dans l’entête',
+  );
+
+  const styles = read('../src/renderer/styles/views.css');
+  const rule = styles.slice(styles.indexOf('.collection-manage {'), styles.indexOf('.collection-manage__page'));
+  assert.match(
+    rule,
+    /padding-block-end/,
+    'la liste doit se réserver la hauteur de la pastille, sinon ses derniers livres se cochent dessous',
+  );
+});
+
 test('le champ de recherche survit à la frappe', () => {
   // Recréé à chaque résultat, il reprendrait le curseur à chaque lettre : seuls
   // les résultats se redessinent.

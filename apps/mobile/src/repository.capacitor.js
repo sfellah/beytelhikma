@@ -876,14 +876,16 @@ function snippetAround(text, pattern) {
  * Les valeurs sont des chaînes, comme celles d'`app_settings`. Les clés de
  * police sont volontairement absentes : `resolveFont` replie sur le défaut que
  * l'appelant lui passe, et inventer une clé ici la ferait replier de toute
- * façon — en donnant l'illusion d'un choix.
+ * façon — en donnant l'illusion d'un choix. `reader.mode` est absent pour la
+ * même raison, et il l'a appris à ses dépens : il disait `page` quand
+ * `shared/reading-modes.js` disait `scroll`, et le défaut partagé n'était donc
+ * jamais lu.
  */
 const reglages = new Map(
   Object.entries({
     'app.locale': 'ar',
     'app.theme': 'paper',
     'reader.fontSize': '22',
-    'reader.mode': 'page',
   }),
 );
 

@@ -25,6 +25,63 @@ const appDir = path.resolve(scriptsDir, '..');
 const sourceRes = path.join(appDir, 'resources', 'android', 'res');
 const cibleRes = path.join(appDir, 'android', 'app', 'src', 'main', 'res');
 const stylesPath = path.join(cibleRes, 'values', 'styles.xml');
+const gradlePath = path.join(appDir, 'android', 'app', 'build.gradle');
+const manifestePath = path.join(appDir, 'package.json');
+
+// ---------------------------------------------------------------------------
+// La version
+// ---------------------------------------------------------------------------
+
+/**
+ * `npx cap add android` écrit `versionName "1.0"` et `versionCode 1`, et
+ * personne ne les touche jamais : `android/` est engendré et ignoré par git.
+ * L'écran « عن التطبيق » lit `App.getInfo()`, c'est-à-dire ces deux valeurs —
+ * il annonçait donc « 1.0 (1) » pendant que le dépôt en était à 0.5. Ce n'est
+ * pas un détail d'affichage : c'est la ligne qu'on recopie dans un rapport de
+ * bug, et elle désignait un binaire qui n'existe pas.
+ *
+ * La version suivie est celle de `package.json`, et c'est ce script qui la
+ * pose — même règle que l'écran de démarrage : la source est suivie, la cible
+ * est refaite, deux exécutions donnent le même arbre.
+ */
+function codeDeVersion(version) {
+  const morceaux = version.split('.').map(Number);
+  const [majeur, mineur, correctif] = morceaux;
+  if (
+    morceaux.length !== 3 ||
+    morceaux.some((n) => !Number.isInteger(n) || n < 0 || n > 99)
+  ) {
+    throw new Error(
+      `version « ${version} » : trois nombres de 0 à 99 attendus.\n` +
+        '  Le `versionCode` d’Android est un entier qui ne peut que croître, et\n' +
+        '  il est ici dérivé de la version — au-delà de 99, deux versions\n' +
+        '  différentes rendraient le même code et le Play Store refuserait la\n' +
+        '  seconde.',
+    );
+  }
+  return majeur * 10000 + mineur * 100 + correctif;
+}
+
+/** Le bloc `defaultConfig`, réécrit sur ses deux lignes de version. */
+function poserVersion(gradle, version) {
+  const code = codeDeVersion(version);
+  const remplacements = [
+    [/versionCode\s+\d+/g, `versionCode ${code}`],
+    [/versionName\s+"[^"]*"/g, `versionName "${version}"`],
+  ];
+  let sortie = gradle;
+  for (const [motif, valeur] of remplacements) {
+    const occurrences = sortie.match(motif)?.length ?? 0;
+    if (occurrences !== 1) {
+      throw new Error(
+        `app/build.gradle : ${occurrences} occurrence(s) de « ${motif.source} », une seule attendue.\n` +
+          '  Capacitor a changé son gabarit : relisez le fichier avant de le réécrire.',
+      );
+    }
+    sortie = sortie.replace(motif, valeur);
+  }
+  return { gradle: sortie, code, change: sortie !== gradle };
+}
 
 // ---------------------------------------------------------------------------
 // Le thème de lancement
@@ -177,6 +234,7 @@ const exigences = [
   ],
   [cibleRes, 'le projet natif `android/` — lancez `npx cap add android`'],
   [stylesPath, 'le thème `android/app/src/main/res/values/styles.xml`'],
+  [gradlePath, 'le montage `android/app/build.gradle`'],
 ];
 const manquants = exigences.filter(([chemin]) => !fs.existsSync(chemin));
 if (manquants.length) {
@@ -185,7 +243,17 @@ if (manquants.length) {
   process.exit(1);
 }
 
-console.log('prépare android/ — écran de démarrage');
+console.log('prépare android/ — version, écran de démarrage');
+
+const { version } = JSON.parse(fs.readFileSync(manifestePath, 'utf8'));
+const versions = poserVersion(fs.readFileSync(gradlePath, 'utf8'), version);
+fs.writeFileSync(gradlePath, versions.gradle);
+console.log(
+  versions.change
+    ? `  réécrit    app/build.gradle — versionName "${version}", versionCode ${versions.code}`
+    : `  app/build.gradle portait déjà « ${version} » : rien à réécrire`,
+);
+
 
 const copies = copierDossier(sourceRes, cibleRes);
 console.log(`  ${String(copies).padStart(2)} fichiers  resources/android/res/ -> android/app/src/main/res/`);

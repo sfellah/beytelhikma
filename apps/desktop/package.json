@@ -1,6 +1,6 @@
 {
   "name": "beytelhikma-desktop",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Beyt El Hikma — bibliothèque numérique arabe, application de bureau",
   "private": true,
   "type": "module",

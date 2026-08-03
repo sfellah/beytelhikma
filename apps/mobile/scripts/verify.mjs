@@ -595,6 +595,121 @@ controle('@capacitor/app est déclaré', () => {
     : 'sans la dépendance, `cap sync` n’embarque pas le greffon natif et l’évènement n’arrive jamais';
 });
 
+/**
+ * L'identité de l'APK, telle que « عن التطبيق » la montre.
+ *
+ * Le rendu est le même des deux côtés : c'est donc au dépôt de porter les trois
+ * mêmes champs — version, plateforme, moteur — sous les mêmes noms. Un `null`
+ * de plus côté mobile ne casserait rien à l'écran, il y laisserait juste un
+ * trou silencieux, et c'est exactement le genre de dérive que cette
+ * vérification existe pour attraper.
+ *
+ * `creerMethodesCatalogue` est une fabrique sans `import`, comme le planteur et
+ * le retour : un `ctx` factice suffit à l'éprouver hors appareil.
+ */
+let creerMethodesCatalogue = null;
+let erreurCatalogue = null;
+try {
+  ({ creerMethodesCatalogue } = await import(
+    pathToFileURL(path.join(appDir, 'src', 'repo', 'catalogue-plus.js')).href
+  ));
+} catch (erreur) {
+  erreurCatalogue = erreur;
+}
+
+/** Un `ctx` factice : juste ce que `getAbout` traverse, et rien d'autre. */
+const mondeAbout = (App) =>
+  creerMethodesCatalogue({
+    garde: (_quoi, fn) => fn(),
+    catalogue: async () => '/data/data/app/files/beyt/catalog.sqlite',
+    livreInstalle: async () => false,
+    first: async () => ({ catalog_version: 2, schema_version: 2 }),
+    all: async () => [],
+    allUser: async () => [],
+    manifeste: async () => null,
+    pont: () => (App ? { App } : null),
+  }).getAbout();
+
+// `controle` n'attend pas : une fonction `async` lui rendrait une promesse,
+// qu'il afficherait telle quelle en échec. Les deux lectures se font donc ici,
+// et les contrôles ne font que lire leur résultat.
+let avecGreffon = null;
+let sansGreffon = null;
+if (!erreurCatalogue) {
+  try {
+    avecGreffon = await mondeAbout({
+      getInfo: async () => ({ name: 'Beyt El Hikma', version: '0.3.1', build: '12' }),
+    });
+    sansGreffon = await mondeAbout(null);
+  } catch (erreur) {
+    erreurCatalogue = erreur;
+  }
+}
+
+controle('« عن التطبيق » porte la version de l’APK, pas celle du dépôt', () => {
+  if (erreurCatalogue) return `repo/catalogue-plus.js illisible : ${erreurCatalogue.message}`;
+  // `versionName` et `versionCode` ensemble : deux APK peuvent porter le même
+  // « 0.3.1 » sans être le même binaire.
+  if (avecGreffon.appVersion !== '0.3.1 (12)') {
+    return `version rendue « ${avecGreffon.appVersion} » au lieu de « 0.3.1 (12) »`;
+  }
+  if (avecGreffon.platform !== 'android') {
+    return `plateforme « ${avecGreffon.platform} » au lieu d’« android »`;
+  }
+  if (!('runtime' in avecGreffon)) {
+    return 'le champ `runtime` manque : l’écran le montre des deux côtés';
+  }
+  return null;
+});
+
+controle('sans greffon, la version se tait au lieu de mentir', () => {
+  if (erreurCatalogue) return `repo/catalogue-plus.js illisible : ${erreurCatalogue.message}`;
+  // Pont pas encore posé, ou greffon absent : `null`, jamais une version
+  // inventée — c'est cette ligne-là qu'on recopie dans un rapport de bug.
+  if (sansGreffon.appVersion !== null) {
+    return `version rendue « ${sansGreffon.appVersion} » sans greffon`;
+  }
+  if (sansGreffon.platform !== 'android') return 'la plateforme ne dépend pas du greffon';
+  return null;
+});
+
+/**
+ * La version, et le fait qu'il n'y en ait qu'une.
+ *
+ * Les deux applications ont dérivé — 0.5.0 au bureau, 0.3.1 sur Android — et
+ * l'APK, lui, annonçait « 1.0 (1) » : le gabarit de `npx cap add android`, que
+ * personne ne touchait puisque `android/` est engendré et ignoré par git. Trois
+ * numéros pour un seul logiciel, dont celui que l'écran montre était le faux.
+ */
+controle('les deux applications annoncent la même version', () => {
+  const lire = (...morceaux) =>
+    JSON.parse(fs.readFileSync(path.join(repoRoot, 'apps', ...morceaux), 'utf8')).version;
+  const bureau = lire('desktop', 'package.json');
+  const mobile = lire('mobile', 'package.json');
+  return bureau === mobile
+    ? null
+    : `le bureau est en ${bureau} et le mobile en ${mobile} : « عن التطبيق » ne dit pas la même chose des deux côtés`;
+});
+
+controle('prepare-android pose la version dans le projet engendré', () => {
+  const source = fs.readFileSync(path.join(appDir, 'scripts', 'prepare-android.mjs'), 'utf8');
+  // Le gabarit de Capacitor écrit `versionName "1.0"` une fois pour toutes :
+  // sans réécriture, l'écran des informations annonce un binaire inexistant.
+  if (!/versionName\\s\+"/.test(source)) return 'le script ne réécrit pas `versionName`';
+  if (!source.includes('codeDeVersion')) return 'le script ne dérive pas de `versionCode`';
+  if (!source.includes('manifestePath')) return 'la version ne vient pas de package.json';
+
+  // Là où le projet natif existe — sur la machine de développement, pas en CI —
+  // on relit ce qui a été posé plutôt que de croire le script sur parole.
+  const gradle = path.join(appDir, 'android', 'app', 'build.gradle');
+  if (!fs.existsSync(gradle)) return null;
+  const attendue = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).version;
+  const posee = fs.readFileSync(gradle, 'utf8').match(/versionName\s+"([^"]*)"/)?.[1] ?? null;
+  return posee === attendue
+    ? null
+    : `app/build.gradle porte « ${posee} » au lieu de « ${attendue} » — lancez \`npm run prepare:android\``;
+});
+
 console.log('\nartefact');
 
 controle('www/ n’est pas suivi par git', () => {

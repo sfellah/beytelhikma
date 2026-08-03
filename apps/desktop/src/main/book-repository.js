@@ -266,13 +266,22 @@ function snippetAround(text, pattern) {
 export class BookRepository {
   #db;
   #downloads = null;
+  #appInfo = null;
   #nameIndex = null;
   /** Ordre alphabétique du catalogue, construit une fois par session. */
   #titleOrderCache = null;
 
-  constructor(database, { downloads = null } = {}) {
+  /**
+   * L'identité de l'application — version, plateforme, moteur — est **passée**,
+   * jamais lue ici. Ce module ne connaît ni `electron` ni `process.versions` :
+   * il tourne aussi sous `node --test`, où `app.getVersion()` n'existe pas, et
+   * l'y importer rendrait la moitié de la suite impossible à monter. C'est le
+   * processus principal qui sait qui il est ; on le lui demande.
+   */
+  constructor(database, { downloads = null, appInfo = null } = {}) {
     this.#db = database;
     this.#downloads = downloads;
+    this.#appInfo = appInfo;
   }
 
   get downloads() {
@@ -2446,6 +2455,12 @@ export class BookRepository {
       const catalog = await this.#db.catalog();
       const user = await this.#db.user();
       return {
+        // Les trois premières lignes de tout rapport de bug : quelle version,
+        // sur quoi, dans quel moteur. Nulles hors application empaquetée — la
+        // vue tait ce qu'elle n'a pas plutôt que d'écrire « — ».
+        appVersion: this.#appInfo?.version ?? null,
+        platform: this.#appInfo?.platform ?? null,
+        runtime: this.#appInfo?.runtime ?? null,
         librarySource: this.#db.librarySource,
         storageRoot: this.#db.root,
         schemaVersion: first(user, 'SELECT schema_version FROM user_info')?.schema_version ?? null,

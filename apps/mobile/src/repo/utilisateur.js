@@ -512,16 +512,23 @@ export function creerMethodesUtilisateur(ctx) {
    * Ce que l'application vaut sur une base vierge.
    *
    * `book-repository.js` ne rend que ce qui est en base et laisse chaque vue
-   * replier de son côté ; la `Map` du shim, elle, posait ces quatre valeurs.
-   * Les garder évite qu'un premier lancement sous Capacitor se comporte
-   * autrement qu'un premier lancement du spike précédent — et n'importe quelle
-   * valeur en base les recouvre.
+   * replier de son côté ; la `Map` du shim, elle, posait ces valeurs. Les
+   * garder évite qu'un premier lancement sous Capacitor se comporte autrement
+   * qu'un premier lancement du spike précédent — et n'importe quelle valeur en
+   * base les recouvre.
+   *
+   * `reader.mode` en est **volontairement absent**, pour la raison des clés de
+   * police : `resolveReadingMode` replie sur `DEFAULT_READING_MODE`, et une
+   * valeur posée ici la recouvrirait — c'est une seconde déclaration du défaut,
+   * dans un fichier que `shared/reading-modes.js` ne peut pas atteindre (les
+   * fabriques n'ont aucun `import`). Elle disait `page` quand le module partagé
+   * disait `scroll` : le bureau ouvrait dans le fil, l'APK sur la feuille, et
+   * le défaut partagé n'était jamais lu.
    */
   const DEFAUTS = {
     'app.locale': 'ar',
     'app.theme': 'paper',
     'reader.fontSize': '22',
-    'reader.mode': 'page',
   };
 
   const getSettings = () =>

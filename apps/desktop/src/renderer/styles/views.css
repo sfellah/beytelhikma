@@ -1060,7 +1060,7 @@ html:not([dir='rtl']) .scroller--at-start {
 
 .author-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-sm) var(--space-md);
   padding: 0;
   margin: 0;
@@ -1180,9 +1180,12 @@ html:not([dir='rtl']) .scroller--at-start {
   box-shadow: var(--shadow-sm);
 }
 
+/* Le plancher est borné à la largeur disponible : voir `--card-min` dans
+   `tokens.css`. Un plancher fixe donnait une seule couverture par rangée sous
+   364 px de fenêtre — la moitié du parc Android. */
 .library__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--card-min), 45%), 1fr));
   gap: var(--space-lg);
 }
 
@@ -1222,8 +1225,10 @@ html:not([dir='rtl']) .scroller--at-start {
   min-width: 0;
 }
 
+/* La jauge prend sa part, jamais 140 px de force : dans une rangée de 320 px,
+   une couverture de 64 px et deux gouttières laissaient 68 px au titre. */
 .library__grid--list .progress {
-  width: 140px;
+  width: clamp(64px, 22%, 140px);
   flex: none;
 }
 
@@ -1343,9 +1348,12 @@ html:not([dir='rtl']) .scroller--at-start {
   gap: var(--space-md);
 }
 
+/* `minmax(0, 1fr)` : les valeurs sont des noms d'éditeur et des mesures, dont
+   certaines ne se coupent pas. Avec un `1fr` nu, la plus longue d'entre elles
+   fixe le plancher de sa colonne et fait déborder la fiche. */
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
   padding: var(--space-lg);
   background: var(--surface-container-low);
@@ -1377,16 +1385,35 @@ html:not([dir='rtl']) .scroller--at-start {
   border-bottom: 1px solid var(--rule);
 }
 
+/* La boîte montre cinq entrées et demie, et le reste se défile : la moitié
+   coupée est ce qui dit qu'il y en a d'autres dessous. Une entrée mesure ~56 px
+   — deux réserves de `--space-md` autour d'une ligne de `label-md`, plus le
+   filet. */
 .toc__list {
+  --toc-row: 56px;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  max-height: 320px;
+  max-height: calc(var(--toc-row) * 5.5);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-sm);
   background: var(--sink);
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
+}
+
+/* C'est cette ligne qui rend visible le sommaire d'un gros livre.
+   Un élément de flex se **rétrécit** par défaut, et `overflow: hidden` sur
+   `.toc__chapter` ramène sa taille minimale automatique à zéro : dans une
+   colonne bornée en hauteur, soixante chapitres se partageaient les ~300 px en
+   filets de cinq pixels, texte rogné par ce même `overflow`. La liste ne
+   débordait donc jamais — elle n'avait plus rien à faire défiler, et le
+   sommaire s'affichait comme une pile de barres vides. Cinq chapitres tenaient
+   dans la boîte et s'affichaient bien : la panne ne se voyait que sur les gros
+   livres, c'est-à-dire sur le corpus. */
+.toc__list > * {
+  flex-shrink: 0;
 }
 
 .toc__chapter {
@@ -1485,10 +1512,15 @@ html:not([dir='rtl']) .scroller--at-start {
   gap: var(--space-xl);
 }
 
+/* `min(…, 100%)` et non `280px` nu : un plancher plus large que le conteneur
+   n'empêche pas la piste d'exister, il la fait **déborder** — la page entière
+   se met alors à défiler de côté. Sur un téléphone de 320 dp, ou sur n'importe
+   quel modèle dont on a agrandi la taille d'affichage du système, le conteneur
+   descend sous 280 px. C'est le même garde-fou que `.disciplines`. */
 .curricula__grid {
   display: grid;
   gap: var(--space-lg);
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
 }
 
 .curriculum-card {
@@ -1633,9 +1665,16 @@ html:not([dir='rtl']) .scroller--at-start {
   list-style: none;
 }
 
+/* `minmax(0, 1fr)` et non `1fr` : un `1fr` nu a pour plancher le *contenu
+   minimal* de sa piste, c'est-à-dire ici le mot le plus long du titre. Un titre
+   arabe de 22 px dans une colonne de 148 px tient sur l'appareil du
+   développement ; le même sous la taille de police agrandie d'Android — qui
+   grossit le texte sans élargir la fenêtre — pousse l'étape au-delà de l'écran,
+   et c'est la page entière qui se met à défiler de côté. Le plancher zéro rend
+   la piste compressible ; `overflow-wrap` sur le texte lui donne où couper. */
 .curriculum-step {
   display: grid;
-  grid-template-columns: auto 64px 1fr auto;
+  grid-template-columns: auto 64px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-lg);
   padding: var(--space-md) var(--space-lg);
@@ -1671,6 +1710,9 @@ html:not([dir='rtl']) .scroller--at-start {
   display: grid;
   gap: 2px;
   min-width: 0;
+  /* Le titre est un lien, non tronqué : il doit pouvoir couper *dans* un mot
+     plutôt que déborder sa colonne. */
+  overflow-wrap: anywhere;
 }
 
 .curriculum-step__text a {
@@ -1679,7 +1721,11 @@ html:not([dir='rtl']) .scroller--at-start {
 
 @media (max-width: 640px) {
   .curriculum-step {
-    grid-template-columns: auto 48px 1fr;
+    grid-template-columns: auto 48px minmax(0, 1fr);
+    /* Trois gouttières de 24 px plus deux réserves de 24 px prenaient 120 px
+       d'une rangée qui en compte 320 : le titre s'écrivait dans 148 px. */
+    gap: var(--space-md);
+    padding: var(--space-md);
   }
 
   .curriculum-step > .button {
@@ -1693,7 +1739,7 @@ html:not([dir='rtl']) .scroller--at-start {
   }
 
   .meta-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -3310,10 +3356,13 @@ html:not([dir='rtl']) .scroller--at-start {
   gap: var(--space-lg);
 }
 
+/* La grille des résultats — celle d'`/explore` **et** celle d'une collection,
+   qui porte la même classe. Le plancher est borné à la largeur disponible :
+   voir `--card-min` dans `tokens.css`. */
 .explore__grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--card-min), 45%), 1fr));
   gap: var(--space-lg);
 }
 
@@ -3676,6 +3725,9 @@ html:not([dir='rtl']) .scroller--at-start {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  /* « Terminé » flotte (`.action-bar`) : la liste se réserve sa hauteur, sinon
+     les derniers livres de la page se cochent sous la pastille. */
+  padding-block-end: 72px;
 }
 
 .collection-manage__page {
@@ -4001,19 +4053,12 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--outline);
 }
 
-.downloads__bulk-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-lg);
-  background: var(--emerald-veil);
-  border: 1px solid var(--rule);
-}
-
-.downloads__bulk-bar > .label-md {
-  margin-inline-end: auto;
+/* La barre de lot flotte (`.action-bar`) : l'écran se réserve sa hauteur, sinon
+   les dernières lignes de la table se lisent dessous et l'on croit la page
+   finie. Les onglets et le retrait système sont **déjà** réservés par la coque.
+   C'est la règle d'`/explore`, à l'identique. */
+.downloads[data-selecting] {
+  padding-block-end: 72px;
 }
 
 /* La table déborde en largeur avant de déborder la fenêtre : elle défile dans
@@ -4063,6 +4108,19 @@ html:not([dir='rtl']) .scroller--at-start {
 
 .books-table tbody tr.is-selected {
   background: var(--emerald-veil);
+}
+
+/* « L'ai-je déjà ? » est la question de cette table, et la colonne du statut y
+   répond six colonnes plus loin. Un filet à l'entrée de la ligne y répond au
+   premier balayage. Il est posé sur **toutes** les lignes, transparent quand le
+   livre manque : n'en donner qu'aux présentes décalerait les autres d'un pixel,
+   et la colonne des cases se lirait en dents de scie. */
+.books-table tbody tr td:first-child {
+  border-inline-start: 3px solid transparent;
+}
+
+.books-table tbody tr.is-present td:first-child {
+  border-inline-start-color: var(--primary);
 }
 
 /* La colonne de sélection ne prend que ce qu'il faut : la ligne porte trois
@@ -4142,8 +4200,12 @@ html:not([dir='rtl']) .scroller--at-start {
   min-width: 8rem;
 }
 
+/* La pastille porte un dessin **et** son mot : le dessin se lit en balayant la
+   colonne, le mot se lit au lecteur d'écran. */
 .books-table__badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-container-high);
@@ -4167,9 +4229,26 @@ html:not([dir='rtl']) .scroller--at-start {
   color: var(--on-error-container);
 }
 
+/* L'absence est un état, pas un défaut d'état : un contour, jamais un aplat.
+   La pastille neutre servait aussi bien aux statuts qu'on ne sait pas nommer —
+   « je ne l'ai pas » et « je ne sais pas » se lisaient pareil. */
+.books-table__badge.is-missing {
+  background: none;
+  border: 1px dashed var(--outline-variant);
+  color: var(--outline);
+}
+
 /* Chemins de « عن التطبيق » : une seule colonne, la valeur prend la largeur. */
 .meta-grid--paths {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Un chemin ne porte pas d'espace : sans point de coupe, il fixe le plancher de
+   sa colonne et pousse l'écran des réglages hors du téléphone. Il se lit tel
+   quel — c'est une valeur qu'on recopie dans un rapport de bug —, il se replie
+   donc au lieu d'être tronqué. */
+.meta-grid--paths dd {
+  overflow-wrap: anywhere;
 }
 
 /* ---------------------------------------------------------- ملاحظاتي */
@@ -4206,9 +4285,12 @@ html:not([dir='rtl']) .scroller--at-start {
   border-color: transparent;
 }
 
+/* 20 rem valent 320 px : c'est exactement la largeur de contenu d'un téléphone
+   de 360 dp, et davantage que celle d'un 320 dp. Sans la borne, la piste
+   dépassait le conteneur et toute la page défilait de côté. */
 .notes__items {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
   gap: var(--space-md);
 }
 
@@ -4349,7 +4431,7 @@ html:not([dir='rtl']) .scroller--at-start {
    hauteur d'une grille. */
 .search__authors {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-sm);
   list-style: none;
   margin: 0;
@@ -4358,7 +4440,7 @@ html:not([dir='rtl']) .scroller--at-start {
 
 .search__curricula {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-sm);
 }
 
@@ -4394,9 +4476,10 @@ html:not([dir='rtl']) .scroller--at-start {
   width: 64px;
 }
 
+/* Même grille de couvertures que l'exploration, même plancher borné. */
 .search__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--card-min), 45%), 1fr));
   gap: var(--space-lg);
 }
 
@@ -4653,14 +4736,10 @@ html:not([dir='rtl']) .scroller--at-start {
 
 /* « Afficher plus » : un sommaire de plusieurs milliers d'entrées ne se monte
    pas d'un bloc, il se déplie. */
-.toc__more,
 .reader__toc-more {
   display: flex;
   justify-content: center;
   margin-top: var(--space-sm);
-}
-
-.reader__toc-more {
   padding: 0 var(--space-md) var(--space-sm);
 }
 

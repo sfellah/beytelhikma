@@ -20,6 +20,7 @@ import {
   clampSize,
   pinchSize,
 } from '../src/shared/reader-size.js';
+import { DEFAULT_READING_MODE, resolveReadingMode } from '../src/shared/reading-modes.js';
 
 // Les fins de ligne du dépôt sont normalisées à la lecture : `core.autocrlf`
 // rend des `\r\n` sous Windows, et un test qui cite deux lignes d'affilée
@@ -60,6 +61,57 @@ test('les deux façons de lire vivent dans un module partagé, seul', () => {
       `${chemin} redéclare la liste des façons de lire`,
     );
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/shared\/reading-modes\.js'/);
+  }
+});
+
+/**
+ * Le fil est le défaut, et c'est `resolveReadingMode` qui le dit.
+ *
+ * Trois entrées valent la même chose — absente, nulle, méconnue : une clé
+ * jamais écrite, une base vierge et une valeur d'une version future se lisent
+ * toutes « on n'a rien choisi », et rien ne justifierait qu'elles ouvrent trois
+ * livres différemment.
+ */
+test('le fil est ce qu’on lit quand on n’a rien choisi', () => {
+  assert.equal(DEFAULT_READING_MODE, 'scroll');
+  for (const rien of [undefined, null, '', 'bidon', 'pager', 0]) {
+    assert.equal(resolveReadingMode(rien), 'scroll', `${String(rien)} ne replie pas sur le fil`);
+  }
+  // Et ce qui a été choisi est rendu tel quel : le défaut n'écrase pas un choix.
+  assert.equal(resolveReadingMode('page'), 'page');
+  assert.equal(resolveReadingMode('scroll'), 'scroll');
+});
+
+/**
+ * Le lecteur ne recopie aucun défaut : il monte sur `DEFAULT_READING_MODE` et
+ * relit la préférence par `resolveReadingMode`. Un `'page'` écrit en dur à l'un
+ * de ces deux endroits rendrait le module partagé décoratif.
+ */
+test('le lecteur monte sur le fil, et ne pose aucun défaut de son cru', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.match(reader, /#mode = DEFAULT_READING_MODE;/);
+  assert.match(reader, /this\.#mode = resolveReadingMode\(prefs\['reader\.mode'\]\);/);
+  // `/settings` affiche la valeur repliée, jamais un défaut recopié.
+  assert.match(read('../src/renderer/js/views/settings.js'), /resolveReadingMode\(prefs\['reader\.mode'\]\)/);
+});
+
+/**
+ * Le piège vécu : les deux clients partagent `resolveReadingMode`, mais le shim
+ * Capacitor pose ses propres valeurs de base vierge **avant** ce qu'il lit en
+ * base. Un `'reader.mode': 'page'` y recouvrait le défaut partagé — le bureau
+ * ouvrait dans le fil, l'APK sur la feuille, et aucun test ne le voyait.
+ *
+ * Le shim ne peut pas importer `shared/reading-modes.js` (ses fabriques n'ont
+ * aucun `import`) : la seule parade est donc l'**absence** de la clé, comme
+ * pour les clés de police. Deux fichiers portent ces tables.
+ */
+test('aucun shim mobile ne repose un défaut de façon de lire', () => {
+  for (const chemin of ['../../mobile/src/repository.capacitor.js', '../../mobile/src/repo/utilisateur.js']) {
+    assert.equal(
+      /'reader\.mode'\s*:/.test(read(chemin)),
+      false,
+      `${chemin} repose un défaut de façon de lire, qui recouvre DEFAULT_READING_MODE`,
+    );
   }
 });
 

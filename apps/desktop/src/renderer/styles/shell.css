@@ -291,6 +291,13 @@
   /* Les 96px du bas dégagent la barre d'onglets ; celle-ci ayant grandi du
      retrait système, la réserve suit, sinon la dernière ligne finit dessous. */
   padding: var(--space-md) var(--space-gutter) calc(96px + var(--safe-bottom));
+  /* En paysage, l'encoche mord sur la largeur : le corps de page occupe tout
+     l'écran, il doit donc écarter les retraits latéraux comme les barres le
+     font. **Physiques** et non logiques — une encoche ne change pas de côté
+     quand l'interface bascule en RTL — et posés après le raccourci, qui les
+     écraserait. `env()` valant 0 ailleurs, le bureau ne bouge pas. */
+  padding-left: calc(var(--space-gutter) + var(--safe-left));
+  padding-right: calc(var(--space-gutter) + var(--safe-right));
 }
 
 /* ---------------------------------------------------------- bottom nav */
@@ -528,6 +535,8 @@
 
   .main {
     padding: var(--space-xl) var(--space-gutter) var(--space-xxl);
+    padding-left: calc(var(--space-gutter) + var(--safe-left));
+    padding-right: calc(var(--space-gutter) + var(--safe-right));
   }
 
   /* Le retrait système est reconduit : une tablette dépasse 900px et garde sa
@@ -535,6 +544,10 @@
      et présent sur l'appareil, ce qui est le pire des deux. */
   .topbar {
     padding: calc(var(--space-md) + var(--safe-top)) var(--space-gutter) var(--space-md);
+    /* Les latéraux aussi : une tablette à encoche en paysage dépasse 900px, et
+       le raccourci ci-dessus les aurait effacés. */
+    padding-left: calc(var(--space-gutter) + var(--safe-left));
+    padding-right: calc(var(--space-gutter) + var(--safe-right));
   }
 
   .topbar__brand {

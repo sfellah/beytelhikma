@@ -165,6 +165,26 @@
   /* Coquille : barre latérale libellée, à droite (RTL natif). */
   --rail-width: 256px;
 
+  /* Largeur plancher d'une carte de livre en grille — exploration, collection,
+     bibliothèque, recherche. Elle vit ici parce que quatre grilles la lisent, et
+     elle n'est **jamais** lue seule : partout où elle sert, elle est bornée à
+     45 % du conteneur (`minmax(min(var(--card-min), 45%), 1fr)`).
+
+     C'est cette borne qui répare le défaut « ça marche sur mon téléphone » : à
+     150 px fixes et 24 px de gouttière, deux colonnes réclamaient 324 px de
+     contenu, donc 364 px de fenêtre. Un téléphone de 411 dp — celui du
+     développement — en avait 371 et montrait deux colonnes ; un de 360 dp, le
+     plus répandu du parc, en avait 320 et retombait sur **une** couverture par
+     rangée, haute de tout l'écran. Quatre pixels séparaient les deux appareils.
+     Et régler la taille de police du système d'Android rétrécit la fenêtre de
+     la même façon, sur n'importe quel modèle.
+
+     45 % et non la moitié : deux colonnes plus la gouttière doivent tenir dans
+     100 %, ce qui laisse 10 % du conteneur à la gouttière — vrai dès 240 px.
+     Au-delà de 334 px de conteneur la borne ne mord plus, et le bureau garde
+     exactement la mise en page qu'il avait. */
+  --card-min: 150px;
+
   /* Mouvement. Une seule courbe d'arrivée — décélération exponentielle, jamais
      de rebond : le pilier « serein » ne supporte pas qu'un élément dépasse puis
      revienne. `--motion-fast` acquitte un geste, `--motion-base` explique un

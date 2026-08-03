@@ -144,6 +144,50 @@ test('les deux boutons d’une ligne sont posés en rangée', () => {
   assert.match(view, /class: 'books-table__row-actions'/);
 });
 
+// --------------------------------------------------- présent ou pas, d’un coup d’œil
+
+test('la présence se lit à l’entrée de la ligne, pas six colonnes plus loin', () => {
+  assert.match(view, /installed && 'is-present'/);
+  // Le filet est posé sur **toutes** les lignes, transparent quand le livre
+  // manque : n'en donner qu'aux présentes décalerait les autres d'un pixel.
+  assert.match(styles, /\.books-table tbody tr td:first-child \{[^}]*border-inline-start: 3px solid transparent/);
+  assert.match(styles, /\.books-table tbody tr\.is-present td:first-child \{[^}]*border-inline-start-color/);
+});
+
+test('chaque statut porte un dessin, et l’absence a sa propre teinte', () => {
+  // Un crochet dit présent, un tiret dit absent : la colonne se balaie sans
+  // lire un mot. Le libellé reste, une icône seule ne s'annonce pas.
+  assert.match(view, /installed: \['downloads\.status\.installed', 'is-installed', 'check'\]/);
+  assert.match(view, /MISSING_STATUS = \['downloads\.status\.missing', 'is-missing', 'minus'\]/);
+  assert.match(view, /icon\(glyph, \{ size: 14 \}\)/);
+  assert.match(styles, /\.books-table__badge \{[^}]*display: inline-flex/);
+  // « je ne l'ai pas » et « je ne sais pas » ne peuvent plus se lire pareil.
+  assert.match(styles, /\.books-table__badge\.is-missing \{[^}]*border: 1px dashed/);
+});
+
+// ------------------------------------------------------------ la barre de lot
+
+test('la barre de lot flotte, comme celle de l’exploration', () => {
+  // Posée dans la page au-dessus de la table, on cochait au quarantième livre
+  // et il fallait remonter tout l'écran pour agir.
+  assert.match(view, /const bulk = actionBar\(\)/);
+  assert.doesNotMatch(view, /downloads__bulk-bar/);
+  assert.doesNotMatch(styles, /downloads__bulk-bar/);
+  assert.match(styles, /\.downloads\[data-selecting\] \{[^}]*padding-block-end/);
+});
+
+test('les trois actions du lot restent en place, refus compris', () => {
+  // Une action qui disparaît déplace les deux autres sous le doigt entre deux
+  // tapes : elle se désactive et porte sa raison à la place de son libellé.
+  const bloc = view.slice(view.indexOf('#drawBulk('), view.indexOf('async #confirmDelete('));
+  for (const key of ['download', 'delete', 'clear']) {
+    assert.match(bloc, new RegExp(`key: '${key}'`), `l’action « ${key} » a disparu de la barre`);
+  }
+  assert.match(bloc, /reason: t\('downloads\.nothingToDownload'\)/);
+  assert.match(bloc, /reason: t\('downloads\.nothingToDelete'\)/);
+  assert.doesNotMatch(bloc, /length > 0 &&/, 'aucune action ne doit s’effacer');
+});
+
 test('la table ne pose aucun alignement physique', () => {
   const block = styles.slice(
     styles.indexOf('.books-table__scroll'),

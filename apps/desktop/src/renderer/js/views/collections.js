@@ -6,6 +6,7 @@ import { chevronBackward, chevronForward, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
+import { actionBar } from '../components/action-bar.js';
 import { bookCard } from '../components/book-card.js';
 import { coverGrain } from '../components/cover.js';
 import { confirmDialog } from '../components/modal.js';
@@ -474,6 +475,41 @@ export function collectionDetailView(host, params) {
 
     pick.results = h('div', { class: 'collection-manage__results' });
 
+    /**
+     * Valider **flotte**, comme la barre de l'exploration : c'est le seul geste
+     * qui sorte du mode, et posé dans l'entête il partait hors champ dès qu'on
+     * descendait dans les résultats — on ajoutait un livre au vingtième rang et
+     * il fallait remonter tout l'écran pour dire qu'on avait fini.
+     *
+     * La barre est visible d'emblée et le reste : un mode dont la sortie
+     * n'apparaît qu'à condition est un mode où l'on se sent enfermé. Elle ne
+     * porte pas de décompte — ceux de l'entête viennent de SQL, et en tenir un
+     * ici serait un second compte à faire diverger.
+     */
+    const bar = actionBar({ label: t('collections.manage') });
+    bar.update({
+      actions: [
+        {
+          key: 'done',
+          icon: 'check',
+          variant: 'filled',
+          label: t('collections.manageDone'),
+          onPick: () => {
+            clearTimeout(pick.timer);
+            // Le jeton avance et l'hôte s'en va : une requête déjà partie ne
+            // dessinera pas dans un nœud qui n'est plus à l'écran.
+            pick.token += 1;
+            pick.results = null;
+            pick.open = false;
+            // Les décomptes de l'entête viennent de SQL : on relit la
+            // collection au lieu de tenir un compte de notre côté.
+            refresh();
+          },
+        },
+      ],
+    });
+    bar.setVisible(true);
+
     const section = h(
       'section',
       { class: 'collection-page' },
@@ -486,31 +522,9 @@ export function collectionDetailView(host, params) {
           h('h1', { class: 'display-lg' }, collection.name),
           h('p', { class: 'body-md muted' }, t('collections.manageHint')),
         ),
-        h(
-          'div',
-          { class: 'collection-page__actions' },
-          h(
-            'button',
-            {
-              class: 'button button--filled',
-              onclick: () => {
-                clearTimeout(pick.timer);
-                // Le jeton avance et l'hôte s'en va : une requête déjà partie
-                // ne dessinera pas dans un nœud qui n'est plus à l'écran.
-                pick.token += 1;
-                pick.results = null;
-                pick.open = false;
-                // Les décomptes de l'entête viennent de SQL : on relit la
-                // collection au lieu de tenir un compte de notre côté.
-                refresh();
-              },
-            },
-            icon('check', { size: 18 }),
-            h('span', {}, t('collections.manageDone')),
-          ),
-        ),
       ),
       h('div', { class: 'collection-manage' }, field, pick.results),
+      bar.node,
     );
 
     loadPicks();

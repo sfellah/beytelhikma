@@ -527,6 +527,25 @@ test('les informations d’application décrivent la bibliothèque installée', 
   assert.ok(about.librarySource.endsWith('sample'));
 });
 
+test('l’identité de l’application est passée, jamais devinée', async () => {
+  // Le dépôt ne connaît ni `electron` ni `process.versions` : sans ce que le
+  // processus principal lui donne, il ne prétend pas savoir. Trois nulles
+  // valent mieux qu'une version inventée dans un rapport de bug.
+  const muet = await repository.getAbout();
+  assert.deepEqual(
+    [muet.appVersion, muet.platform, muet.runtime],
+    [null, null, null],
+  );
+
+  const nommé = new BookRepository(database, {
+    appInfo: { version: '9.9.9', platform: 'desktop', runtime: 'Electron 42' },
+  });
+  const about = await nommé.getAbout();
+  assert.equal(about.appVersion, '9.9.9');
+  assert.equal(about.platform, 'desktop');
+  assert.equal(about.runtime, 'Electron 42');
+});
+
 test('deleteAllBooks vide le dossier et conserve les progressions', async () => {
   await repository.saveProgress({
     editionId: 'ed-muqaddima-01',

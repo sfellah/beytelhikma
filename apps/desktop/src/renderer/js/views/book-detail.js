@@ -207,37 +207,66 @@ const tocPageLabel = (node) => {
   return printed == null ? '' : t('detail.page', { page: printed });
 };
 
-/** Chapitres montés d'un coup ; au-delà, on déplie à la demande. */
+/**
+ * Chapitres montés d'un coup ; le défilement monte la tranche suivante.
+ *
+ * Un sommaire du corpus Shamela porte couramment des milliers d'entrées, et le
+ * plus gros en compte ~96 000 : les monter toutes coûte autant de nœuds DOM
+ * pour une liste qu'on ne parcourt presque jamais jusqu'au bout.
+ */
 const TOC_WINDOW = 60;
+
+/** Distance au bas de la tranche, en pixels, qui monte la suivante. */
+const TOC_EDGE = 160;
 
 function tocSection(entries, openReader) {
   const roots = buildTree(entries);
   const list = h('div', { class: 'toc__list' });
-  const more = h('div', { class: 'toc__more' });
   let shown = 0;
 
-  // Un sommaire du corpus Shamela peut porter des milliers d'entrées : les
-  // monter toutes coûtait autant de nœuds DOM pour une liste qu'on parcourt
-  // rarement jusqu'au bout.
   const grow = () => {
-    const next = roots.slice(shown, shown + TOC_WINDOW);
-    list.append(...next.map((node) => tocChapter(node, openReader)));
-    shown += next.length;
-    more.replaceChildren(
-      shown < roots.length
-        ? h(
-            'button',
-            { class: 'button button--tonal', onclick: grow },
-            h(
-              'span',
-              {},
-              t('detail.showMore', { count: roots.length - shown }),
-            ),
-          )
-        : h('span', {}),
-    );
+    // Jamais `append(...tableau)` : une tranche est bornée, mais le même geste
+    // sert aux sous-entrées, qui ne le sont pas — et autant d'arguments passés
+    // d'un coup débordent la pile d'appels.
+    const bloc = document.createDocumentFragment();
+    for (const node of roots.slice(shown, shown + TOC_WINDOW)) {
+      bloc.append(tocChapter(node, openReader));
+      shown += 1;
+    }
+    list.append(bloc);
   };
+
+  /**
+   * Le dépliage suit le défilement, comme le panneau du lecteur : arriver au
+   * bas de la tranche montée monte la suivante. Un bouton « voir plus » tous
+   * les soixante chapitres, ce n'est pas parcourir une liste, c'est la faire
+   * avancer à la main — et la boîte n'en montre que cinq à la fois.
+   */
+  list.addEventListener('scroll', () => {
+    if (shown >= roots.length) return;
+    if (list.scrollHeight - list.scrollTop - list.clientHeight <= TOC_EDGE) grow();
+  });
+
+  /**
+   * Une tranche qui ne remplit pas la boîte ne défile pas : rien ne rappellerait
+   * le gestionnaire, et la liste s'arrêterait là sans que rien ne le dise. On
+   * complète jusqu'à ce qu'il y ait de quoi défiler, dix crans au plus — le
+   * sommaire entier n'est pas le but.
+   *
+   * Après une image, et pas avant : la boîte n'est pas dans le document au
+   * montage, ses deux hauteurs y valent zéro, et la comparaison monterait les
+   * dix crans pour rien.
+   */
+  const fill = () => {
+    if (!list.isConnected) return;
+    for (let i = 0; i < 10 && shown < roots.length; i += 1) {
+      if (list.scrollHeight > list.clientHeight) return;
+      grow();
+    }
+  };
+
   grow();
+  requestAnimationFrame(fill);
 
   return h(
     'section',
@@ -247,10 +276,11 @@ function tocSection(entries, openReader) {
       { class: 'title-md' },
       icon('toc', { size: 20 }),
       t('detail.toc'),
+      // Le compte vient de l'arbre entier, jamais de la tranche montée : c'est
+      // lui qui dit ce que la boîte laisse sous son bord.
       h('span', { class: 'label-sm muted' }, t('detail.chapters', { count: roots.length })),
     ),
     list,
-    more,
   );
 }
 
@@ -283,16 +313,21 @@ function tocChapter(node, openReader) {
       class: 'toc__chapter',
       ontoggle: () => {
         if (!details.open || children.childElementCount) return;
-        children.append(
-          ...node.children.map((child) =>
+        // Un chapitre du corpus peut porter des milliers de sous-entrées :
+        // `append(...tableau)` les passerait toutes en arguments, ce qui déborde
+        // la pile d'appels. Un fragment les pose en une seule insertion.
+        const bloc = document.createDocumentFragment();
+        for (const child of node.children) {
+          bloc.append(
             h(
               'p',
               { class: 'toc__child', onclick: () => openReader(child.pageId) },
               h('span', {}, child.title),
               h('span', {}, tocPageLabel(child)),
             ),
-          ),
-        );
+          );
+        }
+        children.append(bloc);
       },
     },
     h(

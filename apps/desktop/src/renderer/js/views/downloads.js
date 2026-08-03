@@ -11,6 +11,7 @@ import {
   departures,
   rememberFinished,
 } from '../../../shared/downloads-queue.js';
+import { actionBar } from '../components/action-bar.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { pagination, PAGE_SIZES } from '../components/pagination.js';
@@ -39,16 +40,31 @@ const SORTS = [
   { value: 'recent', label: 'downloads.sort.recent' },
 ];
 
-/** Libellé et teinte de chaque statut, pour la colonne « الحالة ». */
+/**
+ * Libellé, teinte et **dessin** de chaque statut, pour la colonne « الحالة ».
+ *
+ * Le dessin n'est pas un ornement : la question qu'on pose à cette table est
+ * « l'ai-je déjà ? », et une pastille de texte y répond dans une teinte qu'il
+ * faut avoir apprise. Un crochet dit présent, un tiret dit absent, et les deux
+ * se lisent en balayant la colonne sans lire un mot. Le libellé reste : une
+ * icône seule ne se lit pas au lecteur d'écran.
+ */
 const STATUS_LABELS = {
-  installed: ['downloads.status.installed', 'is-installed'],
-  queued: ['downloads.status.queued', 'is-pending'],
-  downloading: ['downloads.status.downloading', 'is-pending'],
-  verifying: ['downloads.status.verifying', 'is-pending'],
-  failed: ['downloads.status.failed', 'is-failed'],
+  installed: ['downloads.status.installed', 'is-installed', 'check'],
+  queued: ['downloads.status.queued', 'is-pending', 'clock'],
+  downloading: ['downloads.status.downloading', 'is-pending', 'download'],
+  verifying: ['downloads.status.verifying', 'is-pending', 'clock'],
+  failed: ['downloads.status.failed', 'is-failed', 'close'],
   // `removed` décrit une ligne d'historique, pas un état visible : pour qui
   // regarde la table, un livre effacé est un livre non téléchargé.
 };
+
+/**
+ * L'absence est un état, pas un défaut d'état. Elle porte donc sa propre teinte
+ * — un contour, pas un aplat — au lieu de la pastille neutre qui servait aussi
+ * bien aux statuts qu'on ne connaît pas.
+ */
+const MISSING_STATUS = ['downloads.status.missing', 'is-missing', 'minus'];
 
 /**
  * Écran des téléchargements : la file en cours au-dessus, puis le catalogue
@@ -110,7 +126,10 @@ class DownloadsScreen {
     const queue = h('div', { class: 'downloads__queue' });
     const table = h('div', { class: 'downloads__table-host' }, loadingView());
     const pager = h('div', { class: 'downloads__pager' });
-    const bulk = h('div', { class: 'downloads__bulk' });
+    // La barre de lot **flotte**, comme celle de l'exploration. Posée dans la
+    // page au-dessus de la table, c'était la mécanique précédente : on cochait
+    // au quarantième livre et il fallait remonter tout l'écran pour agir.
+    const bulk = actionBar();
 
     const search = h('input', {
       type: 'search',
@@ -163,34 +182,33 @@ class DownloadsScreen {
       ),
     );
 
-    this.#nodes = { summary, queue, table, pager, bulk, search };
-
-    this.#host.replaceChildren(
+    const section = h(
+      'section',
+      { class: 'downloads' },
       h(
-        'section',
-        { class: 'downloads' },
-        h(
-          'div',
-          { class: 'downloads__header' },
-          h('h1', { class: 'display-lg' }, t('downloads.title')),
-          summary,
-        ),
-        queue,
-        h(
-          'div',
-          { class: 'downloads__manage' },
-          h(
-            'div',
-            { class: 'downloads__manage-head' },
-            h('h2', { class: 'headline-lg' }, t('downloads.scope.all')),
-            toolbar,
-          ),
-          bulk,
-          table,
-          pager,
-        ),
+        'div',
+        { class: 'downloads__header' },
+        h('h1', { class: 'display-lg' }, t('downloads.title')),
+        summary,
       ),
+      queue,
+      h(
+        'div',
+        { class: 'downloads__manage' },
+        h(
+          'div',
+          { class: 'downloads__manage-head' },
+          h('h2', { class: 'headline-lg' }, t('downloads.scope.all')),
+          toolbar,
+        ),
+        table,
+        pager,
+      ),
+      bulk.node,
     );
+
+    this.#nodes = { summary, queue, table, pager, bulk, search, section };
+    this.#host.replaceChildren(section);
   }
 
   // ---------------------------------------------------------------- données
@@ -483,8 +501,9 @@ class DownloadsScreen {
 
   #bookRow(row) {
     const status = row.downloadStatus ?? null;
-    const [label, tone] = STATUS_LABELS[status] ?? ['downloads.status.missing', ''];
+    const [label, tone, glyph] = STATUS_LABELS[status] ?? MISSING_STATUS;
     const percent = Math.round((row.percent ?? 0) * 100);
+    const installed = status === 'installed';
 
     const statusCell = BUSY.has(status)
       ? h(
@@ -495,16 +514,26 @@ class DownloadsScreen {
         )
       : h(
           'span',
-          { class: `books-table__badge ${tone}`.trim() },
-          status === 'failed' ? (row.error ?? t(label)) : t(label),
+          { class: `books-table__badge ${tone}` },
+          icon(glyph, { size: 14 }),
+          h('span', {}, status === 'failed' ? (row.error ?? t(label)) : t(label)),
         );
 
     // Installé : la taille qui compte est celle prise sur le disque, décompressée.
     const size = row.localBytes || row.compressedSize || 0;
 
+    // Deux marques, deux questions. `is-selected` dit ce que je viens de
+    // cocher, `is-present` dit ce que j'ai déjà — un filet à l'entrée de la
+    // ligne, qui répond avant qu'on ait atteint la colonne du statut, six
+    // colonnes plus loin.
+    const marks = [
+      this.#selection.has(row.editionId) && 'is-selected',
+      installed && 'is-present',
+    ].filter(Boolean);
+
     return h(
       'tr',
-      { class: this.#selection.has(row.editionId) ? 'is-selected' : '' },
+      { class: marks.join(' ') },
       h(
         'td',
         { class: 'books-table__pick' },
@@ -599,10 +628,11 @@ class DownloadsScreen {
     // La sélection survit à la pagination ; seule la part visible peut être
     // décrite précisément, le reste est compté.
     const selected = [...this.#selection];
-    if (!selected.length) {
-      this.#nodes.bulk.replaceChildren();
-      return;
-    }
+    this.#nodes.bulk.setVisible(selected.length > 0);
+    // La table se réserve la hauteur de la pastille, sinon ses dernières lignes
+    // se lisent dessous et l'on croit la page finie. C'est la règle d'`/explore`.
+    this.#nodes.section.toggleAttribute('data-selecting', selected.length > 0);
+    if (!selected.length) return;
 
     const byId = new Map(rows.map((row) => [row.editionId, row]));
     const visible = selected.map((id) => byId.get(id)).filter(Boolean);
@@ -611,54 +641,46 @@ class DownloadsScreen {
       (row) => row.downloadStatus !== 'installed' && !BUSY.has(row.downloadStatus),
     );
 
-    this.#nodes.bulk.replaceChildren(
-      h(
-        'div',
-        { class: 'downloads__bulk-bar' },
-        h(
-          'span',
-          { class: 'label-md' },
-          t('downloads.selectedCount', { count: selected.length }),
-        ),
-        missing.length > 0 &&
-          h(
-            'button',
-            {
-              class: 'button button--filled',
-              onclick: () =>
-                this.#run(async () => {
-                  const queued = await repository.downloadSelection(
-                    missing.map((row) => row.editionId),
-                  );
-                  toast(t('downloads.queued', { count: queued }));
-                }),
-            },
-            icon('download', { size: 18 }),
-            h('span', {}, t('downloads.downloadCount', { count: missing.length })),
-          ),
-        installed.length > 0 &&
-          h(
-            'button',
-            {
-              class: 'button button--danger',
-              onclick: () => this.#confirmDelete(installed),
-            },
-            icon('trash', { size: 18 }),
-            h('span', {}, t('downloads.deleteCount', { count: installed.length })),
-          ),
-        h(
-          'button',
-          {
-            class: 'button button--tonal',
-            onclick: () => {
-              this.#selection.clear();
-              this.#refresh();
-            },
+    // Trois actions, **toujours les trois** : une action qui disparaît déplace
+    // les deux autres sous le doigt entre deux tapes. Désactivée, elle porte sa
+    // raison à la place de son libellé — le refus se lit avant la tape.
+    this.#nodes.bulk.update({
+      label: t('downloads.selectedCount', { count: selected.length }),
+      actions: [
+        {
+          key: 'download',
+          icon: 'download',
+          variant: 'filled',
+          label: t('downloads.downloadCount', { count: missing.length }),
+          reason: t('downloads.nothingToDownload'),
+          disabled: missing.length === 0,
+          onPick: () =>
+            this.#run(async () => {
+              const queued = await repository.downloadSelection(
+                missing.map((row) => row.editionId),
+              );
+              toast(t('downloads.queued', { count: queued }));
+            }),
+        },
+        {
+          key: 'delete',
+          icon: 'trash',
+          variant: 'danger',
+          label: t('downloads.deleteCount', { count: installed.length }),
+          reason: t('downloads.nothingToDelete'),
+          disabled: installed.length === 0,
+          onPick: () => this.#confirmDelete(installed),
+        },
+        {
+          key: 'clear',
+          label: t('downloads.clearSelection'),
+          onPick: () => {
+            this.#selection.clear();
+            this.#refresh();
           },
-          t('downloads.clearSelection'),
-        ),
-      ),
-    );
+        },
+      ],
+    });
   }
 
   async #confirmDelete(rows) {

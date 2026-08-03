@@ -6,6 +6,18 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.5.1] — 2026-08-03
+
+### added
+- Les réglages se terminent par la version de l'application, la plateforme et le moteur, à côté de ce que porte la bibliothèque. Ce sont les trois premières lignes de tout rapport de bug.
+- La table des téléchargements dit d'un coup d'œil si l'on a déjà un livre : une marque à l'entrée de la ligne, et une pastille qui porte un dessin autant que son mot — un crochet pour présent, un tiret pour absent. L'absence a sa propre teinte au lieu de la pastille neutre, qui se lisait comme « on ne sait pas ».
+
+### changed
+- Les barres d'action par lot flottent au-dessus de l'écran au lieu de défiler avec la page : on coche un livre au quarantième rang et les actions sont toujours sous le pouce. Cela vaut pour la table des téléchargements et pour la composition d'une collection, où « Terminé » vivait dans l'entête.
+
+### fixed
+- L'application Android annonçait la version « 1.0 (1) » — le gabarit écrit une fois par l'outillage de build, que personne ne mettait à jour puisque le projet natif est réengendré. La version vient maintenant du projet lui-même, et les deux applications portent le même numéro.
+
 ## [0.5.0] — 2026-08-03
 
 ### added

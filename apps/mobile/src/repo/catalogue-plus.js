@@ -44,6 +44,7 @@ export function creerMethodesCatalogue(ctx) {
     assertEditionId,
     normalizeArabic,
     manifeste,
+    pont,
   } = ctx;
 
   // ------------------------------------------------------------- les mesures
@@ -1264,6 +1265,48 @@ export function creerMethodesCatalogue(ctx) {
    * que le spike ne migre pas. Les deux sont nommées séparément plutôt que
    * confondues sous un seul chiffre qu'un rapport interpréterait de travers.
    */
+  /**
+   * L'identité de l'APK, telle que le système la connaît.
+   *
+   * Elle vient du greffon `@capacitor/app`, déjà embarqué pour le geste retour :
+   * `versionName` et `versionCode` du `build.gradle`, et non le `package.json`
+   * du dépôt — c'est le premier qui est installé sur l'appareil, et les deux
+   * peuvent diverger. Absent (vérification hors appareil, ou pont pas encore
+   * posé), on rend `null` : la vue tait ce qu'elle n'a pas.
+   */
+  async function identite() {
+    try {
+      const info = await pont?.()?.App?.getInfo?.();
+      if (!info?.version) return null;
+      // Le numéro de build se rapporte avec la version : deux APK peuvent
+      // porter le même « 0.3.1 » et n'être pas le même binaire.
+      return info.build ? `${info.version} (${info.build})` : String(info.version);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Le moteur, à la place du « Electron • Chromium » du bureau : la version
+   * d'Android et celle de la WebView. C'est la seconde qui explique la plupart
+   * des différences de rendu d'un appareil à l'autre — elle se met à jour par
+   * le Play Store, indépendamment du système.
+   *
+   * Aucun greffon pour ça : `@capacitor/device` serait une dépendance native de
+   * plus, `cap sync` à refaire et un quatrième bouchon dans `verify.mjs`, pour
+   * deux nombres que la chaîne d'agent porte déjà.
+   */
+  function moteur() {
+    const agent = globalThis.navigator?.userAgent ?? '';
+    const android = /Android ([\d.]+)/.exec(agent)?.[1];
+    const webview = /Chrome\/([\d.]+)/.exec(agent)?.[1];
+    return (
+      [android && `Android ${android}`, webview && `WebView ${webview}`]
+        .filter(Boolean)
+        .join(' • ') || null
+    );
+  }
+
   const getAbout = () =>
     garde("lecture des informations d'application", async () => {
       const db = await catalogue();
@@ -1279,6 +1322,12 @@ export function creerMethodesCatalogue(ctx) {
       }
 
       return {
+        // Les trois mêmes premières lignes que sous Electron : quelle version,
+        // sur quoi, dans quel moteur. Un rapport de bug se lit pareil des deux
+        // côtés, et la vue est la même.
+        appVersion: await identite(),
+        platform: 'android',
+        runtime: moteur(),
         // La source réelle des fichiers, telle qu'`adb` les a posés.
         librarySource: lu?.devicePaths?.catalog ?? null,
         // Le dossier qui les contient : `catalog.sqlite` retiré du chemin.

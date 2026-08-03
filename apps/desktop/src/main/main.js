@@ -72,7 +72,16 @@ async function openRepository() {
     storageRoot: path.join(app.getPath('userData'), 'library'),
   });
   await database.initialize();
-  repository = new BookRepository(database);
+  repository = new BookRepository(database, {
+    // `app.getVersion()` et non le `package.json` lu à la main : empaquetée,
+    // l'application n'a pas de `package.json` à côté d'elle, et la version qui
+    // compte est celle qu'electron-builder a inscrite dans l'exécutable.
+    appInfo: {
+      version: app.getVersion(),
+      platform: 'desktop',
+      runtime: `Electron ${process.versions.electron} • Chromium ${process.versions.chrome}`,
+    },
+  });
   const downloads = repository.createDownloadQueue();
 
   // Réglage optionnel : pointer un autre bucket sans republier le catalogue.

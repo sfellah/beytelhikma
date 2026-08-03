@@ -560,6 +560,18 @@ function serverSection(prefs, refresh) {
 }
 
 /**
+ * Le nom de la plateforme est une **clé de données** — `desktop` ou `android`,
+ * telle que la rend le dépôt — traduite par une table écrite ici, en clair. Une
+ * clé bâtie à l'exécution (`settings.platform.${about.platform}`) se serait
+ * dérobée à `test/i18n.test.js`, qui échoue sur toute chaîne du catalogue que
+ * plus aucune source ne cite.
+ */
+const PLATFORM_LABELS = {
+  desktop: 'settings.platformDesktop',
+  android: 'settings.platformAndroid',
+};
+
+/**
  * Les deux premières lignes portent des chemins absolus : ils débordaient de la
  * grille. Ils passent par `copyField`, qui les tient sur une ligne et les rend
  * copiables — c'est ce qu'on en fait quand on rapporte un problème.
@@ -570,13 +582,22 @@ function aboutSection(about, usage) {
     [t('settings.dataFolder'), about.storageRoot],
   ];
   const facts = [
+    // Ce qu'on demande en premier quand quelque chose ne va pas, donc ce qui
+    // vient en premier. Une valeur absente est **tue** : « — » en face de
+    // « الإصدار » se lit comme une application sans version, alors que c'est le
+    // dépôt qui n'a pas su la dire.
+    about.appVersion && [t('settings.appVersion'), about.appVersion],
+    about.platform && [t('settings.platform'), t(PLATFORM_LABELS[about.platform])],
+    // Le moteur se rapporte tel quel, comme les chemins : jamais en chiffres
+    // arabes-indiens.
+    about.runtime && [t('settings.runtime'), about.runtime],
     [t('settings.editionCount'), n(about.editionCount)],
     [t('settings.categoryCount'), n(about.categoryCount)],
     // Le numéro de schéma se rapporte : il reste en chiffres latins, comme les
     // chemins et les URL de la grille au-dessus.
     [t('settings.schemaVersion'), String(about.schemaVersion)],
     [t('settings.usedSpace'), formatBytes(usage.bytes) || t('format.zeroBytes')],
-  ];
+  ].filter(Boolean);
 
   return group(
     'about',
