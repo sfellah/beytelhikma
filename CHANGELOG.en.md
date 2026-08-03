@@ -6,6 +6,16 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.5.2] — 2026-08-03
+
+### changed
+- On phones the downloads table now reads as cards, with the book's status first: its seven columns wanted 880 points of width, and you had to scroll the table sideways past six of them to learn whether you already had the book. Nobody makes that gesture.
+
+### fixed
+- The interface ran off the screen on phones: on browse and on downloads the page slid sideways and part of the header stayed out of view. Two distinct causes — a box that switched to a column while still allowed to wrap, and a search field with a fixed width that grew wider than the screen as soon as the system text size was enlarged. In right-to-left writing this overflow runs into negative values and so shows up in no width measurement: which is why it lived on without any check going red.
+- Bulk actions were cut down to two-letter stumps. "Clear selection" becomes a cross — it is a way out of the mode, not an action — and the two remaining actions keep their whole word; if room runs short the row moves below the count instead of abbreviating.
+- The bulk action bar placed the system's side inset on the wrong side in right-to-left writing.
+
 ## [0.5.1] — 2026-08-03
 
 ### added

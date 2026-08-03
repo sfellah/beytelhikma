@@ -6,6 +6,16 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.5.2] — 2026-08-03
+
+### changed
+- Sur téléphone, la table des téléchargements se lit en fiches, le statut du livre en tête : ses sept colonnes réclamaient 880 points de large, et il fallait faire défiler la table de côté sur six colonnes pour savoir si l'on avait déjà le livre. Personne ne fait ce geste.
+
+### fixed
+- L'interface débordait de l'écran sur les téléphones : sur l'exploration et sur les téléchargements, la page glissait de côté et une partie de l'entête restait hors champ. Deux causes distinctes — une boîte qui passait en colonne en gardant son enroulement, et un champ de recherche à largeur fixe qui devenait plus large que l'écran dès que la taille de texte du système était agrandie. En écriture de droite à gauche, ce débordement part vers les valeurs négatives et n'apparaît donc dans aucune mesure de largeur : c'est pourquoi il vivait sans qu'aucun contrôle ne bronche.
+- Les actions par lot étaient réduites à des moignons de deux lettres. « Annuler la sélection » devient une croix — c'est une sortie de mode, pas une action — et les deux actions restantes gardent leur mot entier ; si la place manque, la rangée passe sous le décompte au lieu d'abréger.
+- La barre d'actions par lot posait le retrait latéral du système du mauvais côté en écriture de droite à gauche.
+
 ## [0.5.1] — 2026-08-03
 
 ### added
