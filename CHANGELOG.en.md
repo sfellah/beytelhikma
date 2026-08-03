@@ -6,6 +6,29 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.5.0] — 2026-08-03
+
+### added
+- Continuous scrolling returns alongside paged reading: pages follow one another in a single column, and you move between them by scrolling. The choice is made once, in settings, and applies to every book. The column only mounts a window of pages around the one being read — the largest titles in the corpus run past a thousand pages.
+- Footnote markers are now tappable and lead to their note, whether they are tagged or written plainly in the middle of a paragraph. A number is only marked when a note answers it: "(3)" is just as likely a verse number.
+- Reopening a book returns to the exact spot you left, not to the top of the page. On a phone, a page of the corpus commonly runs three to six screens.
+- A very large book says so before making you wait, instead of spinning without a word.
+- Opening a chapter from the table of contents, a search result or an annotation leaves a pill to return to where you were reading.
+- On Android, the back gesture closes one layer at a time — the note, the selection, the panel, full screen — instead of leaving the book outright.
+- The Android app has its own icon and splash screen: the symbol on cream, growing into place.
+
+### changed
+- The table of contents opens on the chapter being read rather than at the start of the book; it arrives after the first page instead of holding it up, and can be filtered by title.
+- The reading slider announces its destination while dragged and only travels on release; until now it loaded a page per notch.
+- Downloads keep what they have just installed on screen, instead of watching it vanish from the queue.
+- The home screen tightens its density: the installed-book count and the link to the whole library share one row, which otherwise pushed the curricula below the fold.
+
+### fixed
+- Writing a note on a passage no longer tints it before you confirm: "Cancel" used to leave an orphan highlight, with nothing on screen to say so.
+
+### removed
+- The setting that stood the pagination ribbon against the edge of the screen. It said "horizontal / vertical" one line away from the reading mode, which says the same thing about something else: you thought you were choosing how to read and you were moving the bar.
+
 ## [0.4.1] — 2026-08-03
 
 ### added

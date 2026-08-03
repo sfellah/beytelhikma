@@ -6,6 +6,29 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.5.0] — 2026-08-03
+
+### added
+- La lecture en fil revient, à côté de la page : les pages s'enchaînent dans une seule colonne et l'on passe de l'une à l'autre en défilant. Le choix se fait une fois, dans les réglages, et vaut pour tous les livres. Le fil ne monte qu'une fenêtre de pages autour de celle qu'on lit — les plus gros titres du corpus passent le millier de pages.
+- Les appels de note se touchent et mènent à la note, qu'ils soient balisés ou écrits en clair au fil du paragraphe. Un nombre n'est marqué que si une note lui répond : « (3) » est aussi bien un numéro de verset.
+- Rouvrir un livre ramène à l'endroit exact où l'on s'était arrêté, et non en haut de la page. Sur un téléphone, une page du corpus fait couramment trois à six écrans.
+- Un livre très gros le dit avant de faire attendre, au lieu de laisser tourner un rouet sans un mot.
+- Ouvrir un chapitre depuis le sommaire, un résultat de recherche ou une annotation laisse une pastille pour revenir où l'on lisait.
+- Sur Android, le geste retour ferme une couche à la fois — la note, la sélection, le panneau, le plein écran — au lieu de quitter le livre d'un coup.
+- L'application Android a son icône et son écran de démarrage : le symbole sur fond crème, qui grandit et paraît.
+
+### changed
+- Le sommaire s'ouvre sur le chapitre qu'on lit, et non au début du livre ; il arrive après la première page au lieu de la faire attendre, et se cherche par son titre.
+- La jauge de lecture annonce sa destination pendant qu'on la glisse et n'y va qu'au relâchement : elle chargeait jusque-là une page par cran.
+- Les téléchargements gardent à l'écran ce qu'ils viennent d'installer, au lieu de le voir disparaître de la file.
+- L'accueil resserre sa densité : le compte de livres installés et le lien vers toute la bibliothèque partagent une ligne, qui poussait sinon les cursus sous la ligne de flottaison.
+
+### fixed
+- Écrire une note sur un passage ne le teinte plus avant qu'on ait validé : « Annuler » laissait un surlignage orphelin, sans rien à l'écran pour le dire.
+
+### removed
+- Le réglage qui dressait le ruban de pagination contre le bord de l'écran. Il annonçait « horizontal / vertical » à une ligne de la façon de lire, qui dit la même chose d'autre chose : on croyait choisir sa lecture et l'on déplaçait la barre.
+
 ## [0.4.1] — 2026-08-03
 
 ### added
