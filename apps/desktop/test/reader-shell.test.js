@@ -4,11 +4,6 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
-  DEFAULT_PAGER_LAYOUT,
-  PAGER_LAYOUTS,
-  resolvePagerLayout,
-} from '../src/shared/pager-layouts.js';
-import {
   DEFAULT_TAP_ZONES,
   SWIPE_MIN,
   TAP_ZONE_MODES,
@@ -39,105 +34,82 @@ const methode = (source, entete) => {
   return source.slice(start, source.indexOf('\n  }', start));
 };
 
-// --------------------------------------------------- purge du fil vertical
+// ------------------------------------------------------ les deux façons de lire
 
 /**
- * Le fil vertical a existé : un mode de lecture, un réglage dans `/settings`,
- * une touche `V`, une classe CSS, une capture. Deux tentatives — la page
- * continue, puis le livre entier monté — et on l'a jeté. Il ne reste qu'une
- * façon de lire : la page imprimée.
+ * Le fil a existé, il avait été jeté, et il revient — demandé, cette fois, et
+ * sur une fenêtre glissante plutôt que sur le livre entier, qui était la
+ * version mesurée puis abandonnée.
  *
- * Ce test tient la porte fermée. Ce qui gêne n'est pas le code mort, c'est
- * qu'un réglage à une seule valeur demande un choix qui n'en est pas un, et
- * qu'une classe qui ne distingue plus rien survit par habitude jusqu'à ce que
- * quelqu'un croie qu'elle sert.
+ * Ce qui l'avait fait tomber tenait en une phrase : le corpus est paginé, et
+ * tout le reste l'est avec lui. Ces tests tiennent donc les deux bouts — le fil
+ * existe, **et** la pagination reste entière dessous.
  */
-test('il ne reste aucune trace du fil vertical', () => {
-  const interdits = [
-    'reading-modes',
-    'READING_MODES',
-    'resolveReadingMode',
-    'reader.mode',
-    'reader--scroll',
-    // `\b` et non la sous-chaîne nue : `reader--pager-*` reste, c'est le ruban
-    // de pagination et non la façon de lire.
-    /reader--page\b/,
-    'data-reading-mode',
-    'readingMode',
-    '#showInFlow',
-    '#extendEnd',
-    '#extendStart',
-    '#startBackfill',
-    '#visibleBlock',
-    '#syncChapters',
-    'FLOW_KEEP',
-    'FLOW_STEP',
-    'BACKFILL',
-  ];
-
-  for (const chemin of [
-    '../src/renderer/js/views/reader.js',
-    '../src/renderer/js/views/settings.js',
-    '../src/renderer/js/components/shortcuts.js',
-    '../src/shared/pager-layouts.js',
-    '../src/main/capture.js',
-    '../src/renderer/styles/views.css',
-    '../src/renderer/js/locales/ar.js',
-    '../src/renderer/js/locales/en.js',
-  ]) {
-    const source = read(chemin);
-    for (const motif of interdits) {
-      const present = typeof motif === 'string' ? source.includes(motif) : motif.test(source);
-      assert.equal(present, false, `${chemin} porte encore « ${motif} »`);
-    }
-  }
-
-  // Le module qui portait les deux listes a pris le nom de celle qui reste :
-  // l'ancien aurait promis un choix qui n'existe plus.
+test('les deux façons de lire vivent dans un module partagé, seul', () => {
   const modes = fileURLToPath(new URL('../src/shared/reading-modes.js', import.meta.url));
-  assert.equal(existsSync(modes), false, 'le module des façons de lire doit avoir disparu');
+  assert.equal(existsSync(modes), true, 'le module des façons de lire doit exister');
 
-  // La touche `V` basculait le mode : elle n'a plus rien à basculer, ni dans
-  // le lecteur ni dans la fiche qui la promettait.
-  assert.equal(
-    read('../src/renderer/js/components/shortcuts.js').includes("keys: ['V']"),
-    false,
-    'la fiche promet une touche qui ne fait plus rien',
-  );
-  assert.equal(
-    read('../src/renderer/js/views/reader.js').includes("case 'v':"),
-    false,
-    'le lecteur écoute encore la touche du mode',
-  );
-});
-
-/**
- * Les cartes `.mode-choices` tiraient leurs teintes de `--reader-*`, déclarées
- * sous `.reader` seulement. La règle avait déjà perdu son porteur une fois ;
- * elle ne doit pas revenir maintenant que le choix lui-même a disparu.
- */
-test('la feuille de style ne garde pas de règle orpheline pour les cartes de mode', () => {
-  const views = read('../src/renderer/styles/views.css');
-  assert.equal(/^\.mode-choices/m.test(views), false, 'règle .mode-choices sans porteur');
-});
-
-/**
- * Des deux listes que portait le module, il n'en reste qu'une, et elle garde
- * son propriétaire unique : c'est de deux copies qu'étaient nées la police
- * orpheline et le thème `sepia` que plus aucune règle ne lisait.
- */
-test('aucune vue ne redéclare la liste des rubans', () => {
-  for (const view of [
-    '../src/renderer/js/views/reader.js',
-    '../src/renderer/js/views/settings.js',
-  ]) {
-    const source = read(view);
-    assert.equal(/const PAGER_LAYOUTS\s*=/.test(source), false, `${view} redéclare la liste`);
-    assert.ok(
-      source.includes('shared/pager-layouts.js'),
-      `${view} doit tenir la liste de son propriétaire unique`,
+  // Deux écrans montrent cette liste — le lecteur et `/settings`. La déclarer
+  // deux fois est exactement ce qui avait produit la police orpheline et
+  // l'ambiance morte.
+  for (const chemin of ['../src/renderer/js/views/reader.js', '../src/renderer/js/views/settings.js']) {
+    const source = read(chemin);
+    assert.equal(
+      /READING_MODES\s*=/.test(source),
+      false,
+      `${chemin} redéclare la liste des façons de lire`,
     );
+    assert.match(source, /from '\.\.\/\.\.\/\.\.\/shared\/reading-modes\.js'/);
   }
+});
+
+test('le ruban reste en bas, et rien ne le déplace plus', () => {
+  const views = read('../src/renderer/styles/views.css');
+  // Un réglage l'a dressé contre le bord un temps. Il portait « أفقي / عمودي »
+  // à une ligne des mots de la façon de lire, et l'on croyait choisir sa
+  // lecture en déplaçant la barre. Le réglage a disparu ; la règle reste.
+  assert.equal(
+    /\.reader--(scroll|page)\b[^{]*\.reader__footer\s*\{/.test(views),
+    false,
+    'un mode déplace le ruban',
+  );
+  assert.equal(/reader--pager/.test(views), false, 'le ruban dressé est revenu');
+  assert.equal(
+    existsSync(fileURLToPath(new URL('../src/shared/pager-layouts.js', import.meta.url))),
+    false,
+    'le module du ruban dressé doit avoir disparu',
+  );
+});
+
+test('le fil monte une fenêtre, jamais le livre entier', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  assert.match(reader, /windowAround\(/);
+  assert.match(reader, /outOfWindow\(/);
+  // Les plus gros livres du corpus passent le millier de pages, et les deux
+  // clients chargent une base de livre entièrement en mémoire.
+  const fenetre = reader.slice(
+    reader.indexOf('async #mountWindow(center, token) {'),
+    reader.indexOf('#visibleIndex() {'),
+  );
+  assert.ok(fenetre.length > 0, 'la fenêtre du fil a disparu');
+  assert.match(fenetre, /this\.#blocks\.delete\(index\)/);
+});
+
+test('le fil ne remonte pas la page qu’on a déjà sous les yeux', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const move = reader.slice(reader.indexOf('#move(direction) {'), reader.indexOf('#previewJump(index) {'));
+  // La remonter ferait clignoter la colonne et perdrait ce qui est au-dessus —
+  // c'est précisément ce que le fil promet de garder.
+  assert.match(move, /scrollTo\(\{ top, behavior: 'smooth' \}\)/);
+});
+
+test('l’animation de feuilletage ne joue que sur la feuille', () => {
+  const views = read('../src/renderer/styles/views.css');
+  assert.match(views, /\.reader--scroll \.reader__block\.is-turned-next[\s\S]*?animation: none;/);
+});
+
+test('la touche `V` bascule la façon de lire', () => {
+  assert.match(read('../src/renderer/js/views/reader.js'), /case 'v':/);
 });
 
 // -------------------------------------------------------- tourner au clic
@@ -469,113 +441,18 @@ test('la colonne garde son défilement, et le masquage des barres avec', () => {
   );
 });
 
-// ------------------------------------------------------------ ruban dressé
-
-test('resolvePagerLayout ne reconnaît que les deux dispositions', () => {
-  for (const layout of PAGER_LAYOUTS) {
-    assert.equal(resolvePagerLayout(layout.key), layout.key);
-  }
-  for (const stored of ['vertical-rl', 'side', '', null, undefined, 0, {}]) {
-    assert.equal(resolvePagerLayout(stored), DEFAULT_PAGER_LAYOUT);
-  }
-});
+// -------------------------------------------------- les chevrons de la barre
 
 /**
- * Dressé, le ruban ne prend **pas** de place en plus : le pied s'en va, la
- * bande le remplace. Si la colonne de lecture gardait sa réserve basse tout en
- * cédant sa largeur, le réglage coûterait des deux côtés.
+ * Les deux chevrons désignent le début et la fin de ligne, et suivent donc le
+ * sens d'écriture. Ils n'ont plus qu'un tracé : le ruban ne se dresse plus, et
+ * les flèches haut/bas qu'il réclamait annonçaient un geste qu'on ne fait pas.
  */
-test('le ruban dressé échange la hauteur contre la largeur', () => {
-  const views = read('../src/renderer/styles/views.css');
-  const bloc = (selector) => {
-    const start = views.indexOf(`${selector} {`);
-    assert.notEqual(start, -1, `règle absente : ${selector}`);
-    return views.slice(start, views.indexOf('}', start));
-  };
-
-  const scroll = bloc('.reader--pager-vertical .reader__scroll');
-  assert.equal(
-    /padding-right/.test(scroll),
-    false,
-    'le ruban est posé sur la page : la colonne ne lui rend aucune largeur',
-  );
-  assert.ok(
-    /padding-bottom:\s*calc\(var\(--space-xxl\)/.test(scroll),
-    'et récupère la hauteur que le bandeau en pied lui prenait',
-  );
-
-  // Posé sur la page, il doit laisser voir dessous : un flou masquerait le
-  // début de chaque ligne, là où un bandeau en pied ne masque qu'une marge.
-  const bande = bloc('.reader--pager-vertical .reader__footer');
-  assert.ok(/backdrop-filter:\s*none/.test(bande), 'la bande ne doit pas flouter le texte');
-  assert.ok(/background:\s*color-mix/.test(bande), 'et ne porter qu’un voile');
-
-  // Escamoté, il sort par son bord : le bas n'est plus le sien.
-  assert.ok(
-    /translateX\(100%\)/.test(bloc('.reader--pager-vertical .reader__footer.is-hidden')),
-    'le ruban dressé doit sortir par le côté',
-  );
-});
-
-/**
- * `[dir='rtl'] .reader__rail` repeint le dégradé « vers la gauche » à la même
- * spécificité : c'est exactement la panne du rail couché, et elle se rejouerait
- * si le sélecteur RTL n'était pas nommé ici aussi.
- */
-test('le rail dressé nomme ses deux sélecteurs', () => {
-  const views = read('../src/renderer/styles/views.css');
-  assert.ok(
-    views.includes(
-      '.reader--pager-vertical .reader__rail,\n[dir=\'rtl\'] .reader--pager-vertical .reader__rail',
-    ),
-    'le rail dressé doit se déclarer pour les deux directions',
-  );
-  const start = views.indexOf('.reader--pager-vertical .reader__rail,');
-  const rule = views.slice(start, views.indexOf('}', start));
-  assert.ok(/writing-mode:\s*vertical-rl/.test(rule), 'le rail doit être dressé');
-  // `writing-mode` dresse, `direction` décide du bout d'où part la valeur :
-  // hérité en RTL, il envoyait la page 2 sur 230 au *bas* du rail.
-  assert.ok(/direction:\s*ltr/.test(rule), 'la page 1 doit rester en haut dans les deux langues');
-});
-
-/**
- * Dressés, les chevrons désignent le haut et le bas. Ceux de direction
- * d'écriture annonceraient un geste qu'on ne fait pas. Un seul endroit en
- * décide — la bascule se fait en lisant, et une seconde décision au montage
- * divergerait au premier clic.
- */
-test('un seul endroit décide du tracé des chevrons', () => {
+test('les chevrons suivent le sens d’écriture, et rien d’autre', () => {
   const reader = read('../src/renderer/js/views/reader.js');
-  const start = reader.indexOf('#syncPager() {');
-  assert.notEqual(start, -1, '#syncPager a disparu');
-  const corps = reader.slice(start, reader.indexOf('\n  }', start));
-  assert.ok(corps.includes("'chevronUp'"), 'la page précédente est en haut');
-  assert.ok(corps.includes("'chevronDown'"), 'la page suivante est en bas');
-
-  assert.equal(
-    reader.split("'chevronUp'").length - 1,
-    1,
-    'le tracé dressé ne doit être décidé qu’une fois',
-  );
-});
-
-/**
- * Le ruban se bascule aussi en lisant : c'est le seul des deux réglages de
- * `/settings` dont on veut voir l'effet sur la page qu'on a sous les yeux.
- * Deux portes, une seule valeur — comme la touche `V` et le mode de lecture.
- */
-test('la barre du lecteur porte la bascule du ruban', () => {
-  const reader = read('../src/renderer/js/views/reader.js');
-  assert.ok(reader.includes("tool('pager'"), 'l’outil doit exister');
-  assert.ok(reader.includes("setSetting('reader.pager'"), 'et écrire le réglage partagé');
-
-  // L'icône montre la disposition qu'on obtiendra, comme celle du plein écran.
-  const start = reader.indexOf('#syncPager() {');
-  const corps = reader.slice(start, reader.indexOf('\n  }', start));
-  assert.ok(
-    /dresse \? 'pagerHorizontal' : 'pagerVertical'/.test(corps),
-    'l’outil annonce la disposition suivante, pas celle qu’on voit déjà',
-  );
+  assert.match(reader, /tool\('previous', chevronBackward/);
+  assert.match(reader, /tool\('next', chevronForward/);
+  assert.equal(/chevronUp|chevronDown/.test(reader), false, 'un tracé dressé subsiste');
 });
 
 // ------------------------------------------------------------ plein écran
@@ -753,26 +630,6 @@ test('la sélection se détecte par selectionchange, pas par mouseup seul', () =
   assert.ok(/SELECTION_SETTLE/.test(reader), 'la mesure doit attendre que la sélection se pose');
 });
 
-/**
- * Le ruban dressé est posé sur le texte : il ne doit pas capter le doigt. En
- * RTL il couvre le bord où **commence** chaque ligne, et il avalait le geste
- * qui aurait démarré une sélection.
- */
-test('le voile du ruban dressé laisse passer le doigt', () => {
-  const views = read('../src/renderer/styles/views.css');
-  const bloc = (selector) => {
-    const start = views.indexOf(selector);
-    assert.notEqual(start, -1, `règle absente : ${selector}`);
-    return views.slice(start, views.indexOf('}', start));
-  };
-
-  const voile = bloc('.reader--pager-vertical .reader__footer,\n');
-  assert.ok(/pointer-events:\s*none/.test(voile), 'le voile doit être transparent au doigt');
-
-  const controles = bloc('.reader--pager-vertical .reader__tool,\n');
-  assert.ok(/pointer-events:\s*auto/.test(controles), 'les chevrons et la jauge gardent leur prise');
-});
-
 // --------------------------------------------------------- marges système
 
 /**
@@ -843,4 +700,99 @@ test('le voile haut du lecteur monte jusqu’au bord de la fenêtre', () => {
   const rule = views.slice(start, views.indexOf('}', start));
   assert.ok(/top:\s*0;/.test(rule), 'le voile doit rester ancré à 0');
   assert.ok(/padding-top:\s*var\(--safe-top\)/.test(rule), 'et écarter le retrait par le padding');
+});
+
+/**
+ * Sur le fil, le geste qui fait passer d'une page à l'autre est le défilement,
+ * et lui seul. Les trois tiers et le glissement sont des gestes de la feuille :
+ * les garder ferait deux façons de faire la même chose, dont une qu'on
+ * déclenche sans la vouloir.
+ *
+ * Ce qui reste, en revanche : les deux chevrons et la jauge, en bas de l'écran,
+ * comme sur la feuille.
+ */
+test('sur le fil, on défile — on ne tourne pas', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  const zone = reader.slice(reader.indexOf('#zoneOf(clientX) {'), reader.indexOf('#onPointerDown(event) {'));
+  assert.match(zone, /if \(this\.#mode === 'scroll'\) return 0;/);
+
+  const up = reader.slice(reader.indexOf('#onPointerUp(event) {'), reader.indexOf('#endPointer(event) {'));
+  const refus = up.indexOf("this.#mode === 'scroll'");
+  const appel = up.indexOf('swipeTurn(');
+  assert.ok(refus > 0 && refus < appel, 'le glissement tourne encore la page sur le fil');
+});
+
+test('un filet sépare deux pages du fil', () => {
+  const views = read('../src/renderer/styles/views.css');
+  const couture = views.slice(views.indexOf('.reader--scroll .reader__block + .reader__block'));
+  assert.match(couture.slice(0, 200), /border-top: 1px solid var\(--reader-rule\)/);
+});
+
+// ------------------------------------------ un seul panneau de réglages
+
+/**
+ * Le panneau du lecteur regroupe tout ce qui change l'aspect du livre : la
+ * façon de lire, la taille, l'ambiance, la face, les côtés qui tournent la
+ * page. Ils vivent aussi dans `/settings` — c'est voulu, on règle en lisant ou
+ * avant d'ouvrir — mais **une seule liste et un seul rendu** les portent.
+ */
+test('les cinq réglages sont dans le panneau du lecteur', () => {
+  const panneau = methode(read('../src/renderer/js/views/reader.js'), '#settingsPanel(refs) {');
+  for (const label of [
+    "t('reader.modeLabel')",
+    "t('reader.sizeLabel')",
+    "t('reader.themeLabel')",
+    "t('reader.fontLabel')",
+    "t('settings.tapZonesLabel')",
+  ]) {
+    assert.ok(panneau.includes(label), `le panneau ne porte pas ${label}`);
+  }
+});
+
+test('le panneau et /settings partagent le même contrôle', () => {
+  // Deux écrans qui montrent la même liste sont exactement la configuration
+  // qui a produit la police orpheline et l'ambiance morte.
+  for (const chemin of ['../src/renderer/js/views/reader.js', '../src/renderer/js/views/settings.js']) {
+    const source = read(chemin);
+    assert.match(source, /from '\.\.\/components\/setting-choice\.js'/);
+    // Les deux listes fermées passent par le composant, jamais par un rendu
+    // local : c'est là que la seconde copie serait née.
+    for (const liste of ['READING_MODES', 'TAP_ZONE_MODES']) {
+      if (!source.includes(liste)) continue;
+      const at = source.indexOf(`liste: ${liste}`);
+      assert.notEqual(at, -1, `${chemin} montre ${liste} sans passer par settingChoice`);
+      assert.ok(
+        source.lastIndexOf('settingChoice({', at) > source.lastIndexOf('segmented({', at),
+        `${chemin} rend ${liste} avec son propre contrôle`,
+      );
+    }
+  }
+});
+
+test('les côtés se règlent dans les deux modes', () => {
+  // Un réglage qui disparaît selon l'écran se cherche, et l'on finit par croire
+  // qu'il n'a jamais existé.
+  const panneau = methode(read('../src/renderer/js/views/reader.js'), '#settingsPanel(refs) {');
+  const bloc = panneau.slice(panneau.indexOf("t('settings.tapZonesLabel')"));
+  assert.equal(/#mode === 'page'|#mode === 'scroll'/.test(bloc), false, 'le réglage dépend du mode');
+});
+
+test('l’outil annonce ce qu’il ouvre', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  // « Aa » annonçait de la typographie ; le panneau porte maintenant la façon
+  // de lire et l'ambiance.
+  assert.match(reader, /tool\('settings', 'sliders'/);
+  assert.equal(/'formatSize'/.test(reader), false, 'l’ancienne icône est restée');
+});
+
+test('la bascule de mode a deux portes et une seule mécanique', () => {
+  const reader = read('../src/renderer/js/views/reader.js');
+  // Le contrôle écrit le réglage lui-même ; la touche `V` passe par
+  // `#setReadingMode`, qui écrit puis applique. Une seule remontée.
+  assert.match(reader, /onPick: \(key\) => this\.#applyReadingMode\(key\)/);
+  const bascule = methode(reader, '#setReadingMode(key) {');
+  assert.match(bascule, /setSetting\('reader\.mode', mode\)/);
+  assert.match(bascule, /this\.#applyReadingMode\(mode\)/);
+  const applique = methode(reader, '#applyReadingMode(key) {');
+  assert.equal(/setSetting/.test(applique), false, 'la pose écrit aussi : deux écritures pour un clic');
 });

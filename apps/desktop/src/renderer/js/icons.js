@@ -208,16 +208,6 @@ const ICONS = {
     ['path', 'M17.6 2.6a2.1 2.1 0 0 1 3 3L13 13.2l-4 1 1-4z'],
     ['line', 8, 17.5, 14, 17.5],
   ],
-  /* Où se pose le ruban de pagination : une page, et le ruban en pied ou sur
-     sa tranche. L'icône montre la disposition qu'on obtiendra en cliquant. */
-  pagerHorizontal: [
-    ['rect', 3.5, 4, 17, 16],
-    ['line', 3.5, 15.5, 20.5, 15.5],
-  ],
-  pagerVertical: [
-    ['rect', 3.5, 4, 17, 16],
-    ['line', 16, 4, 16, 20],
-  ],
 };
 
 function shape(spec) {

@@ -71,6 +71,12 @@
   --emerald: var(--primary);
   --emerald-lift: var(--primary-container);
   --emerald-veil: rgb(43 105 84 / 8%);
+  /* Fond de l'onglet actif. Il ne se dérive pas de `--primary` par `color-mix` :
+     l'émeraude du thème clair est #003527, presque noire, et diluée elle vire
+     au gris — l'état actif perdait sa couleur au lieu de la porter. La teinte de
+     départ est donc la valeur *moyenne* (`--surface-tint`), et la nuit prend la
+     valeur claire, comme partout ailleurs dans cette palette. */
+  --nav-indicator: rgb(43 105 84 / 20%);
   --antique-gold: var(--secondary);
   --gold: var(--secondary);
   --gold-ink: var(--secondary);
@@ -253,6 +259,7 @@
   --on-error-container: #ffdad6;
 
   --emerald-veil: rgb(149 211 186 / 12%);
+  --nav-indicator: rgb(149 211 186 / 18%);
   --gold-veil: rgb(215 195 176 / 22%);
   --teal-veil: rgb(199 199 194 / 10%);
   --mark-color: #8a7440;

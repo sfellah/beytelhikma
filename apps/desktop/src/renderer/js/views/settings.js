@@ -10,10 +10,11 @@ import { copyField } from '../components/copy-field.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { segmented } from '../components/segmented.js';
+import { settingChoice } from '../components/setting-choice.js';
 import { asyncView } from '../components/states.js';
 import { familiesFor, resolveAnyFont, syncUserFonts, userFonts } from '../user-fonts.js';
 import { themeChoices } from '../components/theme-choices.js';
-import { PAGER_LAYOUTS, resolvePagerLayout } from '../../../shared/pager-layouts.js';
+import { READING_MODES, resolveReadingMode } from '../../../shared/reading-modes.js';
 import { resolveTapZones, TAP_ZONE_MODES } from '../../../shared/page-turn.js';
 import {
   DEFAULT_FONT_SIZE,
@@ -158,53 +159,35 @@ function languageSection() {
 }
 
 /**
- * Comment on parcourt un livre — où se pose le ruban de pagination.
+ * Comment on parcourt un livre : **horizontal**, une page par écran qu'on
+ * tourne, ou **vertical**, un fil qu'on défile.
  *
- * Il y avait ici un second réglage, la façon de lire : page imprimée ou fil
- * continu. Le fil a été essayé puis retiré ; il ne reste qu'une façon de lire,
- * et un réglage à une seule valeur est un réglage mort — il demande un choix
- * qui n'en est pas un. La ligne a donc disparu avec lui.
+ * Il y avait ici un second réglage — l'orientation du ruban de pagination,
+ * « أفقي / عمودي ». Deux lignes voisines avec les mêmes mots pour deux choses
+ * différentes : on croyait choisir sa façon de lire et l'on déplaçait la barre.
+ * Le ruban reste donc en bas, toujours, et son réglage a disparu.
  */
 function readingSection(prefs) {
-  /**
-   * Un choix segmenté sur une liste de `pager-layouts.js`.
-   *
-   * Le `dataset` est le contrat de la campagne de captures, comme `data-tool`
-   * pour la barre du lecteur : le libellé suit la langue, l'attribut ne bouge
-   * pas. L'indice porte la seconde ligne de l'option — c'est le seul endroit
-   * où « كما في المطبوع » se lit encore, et le contrôle segmenté n'a pas de
-   * place pour une explication sous le mot.
-   */
-  const choix = ({ liste, valeur, label, setting, marque }) => {
-    const node = segmented({
-      ariaLabel: t(label),
-      value: valeur,
-      options: liste.map((entry) => ({ value: entry.key, label: t(entry.label) })),
-      onPick: (key) => setSetting(setting, key),
-    });
-    for (const [index, button] of [...node.children].entries()) {
-      button.dataset[marque] = liste[index].key;
-      button.title = t(liste[index].hint);
-    }
-    return node;
-  };
+
 
   return group(
     'reading',
     t('settings.reading'),
     t('settings.readingHint'),
-    // Le ruban dressé ne prend pas de place en plus : le pied s'en va, la bande
-    // le remplace, et c'est la largeur qui paie au lieu de la hauteur.
+    // Deux façons de lire, et c'est le premier choix : la feuille imprimée, où
+    // l'on tourne, ou le fil, où l'on défile d'une page à l'autre. Le ruban ne
+    // bouge pas d'un mode à l'autre — il reste en bas, et c'est le réglage
+    // suivant, posé à la main, qui le dresse.
     row(
-      t('reader.pagerLabel'),
-      choix({
-        liste: PAGER_LAYOUTS,
-        valeur: resolvePagerLayout(prefs['reader.pager']),
-        label: 'reader.pagerLabel',
-        setting: 'reader.pager',
-        marque: 'pagerLayout',
+      t('reader.modeLabel'),
+      settingChoice({
+        liste: READING_MODES,
+        valeur: resolveReadingMode(prefs['reader.mode']),
+        label: 'reader.modeLabel',
+        setting: 'reader.mode',
+        marque: 'readingMode',
       }),
-      t('settings.pagerHint'),
+      t('settings.modeHint'),
     ),
     // Les côtés de la page tournent au doigt, et une main qui tient l'appareil
     // touche le bord : c'est le seul des gestes du lecteur qu'on déclenche sans
@@ -212,7 +195,7 @@ function readingSection(prefs) {
     // flèches tournent toujours.
     row(
       t('settings.tapZonesLabel'),
-      choix({
+      settingChoice({
         liste: TAP_ZONE_MODES,
         valeur: resolveTapZones(prefs['reader.tapZones']),
         label: 'settings.tapZonesLabel',

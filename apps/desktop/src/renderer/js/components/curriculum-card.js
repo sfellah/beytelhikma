@@ -85,9 +85,13 @@ function shelf(curriculum) {
             .filter(Boolean)
             .join(' '),
           title: book.title,
+          // Les deux mesures partent en **variables**, jamais en `width` et
+          // `height` posés en clair : un style en ligne l'emporte sur toute
+          // feuille, et le rayon ne pourrait plus se resserrer sur un
+          // téléphone (`--spine-scale`) sans un `!important` par propriété.
           style: {
-            width: `${width}px`,
-            height: `${between(SPINE_MIN_HEIGHT, SPINE_MAX_HEIGHT, ratio)}px`,
+            '--spine-w': `${width}px`,
+            '--spine-h': `${between(SPINE_MIN_HEIGHT, SPINE_MAX_HEIGHT, ratio)}px`,
             '--cover-from': style.from,
             '--cover-to': style.to,
             '--cover-gilt': `rgb(217 184 113 / ${(style.gilt * 100).toFixed(1)}%)`,

@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beyt El Hikma — anatomie du corpus : pages et octets</title>
+<style>
+  :root{
+    --paper:#f6f1e7; --ink:#1d2321; --ink-soft:#5d6b64; --line:#ddd3c2;
+    --primary:#003527; --accent:#b08a3e; --card:#fffdf8;
+    --b1:#003527; --b2:#1c5a45; --b3:#3f8168; --b4:#6da78e; --b5:#a3c9b8; --b6:#b08a3e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#14181a; --ink:#e9e6df; --ink-soft:#9aa8a1; --line:#2b3235;
+           --primary:#95d3ba; --card:#1b2124; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.55 "Iowan Old Style","Palatino Linotype",Georgia,serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 80px}
+  header{border-bottom:2px solid var(--primary);padding-bottom:18px;margin-bottom:34px}
+  h1{font-size:clamp(26px,4vw,38px);margin:0 0 6px;color:var(--primary);letter-spacing:-.01em}
+  .sub{color:var(--ink-soft);font-size:15px;margin:0}
+  h2{font-size:21px;margin:46px 0 6px;color:var(--primary)}
+  h2 .n{font-size:13px;color:var(--accent);display:block;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px}
+  p.note{color:var(--ink-soft);font-size:14.5px;margin:6px 0 18px;max-width:70ch}
+  .kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi b{display:block;font-size:26px;color:var(--primary);font-variant-numeric:tabular-nums;line-height:1.15}
+  .kpi span{font-size:12.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+  .kpi em{display:block;font-style:normal;font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px;background:var(--card)}
+  th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;
+     border-bottom:1.5px solid var(--primary);white-space:nowrap}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.ar{direction:rtl;text-align:right;font-family:"Amiri","Noto Naskh Arabic","Segoe UI",serif;font-size:16px}
+  tbody tr:hover{background:rgba(0,53,39,.05)}
+  .rank{color:var(--ink-soft);width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+  code{font:13px/1 ui-monospace,Consolas,monospace;color:var(--ink-soft)}
+  .bars{display:grid;gap:7px;margin:14px 0 4px}
+  .bar{display:grid;grid-template-columns:110px 1fr auto;align-items:center;gap:10px;font-size:13.5px}
+  .bar .lbl{color:var(--ink-soft);text-align:right;white-space:nowrap}
+  .bar .track{background:var(--line);border-radius:4px;height:20px;overflow:hidden}
+  .bar .fill{height:100%;border-radius:4px}
+  .bar .val{font-variant-numeric:tabular-nums;color:var(--ink-soft);min-width:9ch;text-align:right}
+  .cols{display:grid;gap:26px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .find{border-inline-start:3px solid var(--accent);padding:2px 0 2px 14px;margin:16px 0;max-width:74ch}
+  .find b{color:var(--primary)}
+  footer{margin-top:60px;padding-top:16px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Anatomie du corpus : pages et octets</h1>
+  <p class="sub">8 568 éditions publiées — <code>catalog_version 2</code>, relevé du 3 août 2026, source <code>book_releases</code>.</p>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><span>Éditions</span><b>8 568</b><em>actives au catalogue</em></div>
+  <div class="kpi"><span>Pages</span><b>7 508 537</b><em>876 pages en moyenne</em></div>
+  <div class="kpi"><span>Poids brut</span><b>56,2 Go</b><em>SQLite décompressé</em></div>
+  <div class="kpi"><span>Poids publié</span><b>10,2 Go</b><em>zstd, ratio ×5,6</em></div>
+  <div class="kpi"><span>Médiane</span><b>206 p.</b><em>1,5 Mo — la moitié du corpus</em></div>
+  <div class="kpi"><span>Densité</span><b>~9 Ko</b><em>par page, très stable</em></div>
+</div>
+
+<h2><span class="n">Constat 1</span>Deux champions, et ce n'est pas le même livre</h2>
+<p class="note">Le plus gros par le nombre de pages n'est pas le plus lourd. Un index de manuscrits fait des pages courtes ;
+une revue fait des pages longues. Ce sont deux questions distinctes, et il faut deux réponses.</p>
+
+<div class="cols">
+  <div>
+    <h3 style="font-size:15px;margin:0 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Le plus de pages</h3>
+    <div class="scroll"><table>
+      <thead><tr><th></th><th>Titre</th><th class="num">Pages</th><th class="num">Tomes</th><th class="num">Mo</th></tr></thead>
+      <tbody id="tp"></tbody>
+    </table></div>
+  </div>
+  <div>
+    <h3 style="font-size:15px;margin:0 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Le plus lourd</h3>
+    <div class="scroll"><table>
+      <thead><tr><th></th><th>Titre</th><th class="num">Mo</th><th class="num">zst</th><th class="num">Pages</th></tr></thead>
+      <tbody id="tm"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="find">
+  <b>خزانة التراث - فهرس مخطوطات</b> (<code>sh-1913</code>) porte <b>124 569 pages</b> en 125 tomes pour 201 Mo — 1,7 Ko la page,
+  cinq fois moins que la moyenne : c'est un fichier de fiches, pas un texte suivi.<br>
+  <b>مجلة الرسالة</b> (<code>sh-6551</code>) pèse <b>613 Mo</b> pour 65 431 pages et 1 025 tomes — le plus lourd du corpus,
+  et à lui seul <b>1,1 %</b> des 56 Go.
+</div>
+
+<h2><span class="n">Constat 2</span>Le corpus est fait de petits livres, le poids vient des gros</h2>
+<p class="note">2 943 éditions tiennent en moins de cent pages, et 3 623 en moins d'un mégaoctet — mais les 99 livres
+de plus de dix mille pages emportent 10,7 Go. La médiane (206 pages) ne décrit personne de ce qu'on télécharge vraiment.</p>
+
+<div class="cols">
+  <div>
+    <h3 style="font-size:15px;margin:0 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Par nombre de pages</h3>
+    <div class="bars" id="hp"></div>
+  </div>
+  <div>
+    <h3 style="font-size:15px;margin:0 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Par poids décompressé</h3>
+    <div class="bars" id="hm"></div>
+  </div>
+</div>
+
+<h2><span class="n">Constat 3</span>Concentration : mille livres font 70 % des octets</h2>
+<p class="note">Classées par poids, les éditions se concentrent brutalement. Conséquence directe pour le téléchargement :
+plafonner ou pré-chauffer le cache sur la tête de liste couvre l'essentiel du trafic.</p>
+<div class="bars" id="pareto"></div>
+
+<h2><span class="n">Constat 4</span>Les disciplines pèsent, elles ne comptent pas</h2>
+<p class="note">كتب السنة domine par le nombre (1 241 éditions) mais التفسير domine par le poids avec 273 éditions seulement :
+21,6 Mo en moyenne contre 4,5. La densité par page, elle, ne bouge presque pas d'une discipline à l'autre —
+autour de 9 Ko partout, ce qui confirme que c'est le <em>volume de texte</em>, jamais le format, qui fait la taille.</p>
+<div class="scroll"><table>
+  <thead><tr><th></th><th>Discipline</th><th class="num">Éditions</th><th class="num">Pages</th><th class="num">Go</th><th class="num">Mo moy.</th><th class="num">Ko/page</th></tr></thead>
+  <tbody id="tc"></tbody>
+</table></div>
+
+<h2><span class="n">Constat 5</span>La page est l'unité réelle du corpus, et elle est courte</h2>
+<p class="note">7,5 millions de pages, 3,96 millions d'entrées de sommaire : <b>une entrée toutes les 8,5 pages</b>.
+Le corpus n'est pas fait de longs chapitres mais de fragments courts et indexés — c'est ce qui rend la lecture
+page à page cohérente avec la source, et ce qui explique que le sommaire doive se fenêtrer côté vue.</p>
+
+<div class="kpis">
+  <div class="kpi"><span>Pages/tome</span><b>243</b><em>ratio global, 272 en moyenne par livre</em></div>
+  <div class="kpi"><span>Entrées de toc</span><b>3 959 113</b><em>une toutes les 8,5 pages</em></div>
+  <div class="kpi"><span>Page moyenne</span><b>~9 Ko</b><em>≈ 4 500 caractères arabes</em></div>
+  <div class="kpi"><span>Livres > 10k p.</span><b>99</b><em>1,2 % des titres, 19 % des octets</em></div>
+</div>
+
+<div class="cols">
+  <div>
+    <h3 style="font-size:15px;margin:22px 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Pages par siècle de l'auteur</h3>
+    <p class="note" style="margin:4px 0 10px">Deux crêtes : le 8<sup>e</sup> siècle hégirien (848 k pages) et le 15<sup>e</sup>,
+    contemporain (866 k) — l'édition moderne pèse autant que l'âge d'or de la compilation.</p>
+    <div class="bars" id="siecles"></div>
+  </div>
+  <div>
+    <h3 style="font-size:15px;margin:22px 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Le tome le plus chargé</h3>
+    <p class="note" style="margin:4px 0 10px">Un « tome » n'a aucune longueur standard : de 243 pages en moyenne
+    à 14 587 pour un volume unique. Ne jamais estimer une taille à partir du nombre de tomes.</p>
+    <div class="scroll"><table>
+      <thead><tr><th></th><th>Titre</th><th class="num">Pages</th><th class="num">Tomes</th><th class="num">p./tome</th></tr></thead>
+      <tbody id="tdense"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<h3 style="font-size:15px;margin:30px 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Les sommaires les plus fins</h3>
+<p class="note">Quand <code>toc_count</code> dépasse <code>page_count</code>, l'ouvrage est un dictionnaire ou un index :
+plusieurs entrées par page. Ces livres-là ne se lisent pas, ils se consultent — et c'est le sommaire, pas la pagination,
+qui porte la navigation.</p>
+<div class="scroll"><table>
+  <thead><tr><th></th><th>Titre</th><th class="num">Entrées</th><th class="num">Pages</th><th class="num">Entrées/page</th></tr></thead>
+  <tbody id="ttoc"></tbody>
+</table></div>
+
+<h2><span class="n">Constat 6</span>La page n'est pas une unité de mesure : 1 caractère à 823 404</h2>
+<p class="note">Mesuré caractère par caractère sur les 7 611 186 pages de la source Shamela (8,69 milliards de caractères).
+La « page » du corpus est un découpage éditorial hérité, pas un format : entre la plus courte et la plus longue,
+il y a un facteur <b>823 000</b>. Une estimation de temps de lecture, une barre de progression ou un pré-chargement
+« à la page » repose donc sur une unité qui n'en est pas une.</p>
+
+<div class="kpis">
+  <div class="kpi"><span>Page moyenne</span><b>1 141</b><em>caractères — ~1 min de lecture</em></div>
+  <div class="kpi"><span>Page médiane</span><b>~1 050</b><em>41 % des pages font 1 000–1 999</em></div>
+  <div class="kpi"><span>Page maximale</span><b>823 404</b><em>≈ 700 pages ordinaires en une</em></div>
+  <div class="kpi"><span>Pages vides</span><b>21 535</b><em>0,28 % — corps nul</em></div>
+  <div class="kpi"><span>Pages > 32 k</span><b>265</b><em>0,003 %, mais illisibles telles quelles</em></div>
+  <div class="kpi"><span>Écart</span><b>×823 000</b><em>de la plus courte à la plus longue</em></div>
+</div>
+
+<h3 style="font-size:15px;margin:26px 0 4px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Distribution : longueur d'une page, en caractères</h3>
+<p class="note" style="margin:4px 0 10px">Le corpus est massé entre 300 et 2 000 caractères — 76 % des pages.
+La queue droite est fine mais c'est elle qui casse le rendu : 7 276 pages dépassent 8 000 caractères,
+soit sept fois la moyenne sur une seule feuille.</p>
+<div class="bars" id="hlen"></div>
+
+<div class="cols">
+  <div>
+    <h3 style="font-size:15px;margin:22px 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Les pages les plus longues</h3>
+    <div class="scroll"><table>
+      <thead><tr><th></th><th>Livre</th><th class="num">Page</th><th class="num">Caractères</th><th class="num">× moy.</th></tr></thead>
+      <tbody id="tbig"></tbody>
+    </table></div>
+  </div>
+  <div>
+    <h3 style="font-size:15px;margin:22px 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em">Densité moyenne par discipline</h3>
+    <p class="note" style="margin:0 0 8px">De 582 à 2 135 caractères : un facteur 3,7. Le fiqh chaféite écrit dense,
+    les index et les recueils de hadith écrivent court.</p>
+    <div class="bars" id="dcat"></div>
+  </div>
+</div>
+
+<div class="find">
+  Record absolu : <b>الرسالة الندية في القواعد الفقهية</b> (<code>sh-6817</code>, 152 pages) porte
+  <b>823 404 caractères sur sa seule page 143</b>, et 627 884 sur la 142 — deux pages qui contiennent
+  à elles seules 1,45 million de caractères, l'équivalent de 1 270 pages ordinaires. À l'opposé, des centaines
+  de pages ne portent qu'<b>un seul caractère</b> (titre de section, numéro de tome, artefact de découpage).
+  Le lecteur doit tenir les deux dans la même vue.
+</div>
+
+<div class="find">
+  <b>Ce que ça implique côté lecteur.</b> Une page à 800 k caractères ne se monte pas d'un bloc dans le DOM :
+  c'est le seul cas où le rendu page-à-page a besoin d'un découpage interne. Inversement, une page à 1 caractère
+  rend la fraction du ruban trompeuse — « 143 / 152 » ne dit rien du chemin parcouru quand les pages varient
+  d'un facteur mille. Une jauge assise sur les <em>caractères cumulés</em>, pas sur le numéro de page,
+  serait la seule honnête.
+</div>
+
+<h2><span class="n">Constat 7</span>zstd rend le corpus distribuable</h2>
+<p class="note">56,2 Go bruts, 10,2 Go publiés : ratio moyen ×5,6, de ×2,8 au pire à ×16,5 au mieux. C'est ce qui permet
+d'embarquer le catalogue entier dans un APK de 4,9 Mo compressés et de tenir un livre moyen sous le mégaoctet sur le réseau.</p>
+<div class="bars" id="zst"></div>
+
+<footer>
+  Généré depuis <code>dist/shamela/catalog.sqlite</code> — <code>book_releases</code> jointe à <code>editions</code>,
+  <code>is_active = 1</code>. Mo = 2²⁰ octets. « Ko/page » = <code>uncompressed_size / page_count</code>.
+  Les longueurs de page viennent d'un balayage intégral de <code>C:\shamela-data</code> (8 589 dossiers,
+  <code>pages.jsonl</code>, corps mesuré en caractères après <code>strip()</code>) — 7 611 186 pages, dont
+  21 éditions écartées à l'import, ce qui explique l'écart avec les 7 508 537 pages du catalogue publié.
+  Document statique, sans dépendance.
+</footer>
+
+</div>
+
+<script>
+const TOP_PAGES=[{"t":"خزانة التراث - فهرس مخطوطات","id":"sh-1913","p":124569,"v":125,"u":210882560,"c":32094304},
+{"t":"مجلة الرسالة","id":"sh-6551","p":65431,"v":1025,"u":642871296,"c":123030611},
+{"t":"مجلة البحوث الإسلامية","id":"sh-2961","p":48258,"v":97,"u":294522880,"c":51189987},
+{"t":"المصنف - ابن أبي شيبة - ت الشثري","id":"sh-315","p":46371,"v":21,"u":72617984,"c":14374599},
+{"t":"المصنف - ابن أبي شيبة - ت الحوت","id":"sh-3612","p":42755,"v":7,"u":76926976,"c":12327225},
+{"t":"المسند المصنف المعلل","id":"sh-5251","p":42688,"v":40,"u":210546688,"c":31125513},
+{"t":"تاريخ دمشق لابن عساكر","id":"sh-66","p":33219,"v":74,"u":312586240,"c":49583700},
+{"t":"معجم اللغة العربية المعاصرة","id":"sh-6527","p":32341,"v":3,"u":63119360,"c":12636314},
+{"t":"الموسوعة الفقهية الكويتية","id":"sh-4278","p":31949,"v":45,"u":241446912,"c":42478503},
+{"t":"إتحاف المهرة بالفوائد المبتكرة من أطراف العشرة","id":"sh-6238","p":31913,"v":19,"u":90243072,"c":13566077},
+{"t":"البحر المحيط الثجاج في شرح صحيح الإمام مسلم بن الحجاج","id":"sh-8458","p":30125,"v":45,"u":306638848,"c":52176402},
+{"t":"تحفة الأشراف بمعرفة الأطراف","id":"sh-4255","p":28767,"v":13,"u":56500224,"c":9298931},
+{"t":"المعجم الكبير للطبراني","id":"sh-1484","p":26615,"v":21,"u":85475328,"c":11712966},
+{"t":"السنن الكبرى - البيهقي - ط العلمية","id":"sh-2855","p":24710,"v":10,"u":108093440,"c":14693908},
+{"t":"تاريخ الإسلام - ت تدمري","id":"sh-4577","p":24229,"v":52,"u":182652928,"c":38133822},
+{"t":"مجلة الجامعة الإسلامية بالمدينة المنورة","id":"sh-1788","p":23804,"v":48,"u":213274624,"c":38161585},
+{"t":"مسند أحمد - ط الرسالة","id":"sh-6193","p":23339,"v":45,"u":136814592,"c":26998086},
+{"t":"مجلة مجمع الفقه الإسلامي","id":"sh-2973","p":22276,"v":13,"u":237248512,"c":40660131},
+{"t":"المطالب العالية محققا","id":"sh-7618","p":21641,"v":18,"u":95760384,"c":15845868},
+{"t":"تاج العروس من جواهر القاموس","id":"sh-2502","p":21562,"v":40,"u":199688192,"c":40527959}];
+
+const TOP_MB=[{"t":"مجلة الرسالة","id":"sh-6551","p":65431,"v":1025,"u":642871296,"c":123030611},
+{"t":"مجلة البيان","id":"sh-1365","p":5988,"v":238,"u":321974272,"c":65665860},
+{"t":"تاريخ دمشق لابن عساكر","id":"sh-66","p":33219,"v":74,"u":312586240,"c":49583700},
+{"t":"البحر المحيط الثجاج في شرح صحيح الإمام مسلم بن الحجاج","id":"sh-8458","p":30125,"v":45,"u":306638848,"c":52176402},
+{"t":"مجلة البحوث الإسلامية","id":"sh-2961","p":48258,"v":97,"u":294522880,"c":51189987},
+{"t":"موقع الإسلام سؤال وجواب","id":"sh-6239","p":16344,"v":12,"u":274673664,"c":46296730},
+{"t":"الموسوعة الفقهية الكويتية","id":"sh-4278","p":31949,"v":45,"u":241446912,"c":42478503},
+{"t":"مجلة مجمع الفقه الإسلامي","id":"sh-2973","p":22276,"v":13,"u":237248512,"c":40660131},
+{"t":"فضل الرحيم الودود تخريج سنن أبي داود","id":"sh-247","p":16465,"v":30,"u":220823552,"c":32369434},
+{"t":"مجلة الجامعة الإسلامية بالمدينة المنورة","id":"sh-1788","p":23804,"v":48,"u":213274624,"c":38161585},
+{"t":"خزانة التراث - فهرس مخطوطات","id":"sh-1913","p":124569,"v":125,"u":210882560,"c":32094304},
+{"t":"المسند المصنف المعلل","id":"sh-5251","p":42688,"v":40,"u":210546688,"c":31125513},
+{"t":"المسند الموضوعي الجامع للكتب العشرة","id":"sh-4958","p":10232,"v":21,"u":202924032,"c":26255387},
+{"t":"تاج العروس من جواهر القاموس","id":"sh-2502","p":21562,"v":40,"u":199688192,"c":40527959},
+{"t":"ذخيرة العقبى في شرح المجتبى","id":"sh-4728","p":19271,"v":40,"u":192475136,"c":32230915},
+{"t":"تحفة المحتاج في شرح المنهاج وحواشي الشرواني والعبادي","id":"sh-3226","p":4677,"v":10,"u":189538304,"c":29373283},
+{"t":"عمدة القاري شرح صحيح البخاري","id":"sh-1946","p":7603,"v":25,"u":187138048,"c":33213879},
+{"t":"فتح الباري بشرح البخاري - ط السلفية","id":"sh-1455","p":7996,"v":14,"u":182759424,"c":30376325},
+{"t":"تاريخ الإسلام - ت تدمري","id":"sh-4577","p":24229,"v":52,"u":182652928,"c":38133822},
+{"t":"تفسير حدائق الروح والريحان في روابي علوم القرآن","id":"sh-5338","p":15280,"v":34,"u":160301056,"c":27076331}];
+
+const CATS=[["التفسير",273,671070,5.75,21.6,9.9],["شروح الحديث",265,626990,5.56,21.5,9.5],
+["كتب السنة",1241,1196946,5.51,4.5,7.5],["التراجم والطبقات",579,680421,4.83,8.5,8.5],
+["الجوامع",136,294179,2.70,20.4,10.9],["التاريخ",206,299976,2.59,12.9,10.0],
+["الأدب",406,283831,2.30,5.8,11.3],["العقيدة",803,267310,2.10,2.7,9.0],
+["الفقه الشافعي",89,170320,2.08,24.0,12.3],["الفقه الحنبلي",152,261351,1.97,13.3,7.7],
+["الفقه العام",208,247772,1.88,9.2,8.2],["الفقه المالكي",89,170042,1.66,19.1,10.6],
+["الفقه الحنفي",87,121851,1.49,17.5,12.8],["التخريج والأطراف",127,264388,1.49,12.0,9.5],
+["الرقائق والآداب والأذكار",623,182822,1.48,2.4,9.7],["الغريب والمعاجم",135,206904,1.47,11.2,9.1],
+["أصول الفقه",251,161141,1.22,5.0,8.6],["الفتاوى",64,152970,1.17,18.7,9.4],
+["علوم القرآن وأصول التفسير",311,153640,1.17,3.8,9.5],["السيرة النبوية",187,120645,1.04,5.7,9.1],
+["النحو والصرف",212,125871,0.90,4.3,8.4],["فهارس الكتب والأدلة",102,174434,0.63,6.3,8.7],
+["البلدان والرحلات",97,73779,0.63,6.6,10.1],["كتب عامة",356,72083,0.61,1.8,9.6],
+["علوم الحديث",319,84212,0.60,1.9,8.8]];
+
+const HIST_P=[["< 100 p.",2943],["100 – 299",2055],["300 – 999",2067],["1k – 3k",922],["3k – 10k",482],["> 10 000",99]];
+const HIST_M=[["< 1 Mo",3623],["1 – 5 Mo",2875],["5 – 20 Mo",1404],["20 – 50 Mo",416],["50 – 100 Mo",190],["> 100 Mo",60]];
+const PARETO=[["10 livres",5.1],["100 livres",22.8],["500 livres",54.5],["1 000 livres",70.2],["8 568 livres",100]];
+const ZSTD=[["Corpus brut",56.2],["Publié (zstd)",10.2]];
+
+const HUE=['var(--b1)','var(--b2)','var(--b3)','var(--b4)','var(--b5)','var(--b6)'];
+const nf=n=>n.toLocaleString('fr-FR');
+const mb=o=>(o/1048576).toFixed(0);
+
+function rows(el,data,cols){
+  document.getElementById(el).innerHTML=data.map((d,i)=>
+    `<tr><td class="rank">${i+1}</td><td class="ar" title="${d.id}">${d.t}</td>${cols(d)}</tr>`).join('');
+}
+rows('tp',TOP_PAGES,d=>`<td class="num">${nf(d.p)}</td><td class="num">${nf(d.v)}</td><td class="num">${mb(d.u)}</td>`);
+rows('tm',TOP_MB,d=>`<td class="num">${mb(d.u)}</td><td class="num">${mb(d.c)}</td><td class="num">${nf(d.p)}</td>`);
+
+document.getElementById('tc').innerHTML=CATS.map((c,i)=>
+  `<tr><td class="rank">${i+1}</td><td class="ar">${c[0]}</td><td class="num">${nf(c[1])}</td>
+   <td class="num">${nf(c[2])}</td><td class="num">${c[3].toFixed(2)}</td>
+   <td class="num">${c[4].toFixed(1)}</td><td class="num">${c[5].toFixed(1)}</td></tr>`).join('');
+
+function bars(el,data,unit,digits){
+  const max=Math.max(...data.map(d=>d[1]));
+  document.getElementById(el).innerHTML=data.map((d,i)=>
+    `<div class="bar"><span class="lbl">${d[0]}</span>
+     <span class="track"><span class="fill" style="width:${(d[1]/max*100).toFixed(1)}%;background:${HUE[i%6]}"></span></span>
+     <span class="val">${digits?d[1].toFixed(digits):nf(d[1])}${unit}</span></div>`).join('');
+}
+/* longueur des pages, en caracteres — balayage integral de C:\shamela-data */
+const HIST_LEN=[["vide (0)",21535],["1 – 99",245587],["100 – 299",762219],["300 – 599",1015861],
+["600 – 999",1651670],["1 000 – 1 999",3158592],["2 000 – 3 999",640306],["4 000 – 7 999",108140],
+["8 000 – 15 999",5706],["16 000 – 31 999",1305],["≥ 32 000",265]];
+
+const BIG=[["الرسالة الندية في القواعد الفقهية",143,823404],
+["الرسالة الندية في القواعد الفقهية",142,627884],
+["المختصر في أصول الفقه",6,530340],
+["المشيخة البغدادية لأبي طاهر السلفي",39,435056],
+["المصنف - عبد الرزاق - ط التأصيل",274,427011],
+["التبيان في قواعد النحو وتقويم اللسان",190,412391],
+["صفات رب العالمين",95,384347],
+["صحيح ابن حبان - التقاسيم والأنواع",33,363687],
+["أنشاب الكثب في أنساب الكتب",29,310990],
+["الدرة الثمينة في أخبار المدينة",418,267481],
+["فقه الصيام ومستجداته المعاصرة",89,259862],
+["موهوب الجليل في شرح مختصر خليل",33,226587]];
+
+const DCAT=[["الفقه الشافعي",2135],["الفقه الحنفي",2123],["الطب",1864],["الفقه المالكي",1595],
+["شروح الحديث",1408],["الجوامع",1380],["التفسير",1354],["التاريخ",1296],["الأدب",1205],
+["الرقائق والآداب",1184],["الفقه الحنبلي",1156],["العقيدة",1109],["التراجم والطبقات",1048],
+["النحو والصرف",997],["مسائل فقهية",911],["التخريج والأطراف",838],["كتب السنة",655],
+["فهارس الكتب والأدلة",582]];
+
+const SIECLES=[[1,809],[2,59938],[3,537567],[4,557624],[5,500935],[6,375958],[7,409326],
+[8,848459],[9,608654],[10,351264],[11,162663],[12,110723],[13,151550],[14,473383],[15,866141]];
+const DENSE=[["الجامع الصغير وزيادته",14587,1],["معجم اللغة العربية المعاصرة",32341,3],
+["موسوعة الرقائق والأدب - ياسر الحمداني",8320,1],["تفسير الجلالين",6934,1],
+["تنوير المقباس من تفسير ابن عباس",6611,1],["ضعيف الجامع الصغير وزيادته",6360,1],
+["الوجيز للواحدي",6237,1],["الشرح الصوتي لزاد المستقنع",12382,2]];
+const TOC=[["خزانة التراث - فهرس مخطوطات",136957,124569],["شمس العلوم ودواء كلام العرب",80367,7095],
+["الموسوعة الفقهية الكويتية",37138,31949],["معجم اللغة العربية المعاصرة",32387,32341],
+["تاريخ الإسلام - ت بشار",31905,15404],["موسوعة جمال عبد الناصر في الفقه",20737,9614]];
+
+document.getElementById('tdense').innerHTML=DENSE.map((d,i)=>
+  `<tr><td class="rank">${i+1}</td><td class="ar">${d[0]}</td><td class="num">${nf(d[1])}</td>
+   <td class="num">${d[2]}</td><td class="num">${nf(Math.round(d[1]/d[2]))}</td></tr>`).join('');
+
+document.getElementById('ttoc').innerHTML=TOC.map((d,i)=>
+  `<tr><td class="rank">${i+1}</td><td class="ar">${d[0]}</td><td class="num">${nf(d[1])}</td>
+   <td class="num">${nf(d[2])}</td><td class="num">${(d[1]/d[2]).toFixed(1)}</td></tr>`).join('');
+
+(function(){
+  const max=Math.max(...SIECLES.map(s=>s[1]));
+  document.getElementById('siecles').innerHTML=SIECLES.map(s=>{
+    const w=Math.sqrt(s[1]/max)*100;
+    return `<div class="bar"><span class="lbl">${s[0]}<sup>e</sup> s. h.</span>
+      <span class="track"><span class="fill" style="width:${w.toFixed(1)}%;background:var(--b2)"></span></span>
+      <span class="val">${nf(Math.round(s[1]/1000))} k p.</span></div>`;
+  }).join('');
+})();
+
+document.getElementById('tbig').innerHTML=BIG.map((d,i)=>
+  `<tr><td class="rank">${i+1}</td><td class="ar">${d[0]}</td><td class="num">${nf(d[1])}</td>
+   <td class="num">${nf(d[2])}</td><td class="num">×${Math.round(d[2]/1141)}</td></tr>`).join('');
+
+(function(){
+  const max=Math.max(...HIST_LEN.map(d=>d[1]));
+  document.getElementById('hlen').innerHTML=HIST_LEN.map((d,i)=>{
+    const w=Math.max(Math.sqrt(d[1]/max)*100,.8);
+    const c=i===0?'var(--b6)':(i>=8?'var(--accent)':'var(--b2)');
+    return `<div class="bar"><span class="lbl">${d[0]}</span>
+      <span class="track"><span class="fill" style="width:${w.toFixed(1)}%;background:${c}"></span></span>
+      <span class="val">${nf(d[1])}</span></div>`;
+  }).join('');
+  const m2=Math.max(...DCAT.map(d=>d[1]));
+  document.getElementById('dcat').innerHTML=DCAT.map(d=>
+    `<div class="bar" style="grid-template-columns:130px 1fr auto">
+     <span class="lbl ar" style="direction:rtl">${d[0]}</span>
+     <span class="track"><span class="fill" style="width:${(d[1]/m2*100).toFixed(1)}%;background:var(--b3)"></span></span>
+     <span class="val">${nf(d[1])}</span></div>`).join('');
+})();
+
+bars('hp',HIST_P,' livres');
+bars('hm',HIST_M,' livres');
+bars('pareto',PARETO,' % des octets',1);
+bars('zst',ZSTD,' Go',1);
+</script>
+</body>
+</html>

@@ -877,23 +877,27 @@ export class BookRepository {
         [limit],
       );
 
-      return {
-        total,
-        rows: rows.map((row) => ({
-          categoryId: row.category_id,
-          label: row.label_ar,
-          bookCount: row.book_count ?? 0,
-          // La part se calcule ici : la vue n'a pas à connaître la taille du
-          // catalogue pour afficher un pourcentage.
-          share: visible ? (row.book_count ?? 0) / visible : 0,
-          books: all(
-            db,
-            `${SUMMARY_SELECT} AND e.category_id = ?
+      const bands = rows.map((row) => ({
+        categoryId: row.category_id,
+        label: row.label_ar,
+        bookCount: row.book_count ?? 0,
+        // La part se calcule ici : la vue n'a pas à connaître la taille du
+        // catalogue pour afficher un pourcentage.
+        share: visible ? (row.book_count ?? 0) / visible : 0,
+        books: all(
+          db,
+          `${SUMMARY_SELECT} AND e.category_id = ?
              GROUP BY e.edition_id ORDER BY r.published_at DESC, e.title_ar LIMIT ?`,
-            [row.category_id, sample],
-          ).map(bookSummary),
-        })),
-      };
+          [row.category_id, sample],
+        ).map(bookSummary),
+      }));
+
+      // Un seul aller-retour vers `user.sqlite` pour les six bandes : sans lui,
+      // la pastille « déjà installé » manquait précisément là où l'on tombe sur
+      // un livre par hasard — et l'on retéléchargeait ce qu'on avait déjà.
+      await this.#withDownloadStatus(bands.flatMap((band) => band.books));
+
+      return { total, rows: bands };
     });
   }
 
@@ -971,11 +975,13 @@ export class BookRepository {
         [editionId],
       ).map(author);
 
-      const otherEditions = all(
-        catalog,
-        `${SUMMARY_SELECT} AND e.work_id = ? AND e.edition_id <> ? GROUP BY e.edition_id`,
-        [meta.work_id ?? summary.workId, editionId],
-      ).map(bookSummary);
+      const otherEditions = await this.#withDownloadStatus(
+        all(
+          catalog,
+          `${SUMMARY_SELECT} AND e.work_id = ? AND e.edition_id <> ? GROUP BY e.edition_id`,
+          [meta.work_id ?? summary.workId, editionId],
+        ).map(bookSummary),
+      );
 
       const release = await this.#activeRelease(editionId);
       const user = await this.#db.user();
@@ -1768,6 +1774,29 @@ export class BookRepository {
   }
 
   /**
+   * Lesquels de ces livres sont déjà dans la collection. La question est
+   * **bornée par ce qu'on montre**, jamais posée sur la collection entière.
+   *
+   * Le mode d'édition d'une collection puise dans tout le catalogue : rendre la
+   * liste complète des membres ferait traverser le pont des milliers
+   * d'identifiants à chaque page tournée, pour n'en éclairer qu'une vingtaine.
+   * C'est la règle déjà écrite pour `#titleOrder` : un `IN (?,?,…)` de plusieurs
+   * milliers de paramètres, SQLite le refuserait.
+   */
+  getCollectionMembership(collectionId, editionIds = []) {
+    return this.#guard("lecture de l'appartenance à une collection", async () => {
+      if (!Array.isArray(editionIds) || !editionIds.length) return [];
+      const user = await this.#db.user();
+      return all(
+        user,
+        `SELECT edition_id FROM collection_books
+          WHERE collection_id = ? AND edition_id IN (${editionIds.map(() => '?').join(',')})`,
+        [collectionId, ...editionIds],
+      ).map((row) => row.edition_id);
+    });
+  }
+
+  /**
    * Contenu d'une collection, paginé. Une collection peut porter tout le
    * catalogue : seule la page demandée est jointe, et `missing` dit combien de
    * livres restent à télécharger sur l'ensemble — pas sur la page, sinon le
@@ -2501,6 +2530,7 @@ export const REPOSITORY_METHODS = [
   'addToCollection',
   'removeFromCollection',
   'getCollectionBooks',
+  'getCollectionMembership',
   'getCurricula',
   'getCurriculum',
   'deleteAllBooks',

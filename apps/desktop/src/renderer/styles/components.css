@@ -410,18 +410,48 @@
   color: var(--deep-emerald);
 }
 
+/* Plein, jamais discret : dans une grille, c'est le seul signe qui dise « tu
+   l'as déjà ». Les deux jetons vont ensemble et suivent le thème — une encre
+   sombre posée en dur disparaîtrait de nuit. */
+.book-card__status--installed {
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
+}
+
 .book-card__status--busy {
   color: var(--ink-mute);
 }
 
-.book-card__check {
+/* L'étiquette porte la cible du pouce, la case garde sa taille : c'est la
+   convention du projet (la case du tableau des téléchargements suit la même),
+   et grossir la case elle-même ferait une pastille énorme sur une vignette de
+   150 px. */
+.book-card__check-hit {
   position: absolute;
-  top: var(--space-sm);
-  inset-inline-end: var(--space-sm);
-  width: 20px;
-  height: 20px;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   z-index: 2;
   cursor: pointer;
+}
+
+.book-card__check {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* En mode sélection, l'appui long ne doit pas déclencher la sélection de texte
+   native de la WebView : elle avale les évènements tactiles, et le geste
+   n'arriverait jamais jusqu'à nous. */
+.book-card.is-selecting {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 .book-card.is-selected .book-card__media {
@@ -514,7 +544,31 @@
   color: var(--surface-container-lowest);
   line-height: 20px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
   animation: badge-in var(--motion-slow) var(--ease-out);
+}
+
+/* Dans le rail, la ligne est horizontale : le compte va au bout, là où l'œil
+   le cherche, et non collé au mot. */
+.rail .nav-badge {
+  margin-inline-start: auto;
+}
+
+/* Dans la barre du bas, elle est *posée sur* le coin de l'icône, hors du flux :
+   l'onglet y est une colonne, et une pastille dans le flux s'y empilait en
+   troisième ligne sous le libellé — l'onglet grandissait, la barre entière avec
+   lui, le temps d'un téléchargement. L'anneau la détache de la pastille active,
+   sur laquelle elle se pose sans quoi teinte sur teinte. */
+.bottom-nav .nav-badge {
+  position: absolute;
+  top: -2px;
+  inset-inline-end: 5px;
+  z-index: 1;
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 18px;
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
 @keyframes badge-in {
@@ -600,6 +654,15 @@
   padding: var(--space-xxl) var(--space-md);
   text-align: center;
   color: var(--on-surface-variant);
+}
+
+/* La ligne qui prévient d'une longue attente. Discrète, et bornée en largeur :
+   centrée sur toute la fenêtre elle se lirait comme un titre, pas comme une
+   note en passant. */
+.state__note {
+  max-width: 34ch;
+  margin-top: calc(var(--space-sm) * -1);
+  opacity: 0.7;
 }
 
 .state__title {
@@ -844,4 +907,110 @@
   width: 16px;
   height: 16px;
   border-radius: var(--radius-pill);
+}
+
+/* ------------------------------------------------- barre d'actions ancrée */
+
+/* Elle est **hors du flux**. Posée dans la page au-dessus des résultats, il
+   fallait remonter tout l'écran pour agir sur ce qu'on venait de cocher au
+   quarantième livre — et sur téléphone elle défilait aussi de côté, si bien que
+   l'action première commençait hors champ.
+ *
+ * Elle flotte **au-dessus de la barre d'onglets**, jamais collée au bord.
+ * Ancrée à `inset-block-end: 0` avec un `z-index` de 40, elle passait sous
+ * `.bottom-nav` (fixe, `z-index: 50`) : on cochait des livres et il n'y avait,
+ * littéralement, aucune action à l'écran. Les 96 px et le `z-index` de 99 sont
+ * ceux du toast et de la bande de mise à jour — les trois couches flottantes de
+ * l'application se posent au même endroit, et l'ordre entre elles est décidé
+ * une fois : le toast (100) passe devant, il annonce le résultat des autres. */
+.action-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(96px + var(--safe-bottom));
+  z-index: 99;
+  /* Le voile ne prend pas le doigt ; les boutons, si. C'est la règle déjà
+     écrite pour les couches du lecteur. */
+  pointer-events: none;
+  padding-inline-start: calc(var(--space-sm) + var(--safe-left));
+  padding-inline-end: calc(var(--space-sm) + var(--safe-right));
+}
+
+@keyframes action-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-bar__inner {
+    animation: none;
+  }
+}
+
+.action-bar[hidden] {
+  display: none;
+}
+
+/* Une pastille qui flotte, pas une plaque qui barre l'écran : elle ne prend que
+   la largeur de ce qu'elle dit, et le contenu reste visible autour. */
+.action-bar__inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: max-content;
+  max-width: min(94vw, 560px);
+  margin-inline: auto;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  /* Elle glisse depuis le bas : apparue d'un coup sous le pouce, on ne sait ni
+     d'où elle sort ni ce qu'elle recouvre. */
+  animation: action-bar-in var(--motion-base) var(--ease-out);
+}
+
+.action-bar__count {
+  flex: none;
+}
+
+/* Trois actions au plus, et elles se partagent la largeur : **jamais** de
+   défilement horizontal. Une action qu'il faut aller chercher n'est pas une
+   action, c'est exactement le défaut qu'on corrige. */
+.action-bar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+}
+
+.action-bar__row > * {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.action-bar__row > * > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Une action désactivée **reste en place** : la faire disparaître déplacerait
+   les deux autres sous le doigt entre deux tapes. */
+.action-bar__row > *:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  /* La pastille prend la largeur utile : deux actions et un compte ne tiennent
+     pas dans une largeur de contenu sur un téléphone. */
+  .action-bar__inner {
+    width: auto;
+  }
 }

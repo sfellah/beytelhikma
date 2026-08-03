@@ -295,73 +295,145 @@
 
 /* ---------------------------------------------------------- bottom nav */
 
+/* La barre est une *plaque posée* sur le contenu, pas un trait de séparation :
+   coins hauts arrondis, verre saturé, et une ombre montante teintée émeraude
+   comme le prescrit `docs/DESIGN.md`. Le filet seul laissait le texte défiler
+   au ras des onglets, sans qu'aucune profondeur ne dise lequel est devant. */
 .bottom-nav {
   position: fixed;
   inset-inline: 0;
   bottom: 0;
   z-index: 50;
   display: flex;
-  justify-content: space-around;
-  align-items: center;
+  align-items: stretch;
   /* En bas, la barre de gestes d'Android : sans ce retrait, la dernière rangée
      d'onglets tombe dessous et le geste de retour les traverse. */
-  padding: var(--space-sm) calc(var(--space-md) + var(--safe-right))
-    calc(var(--space-sm) + var(--safe-bottom)) calc(var(--space-md) + var(--safe-left));
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--outline-variant);
+  padding: 6px calc(var(--space-xs) + var(--safe-right)) calc(6px + var(--safe-bottom))
+    calc(var(--space-xs) + var(--safe-left));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(160%);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 70%, transparent);
+  border-start-start-radius: var(--radius-xl);
+  border-start-end-radius: var(--radius-xl);
+  box-shadow: 0 -8px 28px -12px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
+/* Chaque onglet prend sa part égale de la largeur : la zone tactile va d'un
+   bord à l'autre de sa colonne, alors qu'un `space-around` ne rendait
+   cliquable que le mot et l'icône, deux cibles étroites sous un pouce. */
 .bottom-nav__item {
   position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm);
+  gap: 3px;
+  padding: 4px 2px;
   color: var(--on-surface-variant);
   font-family: var(--font-label);
-  font-size: 11px;
-  font-weight: 500;
-  transition: color var(--motion-base) var(--ease-out);
+  transition:
+    color var(--motion-base) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
 /* La pastille est toujours montée, simplement repliée derrière l'icône : elle
-   s'ouvre en largeur sous le pouce au lieu d'apparaître d'un coup. Le fond est
-   un pseudo-élément — mis à l'échelle sur la boîte, il écraserait l'icône. */
+   s'ouvre sous le pouce au lieu d'apparaître d'un coup. Le fond est un
+   pseudo-élément — mis à l'échelle sur la boîte, il écraserait l'icône. */
 .bottom-nav__item .bottom-nav__bubble {
   position: relative;
-  padding: 2px var(--space-md);
-  display: flex;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 60px;
+  height: 34px;
+  transition: transform var(--motion-base) var(--ease-out);
 }
 
+/* Émeraude diluée et non sable : l'état actif appartient à la couleur qui
+   signifie. La teinte vient de `--nav-indicator`, qui suit le thème — sur nuit,
+   c'est la valeur claire de l'émeraude, sans quoi la pastille disparaîtrait dans
+   le graphite. Le liseré interne lui donne son bord tactile sans peser une
+   bordure entière. */
 .bottom-nav__bubble::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   border-radius: var(--radius-pill);
-  background: var(--secondary-container);
-  transform: scaleX(0.35);
+  background: var(--nav-indicator);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nav-indicator) 70%, transparent);
+  transform: scale(0.72);
   opacity: 0;
   transition:
     transform var(--motion-base) var(--ease-out),
     opacity var(--motion-fast) var(--ease-out);
 }
 
-.bottom-nav__item:active .bottom-nav__bubble::before {
-  transform: scaleX(0.9);
-  opacity: 0.5;
+/* Le libellé garde sa ligne quoi qu'il arrive : cinq onglets, des mots arabes
+   qui ne se coupent pas, et une barre qui grandirait d'une ligne au premier
+   mot trop long. */
+.bottom-nav__label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition:
+    font-weight var(--motion-base) var(--ease-out),
+    opacity var(--motion-base) var(--ease-out);
 }
 
+/* L'appui répond sur tout l'onglet, pas sur la seule pastille : c'est l'onglet
+   qu'on vise du pouce. La pastille d'un onglet inactif s'entrouvre pour dire
+   que le geste est pris, sans prétendre que l'écran a déjà changé. */
+.bottom-nav__item:active {
+  transform: scale(0.94);
+}
+
+.bottom-nav__item:active .bottom-nav__bubble::before {
+  transform: scale(0.92);
+  opacity: 0.55;
+}
+
+/* L'icône monte d'un cheveu et grossit à peine : le déplacement se sent, la
+   composition ne bouge pas — la pastille, elle, est de taille fixe. */
 .bottom-nav__item.is-active {
   color: var(--primary);
-  font-weight: 700;
 }
 
+.bottom-nav__item.is-active .bottom-nav__bubble {
+  transform: translateY(-1px) scale(1.04);
+}
+
+/* La pastille est *jouée*, pas seulement transitionnée : la coquille est
+   reconstruite à chaque navigation, l'onglet actif arrive donc déjà actif et
+   aucune transition ne se déclenche — sans cette image, changer d'écran ferait
+   sauter la pastille d'un onglet à l'autre sans qu'on voie le passage. */
 .bottom-nav__item.is-active .bottom-nav__bubble::before {
-  transform: scaleX(1);
+  transform: scale(1);
   opacity: 1;
+  animation: nav-indicator-in var(--motion-base) var(--ease-out);
+}
+
+@keyframes nav-indicator-in {
+  from {
+    transform: scale(0.72);
+    opacity: 0;
+  }
+}
+
+/* 600 et non 700 : à 11px, un gras plein empâte les ligatures arabes et le mot
+   actif devient moins lisible que les quatre autres, ce qui est l'inverse du
+   but. */
+.bottom-nav__item.is-active .bottom-nav__label {
+  font-weight: 600;
+}
+
+.bottom-nav__item:not(.is-active) .bottom-nav__label {
+  opacity: 0.85;
 }
 
 /* --------------------------------------------------------------- toast */

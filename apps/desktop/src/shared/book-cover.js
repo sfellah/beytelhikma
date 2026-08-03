@@ -156,6 +156,56 @@ export function coverFamily(categoryLabel) {
   return FAMILY_BY_NORMALIZED_LABEL.get(key) ?? FALLBACK_FAMILY;
 }
 
+/* ------------------------------------------- une famille pour ce qui n'en a pas */
+
+/**
+ * Une collection n'a pas de discipline : elle est faite par son propriétaire, et
+ * peut mêler la grammaire au hadith. Elle n'a donc rien à quoi accrocher une
+ * teinte — sauf son nom, qui ne change pas.
+ *
+ * On **réutilise** les neuf familles au lieu d'ouvrir une seconde palette : deux
+ * listes de couleurs finissent toujours par diverger, c'est la panne du thème
+ * `sepia` et celle des polices déclarées deux fois.
+ */
+export const FAMILY_KEYS = Object.keys(COVER_FAMILIES);
+
+/**
+ * FNV-1a 32 bits — quatre lignes, aucune dépendance, et surtout **stable** : la
+ * même chaîne rend le même nombre à chaque exécution, dans les deux clients.
+ * `Math.imul` est ce qui garde la multiplication en 32 bits ; en arithmétique
+ * flottante, le produit dépasserait 2^53 et perdrait ses bits de poids faible,
+ * c'est-à-dire précisément ceux dont on tire la famille.
+ */
+export function hashKey(text) {
+  const value = String(text ?? '');
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = Math.imul(hash ^ value.charCodeAt(index), 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+/**
+ * La teinte se tire du **nom**, jamais du rang dans la liste : ajouter une
+ * collection en tête repeindrait toutes les autres, et l'on ne reconnaîtrait
+ * plus la sienne d'un coup d'œil.
+ */
+export function familyForKey(text) {
+  return FAMILY_KEYS[hashKey(text) % FAMILY_KEYS.length];
+}
+
+/**
+ * Ce qu'il faut pour peindre un objet qui n'est pas un livre : les deux teintes
+ * de la famille tirée du nom, et son motif. Pas de dorure : elle suit le siècle
+ * de l'auteur, et une collection n'en a pas — la sienne est une constante, qui
+ * vit dans la feuille de style avec le reste de son décor.
+ */
+export function paletteFor(text) {
+  const family = familyForKey(text);
+  const { from, to, pattern } = COVER_FAMILIES[family];
+  return { family, from, to, pattern };
+}
+
 /* ------------------------------------------------------------------- patine */
 
 /**

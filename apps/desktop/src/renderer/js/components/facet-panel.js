@@ -1,3 +1,4 @@
+import { pushBackHandler } from '../back-intent.js';
 import { h } from '../dom.js';
 import { n, t } from '../i18n.js';
 import { icon } from '../icons.js';
@@ -20,8 +21,13 @@ const SUGGESTED = [
 /** Clés de [query] qui restreignent réellement la liste. */
 const FILTRANTES = ['categories', 'types', 'centuries', 'status', 'authors', 'publishers'];
 
-/** Combien de filtres sont posés — c'est ce que le résumé doit annoncer. */
-function countActive(query) {
+/**
+ * Combien de filtres sont posés — c'est ce que le déclencheur doit annoncer.
+ *
+ * Exportée parce que c'est le seul chiffre de l'écran qui ne vienne pas de SQL :
+ * il se compte ici, et un test le tient.
+ */
+export function countActive(query) {
   let total = 0;
   for (const key of FILTRANTES) {
     const value = query?.[key];
@@ -33,42 +39,153 @@ function countActive(query) {
 }
 
 /**
- * Panneau de filtres. [onChange] reçoit un fragment de requête à fusionner ;
- * le panneau ne détient aucun état, il se redessine à partir de [query].
- *
- * C'est un `<details>` et non plus un `<aside>`, parce que le panneau **précède
- * les résultats dans le flux**. Sur un écran large il occupe sa colonne et cela
- * ne coûte rien ; sur un téléphone il les repoussait si loin qu'il fallait
- * défiler à travers six disciplines, deux types et quinze siècles avant de voir
- * un seul livre.
- *
- * Replié, il garde sa place — au-dessus, là où on va chercher un filtre — sans
- * rien coûter, et son résumé dit combien sont posés, ce qu'une colonne déroulée
- * ne disait pas non plus. Sur large, `open` est posé d'office et le CSS masque
- * le résumé : la colonne latérale ne change pas d'un pixel.
+ * Un champ de saisie ne se réécrit pas sous les doigts qui le tiennent : la
+ * valeur de l'état est celle d'une frappe déjà dépassée, et l'y reposer
+ * déplacerait le curseur en fin de ligne au milieu d'un mot.
  */
-export function facetPanel({ facets, query, onChange }) {
-  const large = !globalThis.matchMedia?.('(max-width: 900px)')?.matches;
-  const actifs = countActive(query);
+function syncField(input, value) {
+  if (globalThis.document?.activeElement === input) return;
+  const text = value == null ? '' : String(value);
+  if (input.value !== text) input.value = text;
+}
 
-  return h(
-    'details',
-    { class: 'facets', open: large },
-    h(
-      'summary',
-      { class: 'facets__summary' },
-      icon('filter'),
-      h('span', { class: 'facets__summary-label' }, t('explore.filters')),
-      actifs > 0
-        ? h('span', { class: 'facets__badge' }, `${n(actifs)} ${t('explore.filtersActive')}`)
-        : null,
-    ),
-    LISTS.map(([key, label]) => listFacet(key, label, facets[key] ?? [], query, onChange)),
-    SUGGESTED.map(([key, label, placeholder]) =>
-      suggestFacet(key, label, placeholder, facets, query, onChange),
-    ),
-    yearFacet(query, onChange),
+/**
+ * Panneau de filtres. [onChange] reçoit un fragment de requête à fusionner ;
+ * [onClose] est appelé quand la feuille se referme, pour que l'appelant amène
+ * les résultats sous les yeux.
+ *
+ * Le panneau **vit** : il rend `{ node, trigger, update }` et non plus un nœud
+ * jetable. Il se redessinait en rendant un arbre neuf que l'appelant
+ * substituait à l'ancien — et ce geste arrachait du document les quatre
+ * `<input>` qu'il porte. Un champ arraché perd le focus, et sur Android la
+ * WebView referme le clavier avec lui : on tapait un caractère, le clavier se
+ * fermait. Les nœuds de saisie sont donc créés une fois et ne bougent plus ;
+ * seul ce qui change de contenu est repeint.
+ *
+ * **Le déclencheur ne vit pas dans le panneau : il en sort.** C'était un
+ * `<details>`, dont le `<summary>` gardait sa place au-dessus des résultats et
+ * les repoussait d'autant en s'ouvrant — ouvert, six disciplines, deux types et
+ * quinze siècles passaient avant le premier livre, et l'on croyait que la
+ * recherche n'avait rien rendu. Le déclencheur est donc un bouton rendu à part
+ * (`trigger`), que l'écran pose **dans sa barre d'outils**, à côté du champ et
+ * du tri ; le panneau, lui, s'ouvre en feuille par-dessus la page et ne prend
+ * plus une ligne du flux.
+ *
+ * Sur grand écran rien de tout cela ne joue : le CSS masque le déclencheur, la
+ * feuille redevient la colonne latérale, et l'état d'ouverture n'a pas de
+ * lecteur. C'est une **media query** qui tranche, jamais une détection d'OS —
+ * une fenêtre de bureau réduite doit se comporter comme un téléphone.
+ */
+export function facetPanel({ facets, query, onChange, onClose }) {
+  let state = { facets: facets ?? {}, query };
+  let opened = false;
+
+  const badge = h('span', { class: 'facets__badge' });
+  const trigger = h(
+    'button',
+    {
+      type: 'button',
+      class: 'facets__trigger',
+      'aria-expanded': 'false',
+      onclick: () => setOpen(!opened),
+    },
+    icon('filter', { size: 18 }),
+    h('span', { class: 'facets__trigger-label' }, t('explore.filters')),
+    badge,
   );
+
+  const sections = [
+    ...LISTS.map(([key, label]) => listFacet(key, label, onChange)),
+    ...SUGGESTED.map(([key, label, placeholder]) =>
+      suggestFacet(key, label, placeholder, onChange),
+    ),
+    yearFacet(onChange),
+  ];
+
+  const sheet = h(
+    'div',
+    { class: 'facets__sheet' },
+    h(
+      'div',
+      { class: 'facets__head' },
+      h('h2', { class: 'facets__head-title label-md' }, t('explore.filters')),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'facets__close',
+          'aria-label': t('action.close'),
+          onclick: () => setOpen(false),
+        },
+        icon('close', { size: 18 }),
+      ),
+    ),
+    h('div', { class: 'facets__sections' }, sections.map((section) => section.node)),
+    h(
+      'button',
+      { type: 'button', class: 'button button--filled facets__apply', onclick: () => setOpen(false) },
+      t('explore.showResults'),
+    ),
+  );
+
+  // Le voile est le nœud lui-même : une tape qui l'atteint — donc qui ne touche
+  // pas la feuille — referme, comme partout ailleurs dans l'application.
+  const node = h(
+    'div',
+    {
+      class: 'facets',
+      onclick: (event) => {
+        if (event.target === node) setOpen(false);
+      },
+    },
+    sheet,
+  );
+
+  /**
+   * L'ouverture se **reflète en attribut**, pas en classe : le CSS n'en lit
+   * qu'une déclaration, sous la media query du téléphone, et sur grand écran
+   * l'attribut ne veut rien dire.
+   */
+  function setOpen(next) {
+    if (opened === next) return;
+    opened = next;
+    if (opened) node.setAttribute('data-open', '');
+    else node.removeAttribute('data-open');
+    trigger.setAttribute('aria-expanded', String(opened));
+    if (!opened) onClose?.();
+  }
+
+  // Le geste retour d'Android ferme la feuille avant de quitter l'écran : c'est
+  // la cascade d'`Escape`, une couche à la fois.
+  const releaseBack = pushBackHandler(() => {
+    if (!opened) return false;
+    setOpen(false);
+    return true;
+  });
+
+  function paint() {
+    const actifs = countActive(state.query);
+    badge.textContent = actifs > 0 ? n(actifs) : '';
+    badge.hidden = actifs === 0;
+    trigger.setAttribute('aria-label', t('explore.filtersCount', { count: actifs }));
+    for (const section of sections) section.paint(state);
+  }
+
+  paint();
+
+  return {
+    node,
+    trigger,
+    /** Repeint depuis un nouvel état, sans remplacer un seul nœud de saisie. */
+    update({ facets: nextFacets, query: nextQuery }) {
+      state = { facets: nextFacets ?? {}, query: nextQuery };
+      paint();
+    },
+    /** Ouvre ou ferme la feuille. Sans effet visible sur grand écran. */
+    setOpen,
+    isOpen: () => opened,
+    dispose: releaseBack,
+  };
 }
 
 /** Le statut n'accepte qu'une valeur ; les autres facettes en acceptent plusieurs. */
@@ -81,41 +198,56 @@ function toggle(key, value, query) {
   return { [key]: next };
 }
 
-function listFacet(key, label, entries, query, onChange) {
-  if (!entries.length) return null;
-  const selected = key === 'status' ? [query.status].filter(Boolean) : (query[key] ?? []);
-  return h(
+/**
+ * Une facette sans valeur se **cache** au lieu de disparaître du document :
+ * l'ordre des sections est alors fixe, et rien n'a besoin de réinsérer un
+ * voisin — c'est cette réinsertion qui déracinait les champs.
+ */
+function listFacet(key, label, onChange) {
+  const list = h('div', { class: 'facet__list' });
+  const node = h(
     'section',
     { class: 'facet' },
     h('h3', { class: 'facet__title label-md' }, t(label)),
-    h(
-      'div',
-      { class: 'facet__list' },
-      entries.map((entry) =>
-        h(
-          'label',
-          { class: `facet__option${entry.count === 0 ? ' is-empty' : ''}` },
-          h('input', {
-            type: 'checkbox',
-            checked: selected.includes(entry.value),
-            // Une valeur à zéro reste visible mais inutilisable : voir qu'une
-            // combinaison est vide vaut mieux qu'une liste qui rétrécit sans
-            // explication.
-            disabled: entry.count === 0 && !selected.includes(entry.value),
-            onchange: () => onChange(toggle(key, entry.value, query)),
-          }),
-          h('span', { class: 'facet__label' }, entry.label),
-          h('span', { class: 'facet__count label-sm muted' }, n(entry.count)),
-        ),
-      ),
-    ),
+    list,
   );
+
+  return {
+    node,
+    paint({ facets, query }) {
+      const entries = facets[key] ?? [];
+      node.hidden = entries.length === 0;
+      const selected = key === 'status' ? [query.status].filter(Boolean) : (query[key] ?? []);
+      list.replaceChildren(
+        ...entries.map((entry) =>
+          h(
+            'label',
+            { class: `facet__option${entry.count === 0 ? ' is-empty' : ''}` },
+            h('input', {
+              type: 'checkbox',
+              checked: selected.includes(entry.value),
+              // Une valeur à zéro reste visible mais inutilisable : voir qu'une
+              // combinaison est vide vaut mieux qu'une liste qui rétrécit sans
+              // explication.
+              disabled: entry.count === 0 && !selected.includes(entry.value),
+              onchange: () => onChange(toggle(key, entry.value, query)),
+            }),
+            h('span', { class: 'facet__label' }, entry.label),
+            h('span', { class: 'facet__count label-sm muted' }, n(entry.count)),
+          ),
+        ),
+      );
+    },
+  };
 }
 
-function suggestFacet(key, label, placeholder, facets, query, onChange) {
-  const chosen = query[key] ?? [];
-  const results = h('div', { class: 'facet__suggestions' });
+function suggestFacet(key, label, placeholder, onChange) {
+  let facets = {};
+  let chosen = [];
   let timer = null;
+
+  const picked = h('div', { class: 'facet__chosen' });
+  const results = h('div', { class: 'facet__suggestions' });
 
   // Les identifiants d'auteurs ne sont pas lisibles : on cherche leur libellé
   // dans les facettes déjà chargées, à défaut on montre la valeur brute.
@@ -132,6 +264,8 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
       timer = setTimeout(async () => {
         const term = field.value.trim();
         const suggestions = term.length >= 2 ? await repository.suggestValues(key, term) : [];
+        // L'écran a pu partir pendant l'aller-retour.
+        if (!field.isConnected) return;
         results.replaceChildren(
           ...suggestions
             .filter((entry) => !chosen.includes(entry.value))
@@ -155,15 +289,23 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
     },
   });
 
-  return h(
+  const node = h(
     'section',
     { class: 'facet' },
     h('h3', { class: 'facet__title label-md' }, t(label)),
-    chosen.length > 0 &&
-      h(
-        'div',
-        { class: 'facet__chosen' },
-        chosen.map((value) =>
+    picked,
+    field,
+    results,
+  );
+
+  return {
+    node,
+    paint(state) {
+      facets = state.facets;
+      chosen = state.query[key] ?? [];
+      picked.hidden = chosen.length === 0;
+      picked.replaceChildren(
+        ...chosen.map((value) =>
           h(
             'button',
             {
@@ -174,42 +316,47 @@ function suggestFacet(key, label, placeholder, facets, query, onChange) {
             icon('close', { size: 14 }),
           ),
         ),
-      ),
-    field,
-    results,
-  );
+      );
+    },
+  };
 }
 
-function yearFacet(query, onChange) {
-  const { from = '', to = '' } = query.years ?? {};
+function yearFacet(onChange) {
+  let years = {};
 
   const emit = (patch) => {
-    const years = { ...(query.years ?? {}), ...patch };
+    const next = { ...years, ...patch };
     for (const key of ['from', 'to']) {
-      if (years[key] == null || years[key] === '' || Number.isNaN(years[key])) delete years[key];
+      if (next[key] == null || next[key] === '' || Number.isNaN(next[key])) delete next[key];
     }
-    onChange({ years: Object.keys(years).length ? years : null });
+    onChange({ years: Object.keys(next).length ? next : null });
   };
 
-  const box = (value, key, placeholder) =>
+  const box = (key, placeholder) =>
     h('input', {
       type: 'number',
       class: 'facet__year',
-      value: String(value ?? ''),
       placeholder,
       onchange: (event) =>
         emit({ [key]: event.target.value === '' ? null : Number(event.target.value) }),
     });
 
-  return h(
+  const from = box('from', t('facet.from'));
+  const to = box('to', t('facet.to'));
+
+  const node = h(
     'section',
     { class: 'facet' },
     h('h3', { class: 'facet__title label-md' }, t('facet.year')),
-    h(
-      'div',
-      { class: 'facet__range' },
-      box(from, 'from', t('facet.from')),
-      box(to, 'to', t('facet.to')),
-    ),
+    h('div', { class: 'facet__range' }, from, to),
   );
+
+  return {
+    node,
+    paint({ query }) {
+      years = query.years ?? {};
+      syncField(from, years.from);
+      syncField(to, years.to);
+    },
+  };
 }

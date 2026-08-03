@@ -51,6 +51,7 @@ const METHODS = [
   'addToCollection',
   'removeFromCollection',
   'getCollectionBooks',
+  'getCollectionMembership',
   'getCurricula',
   'getCurriculum',
   'deleteAllBooks',

@@ -141,6 +141,17 @@ function grain(pattern) {
   );
 }
 
+/**
+ * Le même moiré, pour ce qui n'est pas un livre — la carte d'une collection.
+ * Exporté plutôt que recopié : les six géométries et leurs `<defs>` n'existent
+ * qu'ici, et une seconde tuile dessinée ailleurs dériverait de celle-ci.
+ * La teinte est celle de `--cover-gilt`, que `.cover__grain` lit.
+ */
+export function coverGrain(pattern) {
+  ensureDefs();
+  return grain(pattern);
+}
+
 /* ----------------------------------------------------------------- reliures */
 
 const title = (book) => h('div', { class: 'cover__title clamp-3' }, book?.title ?? '');

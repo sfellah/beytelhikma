@@ -5,6 +5,12 @@ import { icon } from '../icons.js';
 import { onDownloadsChanged, repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell, toast } from '../shell.js';
+import {
+  BUSY,
+  FINISHED_LIMIT,
+  departures,
+  rememberFinished,
+} from '../../../shared/downloads-queue.js';
 import { formatBytes } from '../components/download-action.js';
 import { confirmDialog } from '../components/modal.js';
 import { pagination, PAGE_SIZES } from '../components/pagination.js';
@@ -44,9 +50,6 @@ const STATUS_LABELS = {
   // regarde la table, un livre effacé est un livre non téléchargé.
 };
 
-/** Statuts pendant lesquels la file travaille encore sur ce livre. */
-const BUSY = new Set(['queued', 'downloading', 'verifying']);
-
 /**
  * Écran des téléchargements : la file en cours au-dessus, puis le catalogue
  * entier sous forme de table paginée — taille, nombre de pages, statut — d'où
@@ -63,6 +66,10 @@ class DownloadsScreen {
   #host;
   #query = { text: '', status: '', sort: 'title', offset: 0, limit: PAGE_SIZES[0] };
   #selection = new Set();
+  /** Les travaux vus dans la file au passage précédent, pour savoir qui la quitte. */
+  #watched = new Set();
+  /** Les livres tout juste installés, confirmés par le dépôt : `id → ligne`. */
+  #finished = new Map();
   #nodes = {};
   #searchTimer = null;
   #refreshTimer = null;
@@ -198,6 +205,9 @@ class DownloadsScreen {
       ]);
       if (token !== this.#token || !this.#host.isConnected) return;
 
+      await this.#collectFinished(jobs, token);
+      if (token !== this.#token || !this.#host.isConnected) return;
+
       this.#nodes.summary.textContent =
         t('downloads.usage', {
           count: usage.bookCount,
@@ -228,6 +238,34 @@ class DownloadsScreen {
     }
   }
 
+  /**
+   * Ce qui a quitté la file depuis le passage précédent, réduit à ce qui est
+   * **effectivement installé**.
+   *
+   * La file efface un travail dès qu'il est installé : rien, dans ce qu'elle
+   * rend, ne distingue un livre posé sur le disque d'un téléchargement annulé.
+   * On ne devine donc pas — on redemande au dépôt les seuls identifiants
+   * disparus, filtrés sur `installed`. Un seul aller-retour, et seulement quand
+   * la file s'est vidée de quelque chose.
+   */
+  async #collectFinished(jobs, token) {
+    const { present, left } = departures(this.#watched, jobs);
+    this.#watched = present;
+    if (!left.length) return;
+
+    // On ne demande que ce qu'on pourrait montrer, et les derniers partis sont
+    // les derniers arrivés : un nettoyage des échecs sur un lot de mille livres
+    // ferait autrement un `IN (?,?,…)` de mille paramètres, que SQLite refuse.
+    const asked = left.slice(-FINISHED_LIMIT);
+    const { rows } = await repository.getManagedBooks({
+      ids: asked,
+      status: 'installed',
+      limit: asked.length,
+    });
+    if (token !== this.#token || !this.#host.isConnected) return;
+    this.#finished = rememberFinished(this.#finished, rows);
+  }
+
   /** Le champ texte est vide par défaut : on n'envoie que ce qui filtre. */
   #queryPayload() {
     const { text, status, sort, offset, limit } = this.#query;
@@ -246,13 +284,17 @@ class DownloadsScreen {
     const sections = SECTIONS.map((section) => [section, jobs.filter(section.keep)]).filter(
       ([, items]) => items.length > 0,
     );
+    const finished = [...this.#finished.values()];
 
-    if (!sections.length) {
+    if (!sections.length && !finished.length) {
       this.#nodes.queue.replaceChildren();
       return;
     }
 
     this.#nodes.queue.replaceChildren(
+      // Ce qui vient d'arriver passe devant : c'est la seule ligne de l'écran
+      // qui appelle un geste, les autres ne font que rendre compte.
+      ...(finished.length ? [this.#doneSection(finished)] : []),
       ...sections.map(([section, items]) =>
         h(
           'div',
@@ -272,6 +314,60 @@ class DownloadsScreen {
               ),
           ),
           items.map((job) => this.#jobRow(job)),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Les livres tout juste installés, avec le geste qu'on attend d'eux : les
+   * lire. Sans cette section, un téléchargement qui aboutit s'efface de la file
+   * et il faut retrouver le livre dans la table pour l'ouvrir.
+   *
+   * `#finished` ne porte que des lignes confirmées installées par le dépôt : le
+   * bouton ne peut donc pas mener à un livre absent du disque.
+   */
+  #doneSection(rows) {
+    return h(
+      'div',
+      { class: 'downloads__section' },
+      h(
+        'div',
+        { class: 'downloads__section-head' },
+        h('h2', { class: 'headline-lg' }, t('downloads.group.done')),
+      ),
+      rows.map((row) =>
+        h(
+          'article',
+          { class: 'download-row' },
+          h(
+            'div',
+            { class: 'download-row__main' },
+            h('p', { class: 'title-md' }, row.title ?? row.editionId),
+            h('p', { class: 'label-sm muted' }, t('downloads.doneHint')),
+          ),
+          h(
+            'button',
+            {
+              class: 'button button--filled',
+              onclick: () => navigate(`/reader/${row.editionId}`),
+            },
+            icon('bookOpen', { size: 18 }),
+            h('span', {}, t('downloads.read')),
+          ),
+          h(
+            'button',
+            {
+              class: 'button--icon',
+              title: t('downloads.dismiss'),
+              'aria-label': t('downloads.dismiss'),
+              onclick: () => {
+                this.#finished.delete(row.editionId);
+                this.#refresh();
+              },
+            },
+            icon('close', { size: 20 }),
+          ),
         ),
       ),
     );
@@ -342,19 +438,26 @@ class DownloadsScreen {
       h(
         'th',
         { class: 'books-table__pick' },
-        h('input', {
-          type: 'checkbox',
-          checked: allChecked,
-          title: t('downloads.selectPage'),
-          'aria-label': t('downloads.selectPage'),
-          onchange: (event) => {
-            for (const id of pageIds) {
-              if (event.target.checked) this.#selection.add(id);
-              else this.#selection.delete(id);
-            }
-            this.#refresh();
-          },
-        }),
+        // L'étiquette porte la cible qu'on touche ; la case n'en porte que le
+        // dessin. Grossir la case elle-même prenait la place des deux boutons
+        // de la ligne — lire, supprimer — et écrasait le titre sur téléphone.
+        h(
+          'label',
+          { class: 'books-table__check' },
+          h('input', {
+            type: 'checkbox',
+            checked: allChecked,
+            title: t('downloads.selectPage'),
+            'aria-label': t('downloads.selectPage'),
+            onchange: (event) => {
+              for (const id of pageIds) {
+                if (event.target.checked) this.#selection.add(id);
+                else this.#selection.delete(id);
+              }
+              this.#refresh();
+            },
+          }),
+        ),
       ),
       h('th', {}, t('downloads.column.book')),
       h('th', {}, t('downloads.column.field')),
@@ -405,16 +508,20 @@ class DownloadsScreen {
       h(
         'td',
         { class: 'books-table__pick' },
-        h('input', {
-          type: 'checkbox',
-          checked: this.#selection.has(row.editionId),
-          'aria-label': row.title,
-          onchange: (event) => {
-            if (event.target.checked) this.#selection.add(row.editionId);
-            else this.#selection.delete(row.editionId);
-            this.#refresh();
-          },
-        }),
+        h(
+          'label',
+          { class: 'books-table__check' },
+          h('input', {
+            type: 'checkbox',
+            checked: this.#selection.has(row.editionId),
+            'aria-label': row.title,
+            onchange: (event) => {
+              if (event.target.checked) this.#selection.add(row.editionId);
+              else this.#selection.delete(row.editionId);
+              this.#refresh();
+            },
+          }),
+        ),
       ),
       h(
         'td',
@@ -438,7 +545,14 @@ class DownloadsScreen {
       ),
       h('td', { class: 'books-table__num label-sm' }, size ? formatBytes(size) : '—'),
       h('td', {}, statusCell),
-      h('td', { class: 'books-table__actions' }, ...this.#rowActions(row, status)),
+      // Les boutons sont posés en rangée : `.button--icon` est un bloc, et deux
+      // blocs dans une cellule s'empilent — « lire » passait sous « supprimer »
+      // et doublait la hauteur de la ligne.
+      h(
+        'td',
+        { class: 'books-table__actions' },
+        h('div', { class: 'books-table__row-actions' }, ...this.#rowActions(row, status)),
+      ),
     );
   }
 
@@ -457,6 +571,8 @@ class DownloadsScreen {
         ),
       ];
     }
+    // « Lire » n'apparaît **que** sur un livre installé : le lecteur ouvre un
+    // fichier, et il n'y en a pas tant que la file n'a pas fini.
     if (status === 'installed') {
       return [
         button('bookOpen', t('downloads.read'), () => navigate(`/reader/${row.editionId}`)),
@@ -560,7 +676,12 @@ class DownloadsScreen {
 
     await this.#run(async () => {
       const removed = await repository.deleteBooks(rows.map((row) => row.editionId));
-      for (const row of rows) this.#selection.delete(row.editionId);
+      for (const row of rows) {
+        this.#selection.delete(row.editionId);
+        // Un livre effacé quitte aussi « ce qu'on vient de télécharger » :
+        // sinon son bouton « lire » survivrait à son fichier.
+        this.#finished.delete(row.editionId);
+      }
       toast(t('downloads.deleted', { count: removed }));
     });
   }

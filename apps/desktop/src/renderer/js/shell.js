@@ -47,12 +47,24 @@ onDownloadsChanged((jobs) => {
   paintBadges();
 });
 
+/* La pastille se pose *sur* l'icône dans la barre du bas, et jamais dans le
+   flux : l'onglet y est une colonne (icône, libellé), donc une pastille ajoutée
+   en queue s'empilait en troisième ligne sous le mot et faisait grandir la
+   barre entière — un onglet plus haut que les quatre autres, le ruban déformé
+   le temps d'un téléchargement. Elle s'ancre donc sur la bulle, en absolu.
+   Dans le rail, la ligne est horizontale : le compte s'y lit en fin de ligne,
+   là où l'œil le cherche, et n'a rien à déformer. */
 function paintBadges() {
   for (const node of document.querySelectorAll('[data-nav="downloads"]')) {
     node.querySelector('.nav-badge')?.remove();
-    if (activeDownloads > 0) {
-      node.append(h('span', { class: 'nav-badge label-sm' }, n(activeDownloads)));
-    }
+    if (activeDownloads <= 0) continue;
+    const anchor = node.querySelector('.bottom-nav__bubble') ?? node;
+    // Au-delà de 9, le nombre est plus large que l'icône qu'il annote et finit
+    // par la recouvrir : mesuré, « ٩٩+ » mange la moitié de la flèche. Passé ce
+    // seuil, la pastille dit qu'il y a du travail en cours, pas combien — c'est
+    // l'écran des téléchargements qui tient le compte exact.
+    const count = activeDownloads > 9 ? `${n(9)}+` : n(activeDownloads);
+    anchor.append(h('span', { class: 'nav-badge label-sm' }, count));
   }
 }
 
@@ -223,19 +235,24 @@ function topbar() {
 function bottomNav(active) {
   return h(
     'nav',
-    { class: 'bottom-nav' },
-    NAV.filter((item) => item.primary).map((item) =>
-      h(
+    { class: 'bottom-nav', 'aria-label': t('nav.aria') },
+    NAV.filter((item) => item.primary).map((item) => {
+      const current = item.key === active;
+      return h(
         'a',
         {
-          class: `bottom-nav__item${item.key === active ? ' is-active' : ''}`,
+          class: `bottom-nav__item${current ? ' is-active' : ''}`,
           href: `#${item.path}`,
           dataset: { nav: item.key },
+          // Le rail l'annonçait, la barre du bas non : sur un téléphone, c'est
+          // pourtant la *seule* navigation, donc le seul endroit où un lecteur
+          // d'écran peut apprendre où il se trouve.
+          'aria-current': current ? 'page' : null,
         },
-        h('span', { class: 'bottom-nav__bubble' }, icon(item.icon, { size: 22 })),
-        h('span', {}, t(item.label)),
-      ),
-    ),
+        h('span', { class: 'bottom-nav__bubble' }, icon(item.icon, { size: 24 })),
+        h('span', { class: 'bottom-nav__label' }, t(item.label)),
+      );
+    }),
   );
 }
 

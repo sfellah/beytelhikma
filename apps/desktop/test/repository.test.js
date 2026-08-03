@@ -585,6 +585,9 @@ test('les disciplines principales comptent tout le fonds, pas la page rendue', a
       // Les trois canaux de la couverture composée doivent être projetés :
       // sans eux les vignettes tomberaient toutes sur le même repli.
       assert.ok('bookType' in book && 'authorDeathYear' in book && 'categoryLabel' in book);
+      // Et le statut d'installation : c'est sur l'accueil qu'on tombe sur un
+      // livre par hasard, et sans pastille on remettait en file ce qu'on avait.
+      assert.ok('downloadStatus' in book, 'la pastille « déjà téléchargé » manquerait');
     }
   }
 });
