@@ -481,6 +481,120 @@ controle('prepare-www embarque la graine depuis le cache data/', () => {
     : null;
 });
 
+console.log('\nretour matériel');
+
+/**
+ * Le geste retour d'Android. Sans écouteur, il retombe sur `history.back()` de
+ * la WebView et emporte l'écran entier alors qu'un panneau est ouvert par
+ * dessus — on ouvre le sommaire, on fait le geste pour le refermer, et l'on se
+ * retrouve sur la fiche du livre.
+ *
+ * `brancherRetour` est une fabrique sans `import`, comme le planteur de graine :
+ * elle s'éprouve donc entièrement ici, avec un `App` et un `document` factices,
+ * sans appareil.
+ */
+let brancherRetour = null;
+let erreurRetour = null;
+try {
+  ({ brancherRetour } = await import(
+    pathToFileURL(path.join(appDir, 'src', 'repo', 'retour.js')).href
+  ));
+} catch (erreur) {
+  erreurRetour = erreur;
+}
+
+/** Un monde factice : un `App` qui rend le geste, un `document` qui le refuse ou non. */
+function mondeRetour({ consomme, entrees }) {
+  const journal = [];
+  let tirer = null;
+  brancherRetour({
+    App: { addListener: (_nom, fn) => ((tirer = fn), { remove: () => {} }) },
+    document: {
+      dispatchEvent: (evenement) => {
+        journal.push(['dispatch', evenement.type, evenement.cancelable]);
+        return !consomme;
+      },
+    },
+    history: { length: entrees, back: () => journal.push(['back']) },
+    quitter: () => journal.push(['quitter']),
+  });
+  return { tirer, journal };
+}
+
+controle('le geste retour ferme la couche du dessus avant de quitter', (notes) => {
+  if (erreurRetour) return `repo/retour.js illisible : ${erreurRetour.message}`;
+  if (typeof globalThis.CustomEvent !== 'function') {
+    notes.push('CustomEvent absent de ce Node : contrôle sauté');
+    return null;
+  }
+
+  const ferme = mondeRetour({ consomme: true, entrees: 5 });
+  if (!ferme.tirer) return 'aucun écouteur `backButton` posé';
+  ferme.tirer();
+  if (ferme.journal.some(([quoi]) => quoi === 'back' || quoi === 'quitter')) {
+    return 'une couche a consommé le geste et l’écran a quand même été quitté';
+  }
+  const [[, type, annulable] = []] = ferme.journal;
+  if (type !== 'beyt:back') return `évènement émis « ${type} » au lieu de « beyt:back »`;
+  if (!annulable) return 'l’évènement n’est pas annulable : personne ne peut le consommer';
+
+  const remonte = mondeRetour({ consomme: false, entrees: 5 });
+  remonte.tirer();
+  if (!remonte.journal.some(([quoi]) => quoi === 'back')) {
+    return 'rien n’était ouvert et le geste n’a pas remonté d’un écran';
+  }
+
+  // À la racine il n'y a plus d'écran à remonter : le geste sort. Quitter
+  // depuis n'importe où renverrait un lecteur au bureau d'Android au lieu de sa
+  // bibliothèque.
+  const racine = mondeRetour({ consomme: false, entrees: 1 });
+  racine.tirer();
+  if (!racine.journal.some(([quoi]) => quoi === 'quitter')) {
+    return 'à la racine, le geste ne quitte pas l’application';
+  }
+  return null;
+});
+
+controle('sans greffon, brancherRetour ne branche rien', () => {
+  if (erreurRetour) return `repo/retour.js illisible : ${erreurRetour.message}`;
+  // Sous Electron et dans cette vérification, `Capacitor.Plugins.App` est
+  // absent : le module doit se charger sans rien faire, pas lever.
+  const debrancher = brancherRetour({ App: null, document: null });
+  return typeof debrancher === 'function' ? null : 'aucune fonction de débranchement rendue';
+});
+
+controle('le nom de l’évènement est le même des deux côtés', () => {
+  const rendu = path.join(repoRoot, 'apps', 'desktop', 'src', 'renderer', 'js', 'back-intent.js');
+  if (!fs.existsSync(rendu)) return `${rendu} absent : le rendu n’a pas de registre de retour`;
+  const cite = (fichier) => {
+    const trouve = fs.readFileSync(fichier, 'utf8').match(/BACK_INTENT\s*=\s*'([^']+)'/);
+    return trouve?.[1] ?? null;
+  };
+  const cote = cite(rendu);
+  const mobile = cite(path.join(appDir, 'src', 'repo', 'retour.js'));
+  if (!cote || !mobile) return 'BACK_INTENT introuvable dans l’un des deux fichiers';
+  return cote === mobile
+    ? null
+    : `« ${cote} » côté rendu contre « ${mobile} » côté mobile : le geste ne sera jamais entendu`;
+});
+
+controle('le shim branche le retour sur le greffon', () => {
+  const source = fs.readFileSync(shimPath, 'utf8');
+  if (!source.includes('brancherRetour(')) return 'le shim n’assemble pas repo/retour.js';
+  // Le greffon se prend sur `globalThis.Capacitor.Plugins`, comme les deux
+  // autres : le rendu se sert sans bundler, et `import '@capacitor/app'` serait
+  // un spécificateur nu qu'aucun navigateur ne résout.
+  if (!/pont\(\)\?\.App/.test(source)) return 'le greffon App n’est pas pris sur le pont Capacitor';
+  return null;
+});
+
+controle('@capacitor/app est déclaré', () => {
+  const manifeste = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8'));
+  return manifeste.dependencies?.['@capacitor/app']
+    ? null
+    : 'sans la dépendance, `cap sync` n’embarque pas le greffon natif et l’évènement n’arrive jamais';
+});
+
 console.log('\nartefact');
 
 controle('www/ n’est pas suivi par git', () => {
@@ -535,6 +649,242 @@ controle('la graine (data/) n’est pas suivie par git', () => {
   return ignore.status === 0
     ? null
     : `\`git check-ignore ${sonde}\` rend ${ignore.status} : aucune règle ne l’exclut de git`;
+});
+
+// ---------------------------------------------------------------------------
+// Écran de démarrage
+// ---------------------------------------------------------------------------
+//
+// Rien de tout ceci ne demande un appareil, et c'est le point : `android/` est
+// engendré, donc absent en CI, et les ressources qui l'alimentent sont les
+// seules qu'on puisse contrôler. Une icône qui déborde de la ligne de garde ne
+// casse aucun build — elle se voit rognée, une fois, sur un téléphone.
+
+console.log('\nécran de démarrage et icône du lanceur');
+
+const splashRes = path.join(appDir, 'resources', 'android', 'res');
+const lire = (...morceaux) => {
+  const chemin = path.join(splashRes, ...morceaux);
+  return fs.existsSync(chemin) ? fs.readFileSync(chemin, 'utf8') : null;
+};
+
+const vecteur = lire('drawable', 'splash_icon.xml');
+
+controle('les ressources engendrées sont là', () => {
+  const attendus = [
+    ['drawable', 'splash_icon.xml'],
+    ['drawable-v31', 'splash_reveal.xml'],
+    ['drawable', 'splash_reveal.xml'],
+    ['drawable', 'ic_launcher_foreground.xml'],
+    ['mipmap-anydpi-v26', 'ic_launcher.xml'],
+    ['mipmap-anydpi-v26', 'ic_launcher_round.xml'],
+    ['values', 'splash.xml'],
+    ['values', 'ic_launcher_background.xml'],
+    ['animator', 'splash_apparait.xml'],
+    ['animator', 'splash_grandit.xml'],
+  ];
+  const manquants = attendus
+    .filter((morceaux) => !fs.existsSync(path.join(splashRes, ...morceaux)))
+    .map((morceaux) => morceaux.join('/'));
+  return manquants.length
+    ? `absents : ${manquants.join(', ')} — lancez \`python tools/gen_brand_assets.py\``
+    : null;
+});
+
+controle('resources/android/ peut entrer dans git', () => {
+  // Le contraire de `www/` et de `data/`, et pour la même raison retournée :
+  // ces ressources sont la **source**, et le projet natif qui les consomme est
+  // engendré. Ignorées, elles disparaissent au clone et l'écran de démarrage
+  // redevient celui de Capacitor — sans que rien n'échoue.
+  //
+  // Le défaut est arrivé : la règle `android/` du `.gitignore`, sans barre
+  // oblique de tête, vise tout dossier de ce nom à n'importe quelle
+  // profondeur. Elle avalait `resources/android/`.
+  const sonde = 'apps/mobile/resources/android/res/values/splash.xml';
+  const ignore = spawnSync('git', ['check-ignore', '-v', '--', sonde], { cwd: repoRoot, encoding: 'utf8' });
+  if (ignore.error) return `git indisponible : ${ignore.error.message}`;
+  return ignore.status === 0
+    ? `une règle l’exclut : ${String(ignore.stdout ?? '').trim()}\n       ` +
+        'ancrez-la (`/android/`) pour qu’elle ne vise que le projet natif'
+    : null;
+});
+
+// Les deux dessins, avec la garde que leur impose le système. Elles ne sont
+// **pas** la même : 192 dp sur 288 pour l'écran de démarrage, 66 sur 108 pour
+// le lanceur, dont le masque est bien plus serré. Confondre les deux, c'est
+// livrer une icône rognée.
+const GARDES = [
+  ['drawable/splash_icon.xml', 'l’écran de démarrage', 192, 288],
+  ['drawable/ic_launcher_foreground.xml', 'l’icône du lanceur', 66, 108],
+];
+
+for (const [fichier, quoi, garde, toileAttendue] of GARDES) {
+  controle(`le dessin de ${quoi} tient dans sa ligne de garde`, (notes) => {
+    const xml = lire(...fichier.split('/'));
+    if (!xml) return `${fichier} est absent — lancez \`python tools/gen_brand_assets.py\``;
+
+    const toile = Number(/android:viewportWidth="([\d.]+)"/.exec(xml)?.[1]);
+    if (!toile) return 'aucun `viewportWidth` : le fichier n’est pas un <vector>';
+    if (toile !== toileAttendue) {
+      return `toile de ${toile}, attendue ${toileAttendue} : la garde de ${garde} ne veut plus rien dire`;
+    }
+
+    // Le masque d'Android est un **disque**. Un dessin calé sur le carré passe
+    // pour correct et se fait rogner : c'est ce qui arrivait à la pointe du
+    // mihrab.
+    const rayonPermis = garde / 2;
+    const centre = toile / 2;
+
+    let rayonMax = 0;
+    for (const [, donnees] of xml.matchAll(/android:pathData="([^"]*)"/g)) {
+      const nombres = donnees.match(/-?\d*\.?\d+/g) ?? [];
+      for (let i = 0; i + 1 < nombres.length; i += 2) {
+        rayonMax = Math.max(
+          rayonMax,
+          Math.hypot(Number(nombres[i]) - centre, Number(nombres[i + 1]) - centre),
+        );
+      }
+    }
+
+    // Les points de contrôle d'une cubique sortent de la courbe : ce rayon
+    // majore le vrai. Un contrôle qui majore ne peut pas laisser passer un
+    // débordement, et c'est le sens qui compte ici.
+    notes.push(
+      `rayon ${rayonMax.toFixed(1)} sur ${rayonPermis} permis (majoré par les points de contrôle)`,
+    );
+    return rayonMax > rayonPermis * 1.1
+      ? `le tracé sort du disque de ${rayonPermis} : le masque le rognerait`
+      : null;
+  });
+}
+
+controle('les icônes héritées sont là, aux cinq densités', () => {
+  // Android 7 et 8.0 ignorent l'icône adaptative. Sans ces PNG, ils
+  // retomberaient sur celle de Capacitor — sur les seules versions que
+  // personne ne teste.
+  const tailles = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
+  const griefs = [];
+  for (const densite of Object.keys(tailles)) {
+    for (const nom of ['ic_launcher.png', 'ic_launcher_round.png']) {
+      if (!fs.existsSync(path.join(splashRes, `mipmap-${densite}`, nom))) {
+        griefs.push(`mipmap-${densite}/${nom}`);
+      }
+    }
+  }
+  return griefs.length ? `absents : ${griefs.join(', ')}` : null;
+});
+
+controle('l’icône adaptative cite des ressources qui existent', () => {
+  const griefs = [];
+  for (const nom of ['ic_launcher.xml', 'ic_launcher_round.xml']) {
+    const xml = lire('mipmap-anydpi-v26', nom);
+    if (!xml) {
+      griefs.push(`mipmap-anydpi-v26/${nom} est absent`);
+      continue;
+    }
+    for (const [, type, ressource] of xml.matchAll(/android:drawable="@(drawable|color|mipmap)\/(\w+)"/g)) {
+      const trouve =
+        type === 'color'
+          ? (lire('values', 'ic_launcher_background.xml') ?? '').includes(`name="${ressource}"`)
+          : fs.existsSync(path.join(splashRes, type, `${ressource}.xml`));
+      if (!trouve) griefs.push(`${nom} : @${type}/${ressource} introuvable dans resources/android/`);
+    }
+  }
+  return griefs.length ? griefs.join(' ; ') : null;
+});
+
+controle('le fond de l’icône et celui du démarrage sont la même couleur', () => {
+  // L'icône du lanceur est le premier écran de l'application, l'écran de
+  // démarrage le second. Deux crèmes différents à une fraction de seconde
+  // d'intervalle se lisent comme un clignotement.
+  const teinte = (fichier, nom) =>
+    new RegExp(`<color name="${nom}">(#[0-9A-Fa-f]{6,8})<`).exec(lire('values', fichier) ?? '')?.[1];
+  const icone = teinte('ic_launcher_background.xml', 'ic_launcher_background');
+  const demarrage = teinte('splash.xml', 'splash_fond');
+  if (!icone || !demarrage) return 'une des deux couleurs est absente de values/';
+  return icone.toUpperCase() === demarrage.toUpperCase()
+    ? null
+    : `icône ${icone} contre démarrage ${demarrage} : le passage clignoterait`;
+});
+
+controle('l’animation vise des noms que le dessin porte', () => {
+  const anime = lire('drawable-v31', 'splash_reveal.xml');
+  if (!anime || !vecteur) return 'drawable-v31/splash_reveal.xml ou son dessin est absent';
+
+  const poses = new Set([...vecteur.matchAll(/android:name="([^"]+)"/g)].map((m) => m[1]));
+  const vises = [...anime.matchAll(/<target\s+android:name="([^"]+)"/g)].map((m) => m[1]);
+  if (!vises.length) return 'aucune <target> : l’animation ne ferait rien';
+
+  // Un `<target>` qui ne trouve pas son nom ne lève rien : l'animation est
+  // simplement sautée, et l'icône paraît d'un coup. Le défaut ne se voit que
+  // sur un appareil, une fois, au premier lancement.
+  const orphelins = vises.filter((nom) => !poses.has(nom));
+  return orphelins.length
+    ? `${orphelins.join(', ')} : aucun élément du <vector> ne porte ce nom`
+    : null;
+});
+
+controle('les animateurs cités existent', () => {
+  const anime = lire('drawable-v31', 'splash_reveal.xml');
+  if (!anime) return 'drawable-v31/splash_reveal.xml est absent';
+  const cites = [...anime.matchAll(/android:animation="@animator\/([^"]+)"/g)].map((m) => m[1]);
+  const absents = cites.filter((nom) => !fs.existsSync(path.join(splashRes, 'animator', `${nom}.xml`)));
+  return absents.length ? `@animator/${absents.join(', @animator/')} : fichier absent` : null;
+});
+
+controle('aucun commentaire XML ne porte deux tirets', () => {
+  // AAPT refuse `--` dans un commentaire, et le message qu'il rend ne dit pas
+  // quel fichier de la source en est la cause : il nomme la copie posée dans
+  // `android/`, que personne n'édite. Le contrôle le dit ici.
+  const coupables = [];
+  const parcourir = (dossier) => {
+    for (const entree of fs.readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = path.join(dossier, entree.name);
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (entree.name.endsWith('.xml')) {
+        for (const [, corps] of fs.readFileSync(chemin, 'utf8').matchAll(/<!--([\s\S]*?)-->/g)) {
+          if (corps.includes('--')) coupables.push(path.relative(appDir, chemin));
+        }
+      }
+    }
+  };
+  if (!fs.existsSync(splashRes)) return 'resources/android/res/ est absent';
+  parcourir(splashRes);
+  return coupables.length ? `${[...new Set(coupables)].join(', ')} — AAPT refuse la séquence` : null;
+});
+
+controle('le thème posé cite des ressources qui existent', () => {
+  const source = fs.readFileSync(path.join(scriptsDir, 'prepare-android.mjs'), 'utf8');
+  const bloc = /const THEME_LANCEMENT = `([\s\S]*?)`;/.exec(source);
+  if (!bloc) return 'prepare-android.mjs : `THEME_LANCEMENT` introuvable';
+
+  // Le thème est un littéral du script, pas un fichier : sans ce contrôle,
+  // renommer `splash_reveal` dans le générateur casserait le build Android
+  // sans que rien, côté source, ne l'ait signalé.
+  const manquants = [];
+  for (const [, type, nom] of bloc[1].matchAll(/@(drawable|color|animator)\/([\w]+)/g)) {
+    const trouve =
+      type === 'color'
+        ? (lire('values', 'splash.xml') ?? '').includes(`name="${nom}"`)
+        : fs.existsSync(path.join(splashRes, type, `${nom}.xml`));
+    if (!trouve) manquants.push(`@${type}/${nom}`);
+  }
+  return manquants.length ? `${manquants.join(', ')} : rien ne les définit dans resources/android/` : null;
+});
+
+controle('`npm run sync` pose l’écran de démarrage', () => {
+  const manifeste = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8'));
+  // `android/` est engendré : une chaîne de build qui oublie ce script rend
+  // toutes les ressources ci-dessus décoratives.
+  // Les deux formes se valent : `npm run prepare:android` ou l'appel direct au
+  // fichier. Exiger l'une des deux ferait échouer le contrôle sur une chaîne
+  // parfaitement correcte.
+  const oublieux = ['sync', 'android:release'].filter(
+    (nom) => !/prepare[-:]android/.test(String(manifeste.scripts?.[nom] ?? '')),
+  );
+  return oublieux.length
+    ? `${oublieux.join(', ')} n’appelle pas prepare-android.mjs : le splash resterait celui de Capacitor`
+    : null;
 });
 
 console.log(

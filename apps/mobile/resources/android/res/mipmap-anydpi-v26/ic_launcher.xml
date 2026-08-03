@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  L'icône adaptative, à partir d'Android 8.1. Le lanceur compose lui-même les
+  deux couches et leur applique son masque — rond, carré, en écusson ou en
+  goutte selon le constructeur. C'est pourquoi l'avant-plan tient dans les
+  66 dp centraux d'une toile de 108 : tout ce qui déborde est du sacrifiable.
+
+  L'avant-plan est un `drawable` et non un `mipmap` : c'est un vectoriel, il
+  n'a pas de densité à choisir. Les `mipmap-*/ic_launcher.png` d'à côté ne
+  servent qu'à Android 7 et 8.0, qui ignorent ce fichier.
+
+  `monochrome` donne l'icône thématisée d'Android 13+ : le système repeint le
+  tracé d'une seule encre tirée du fond d'écran. Le mihrab étant un contour
+  creux, il reste lisible une fois aplati en une couleur.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

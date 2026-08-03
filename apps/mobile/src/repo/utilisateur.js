@@ -739,6 +739,23 @@ export function creerMethodesUtilisateur(ctx) {
     });
 
   /**
+   * Lesquels de ces livres sont déjà dans la collection. La question est
+   * **bornée par ce qu'on montre** : le mode d'édition puise dans tout le
+   * catalogue, et rendre la liste entière des membres ferait traverser le pont
+   * natif des milliers d'identifiants pour n'en éclairer qu'une vingtaine.
+   */
+  const getCollectionMembership = (collectionId, editionIds = []) =>
+    garde("lecture de l'appartenance à une collection", async () => {
+      if (!Array.isArray(editionIds) || !editionIds.length) return [];
+      const rows = await lireTout(
+        `SELECT edition_id FROM collection_books
+          WHERE collection_id = ? AND edition_id IN (${editionIds.map(() => '?').join(',')})`,
+        [collectionId, ...editionIds],
+      );
+      return rows.map((row) => row.edition_id);
+    });
+
+  /**
    * Contenu d'une collection, paginé : `{ rows, total, missing }`.
    *
    * `missing` porte sur **l'ensemble**, pas sur la page : c'est lui qui
@@ -1028,6 +1045,7 @@ export function creerMethodesUtilisateur(ctx) {
     addToCollection,
     removeFromCollection,
     getCollectionBooks,
+    getCollectionMembership,
     getBookAnnotations,
     getAnnotations,
     saveHighlight,

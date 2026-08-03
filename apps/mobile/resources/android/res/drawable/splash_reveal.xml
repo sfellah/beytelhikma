@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  L'icône de démarrage telle que la voient Android 7 à 11 : le dessin fixe,
+  sans animation.
+
+  Ce fichier est un **alias**. Son jumeau `drawable-v31/splash_reveal.xml`
+  porte la version animée, et le thème ne désigne que `@drawable/splash_reveal`
+  — le système tranche selon la version, sans que le thème ait à le savoir.
+
+  Avant Android 12, `core-splashscreen` pose cette icône en fond de fenêtre.
+  Un fond de fenêtre n'est jamais animé : personne n'appelle `start()`. Y
+  mettre l'`animated-vector` reviendrait à parier sur l'image qu'il donne à
+  l'arrêt — un pari qu'on ne peut pas tenir sur tous les constructeurs.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/splash_icon" />
+</layer-list>

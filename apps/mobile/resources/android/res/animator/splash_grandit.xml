@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le mihrab s'approche. Cible : le groupe `glyphe`, dont le pivot est le centre
+  de la toile — c'est le générateur qui l'y pose (`SPLASH_CANVAS / 2`).
+
+  0,86 et pas moins : au-delà le dessin part de si loin que le geste se lit
+  comme un zoom, et non comme une page qu'on ouvre. Aucun dépassement au-delà
+  de 1 non plus — le système coupe l'écran de démarrage dès que la première
+  image de l'application est prête, et un rebond amputé se voit comme un à-coup.
+
+  La durée tient sous les 1 000 ms qu'Android 12+ accorde à
+  `windowSplashScreenAnimationDuration` : au-delà, il coupe au milieu du geste.
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator
+        android:propertyName="scaleX"
+        android:valueFrom="0.86"
+        android:valueTo="1"
+        android:valueType="floatType"
+        android:duration="700"
+        android:interpolator="@android:interpolator/decelerate_quint" />
+    <objectAnimator
+        android:propertyName="scaleY"
+        android:valueFrom="0.86"
+        android:valueTo="1"
+        android:valueType="floatType"
+        android:duration="700"
+        android:interpolator="@android:interpolator/decelerate_quint" />
+</set>

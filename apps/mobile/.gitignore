@@ -6,7 +6,14 @@ node_modules/
 www/
 
 # Projet natif engendré par `npx cap add android`.
-android/
+#
+# La barre oblique de tête n'est pas décorative : sans elle, la règle vise
+# **tout** dossier nommé `android`, à n'importe quelle profondeur. Elle avalait
+# `resources/android/`, c'est-à-dire les ressources suivies que
+# `scripts/prepare-android.mjs` recopie précisément parce que celles du projet
+# natif ne survivent pas à un clone. Le contrôle « resources/android/ est
+# suivi » de `scripts/verify.mjs` existe pour cette raison.
+/android/
 
 # Bases tirées du bucket — jusqu'à 28 Mo, reconstructibles par `npm run data` —
 # et la graine de catalogue (`catalog.sqlite.zst` + `catalog-seed.json`,

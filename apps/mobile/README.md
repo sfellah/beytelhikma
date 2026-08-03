@@ -136,6 +136,58 @@ démarrage, depuis le rendu partagé (`js/catalog-update.js`) : la même banniè
 que le bureau, les trois méthodes du pont étant portées ici contre SQLite
 natif.
 
+## L'icône et l'écran de démarrage
+
+Le symbole sur fond crème — dans le lanceur, puis au démarrage, où il grandit et
+paraît en 700 ms. Les deux sortent d'`icon.svg` (à la racine du dépôt) par
+`python tools/gen_brand_assets.py`, en `VectorDrawable` : le système les rend à
+la densité de l'appareil, et il n'y a pas cinq PNG à tenir à jour. Le fond est
+le même des deux côtés (`#FBF9F4`) : l'icône est le premier écran de
+l'application et le démarrage le second, deux crèmes différents à une fraction
+de seconde d'intervalle se lisent comme un clignotement.
+
+**Il se pose par script**, comme `www/`. `android/` est engendré par
+`npx cap add android` et ignoré par git : une ressource déposée là à la main
+disparaît au premier clone, et la panne est muette — le build réussit, avec
+l'écran de démarrage par défaut de Capacitor. La source suivie est
+`resources/android/res/`, et `scripts/prepare-android.mjs` l'y recopie, réécrit
+le thème de lancement et efface les onze `splash.png` de Capacitor. Il tourne
+depuis `npm run sync` et `npm run android:release`, et deux exécutions de suite
+donnent le même arbre.
+
+| Ce qui est vu | Où |
+| --- | --- |
+| le dessin, 288 dp | `resources/android/res/drawable/splash_icon.xml` (engendré) |
+| l'animation, Android 12+ | `resources/android/res/drawable-v31/splash_reveal.xml` (engendré) |
+| le dessin fixe, Android 7 à 11 | `resources/android/res/drawable/splash_reveal.xml` |
+| les deux gestes | `resources/android/res/animator/` |
+| le fond crème du démarrage | `resources/android/res/values/splash.xml` |
+| le thème de lancement | le littéral `THEME_LANCEMENT` de `scripts/prepare-android.mjs` |
+| l'avant-plan de l'icône, 108 dp | `resources/android/res/drawable/ic_launcher_foreground.xml` (engendré) |
+| l'icône adaptative, Android 8.1+ | `resources/android/res/mipmap-anydpi-v26/` |
+| les icônes héritées, Android 7–8.0 | `resources/android/res/mipmap-*dpi/` (engendrées) |
+| le fond crème de l'icône | `resources/android/res/values/ic_launcher_background.xml` |
+
+Quatre pièges, tous tenus par `npm run verify` ou par `prepare-android.mjs` :
+
+- **La ligne de garde est un disque, et elle n'est pas la même des deux
+  côtés.** `core-splashscreen` pose l'icône de démarrage sur 288 dp et masque
+  tout ce qui sort d'un disque de 192 ; le lanceur, lui, ne garantit que 66 dp
+  sur 108. Calé sur la boîte du dessin, le mihrab perdait sa pointe. Le
+  générateur cherche le cercle minimal et cale dessus, avec la garde de chaque
+  destination.
+- **Un dossier qualifié l'emporte sur le dossier nu.** Capacitor range son
+  avant-plan dans `drawable-v24/`, qui gagne dès l'API 24 — c'est-à-dire
+  toujours, `minSdkVersion` valant 24. Le nôtre, posé dans `drawable/`, n'était
+  lu par personne : l'icône montrait le petit robot d'Android sur notre fond
+  crème, et **rien n'échouait**. `prepare-android.mjs` efface la variante et
+  refuse désormais de finir si une autre en masque une des nôtres.
+- **L'animation ne joue pas avant Android 12.** En deçà, l'icône est un *fond
+  de fenêtre*, que personne n'anime : d'où l'alias fixe dans `drawable/` et
+  l'`animated-vector` dans `drawable-v31/`, sous le même nom.
+- **`--` casse AAPT** dans un commentaire XML. Citer un jeton CSS suffit, et le
+  message d'erreur nomme la copie de `android/`, que personne n'édite.
+
 ## Deux choses que la plateforme impose
 
 **FTS5 existe ici.** Le greffon embarque SQLCipher, pas le SQLite d'Android :

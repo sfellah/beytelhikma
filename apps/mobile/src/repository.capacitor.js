@@ -40,6 +40,7 @@ import { creerMethodesPolices } from './repo/polices.js';
 import { creerMethodesTelechargements } from './repo/telechargements.js';
 import { creerMethodesUtilisateur } from './repo/utilisateur.js';
 import { creerPlanteurGraine } from './repo/graine.js';
+import { brancherRetour } from './repo/retour.js';
 
 function arabe() {
   arabePromise ??= import(new URL('../shared/arabic.js', import.meta.url).href).catch((erreur) => {
@@ -53,7 +54,7 @@ function arabe() {
 // ---------------------------------------------------------------- la surface
 
 /**
- * Les 67 noms de `src/preload/preload.cjs`, recopiés dans l'ordre.
+ * Les 68 noms de `src/preload/preload.cjs`, recopiés dans l'ordre.
  *
  * Le compte se lit dans le fichier, il ne se décide pas d'avance : c'est
  * `scripts/verify.mjs` qui relit cette liste-là dans le preload et compare. Une
@@ -110,6 +111,7 @@ const METHODS = [
   'addToCollection',
   'removeFromCollection',
   'getCollectionBooks',
+  'getCollectionMembership',
   'getCurricula',
   'getCurriculum',
   'deleteAllBooks',
@@ -1667,6 +1669,25 @@ for (const nom of METHODS) {
 }
 
 export { repository };
+
+/**
+ * Le geste retour d'Android, branché une fois pour la session.
+ *
+ * Ici et pas dans une vue : c'est le seul fichier du rendu qui diffère sous
+ * Capacitor, et le seul, donc, où une ligne propre à la plateforme a sa place.
+ * Le greffon se prend sur `globalThis.Capacitor.Plugins` comme les deux autres
+ * — le rendu se sert sans bundler, et un `import '@capacitor/app'` serait un
+ * spécificateur nu qu'aucun navigateur ne résout.
+ *
+ * Hors appareil — `verify.mjs`, un navigateur de bureau — le greffon est absent
+ * et `brancherRetour` ne branche rien.
+ */
+brancherRetour({
+  App: pont()?.App,
+  document: globalThis.document,
+  history: globalThis.history,
+  quitter: () => pont()?.App?.exitApp?.(),
+});
 
 /** S'abonne au canal poussé ; rend la fonction de désabonnement. */
 export function onDownloadsChanged(callback) {

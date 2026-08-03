@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Le crème de l'application : le jeton `surface` du thème `paper`, et le
+      fond de la plaque d'`app-icon.png`. C'est la même valeur que
+      `ICON_BACKGROUND` dans `tools/gen_brand_assets.py`.
+
+      (Le jeton s'écrit avec deux tirets devant, qu'un commentaire XML ne
+      supporte pas : AAPT refuse la séquence et le build casse.)
+
+      Il ne suit pas le mode nuit du système, et c'est délibéré : l'ambiance de
+      l'application est un réglage rangé dans `user.sqlite`, que le lanceur ne
+      peut pas lire avant que la WebView n'existe. Un écran de démarrage qui
+      suivrait le système afficherait donc du sombre à qui lit sur parchemin.
+    -->
+    <color name="splash_fond">#FBF9F4</color>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Le fond de l'icône adaptative. Capacitor le pose en blanc pur ; le nôtre
+      est le crème de l'application, celui de `splash_fond` et de la plaque
+      d'`app-icon.png`.
+
+      Ce n'est pas une préférence : sur un lanceur, l'icône est le premier
+      écran de l'application, et l'écran de démarrage est le second. Deux
+      blancs différents à une fraction de seconde d'intervalle se voient comme
+      un clignotement.
+    -->
+    <color name="ic_launcher_background">#FBF9F4</color>
+</resources>
