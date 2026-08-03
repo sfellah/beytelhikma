@@ -220,3 +220,48 @@ jobs:
       contents: read
       pages: write
       id-token: write
+
+  verify-site:
+    name: relecture du site
+    needs: [guard, site]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # La même règle que `verify` applique aux binaires, appliquée aux pages :
+      # on relit ce qui est **en ligne**, pas ce que le build croit avoir écrit.
+      # Un site qui reste sur la version précédente est une panne silencieuse —
+      # le tag est public, la Release aussi, et la page dit encore autre chose.
+      #
+      # C'est `releases.json` qu'on interroge, et pas une page : c'est le contrat
+      # de données dont les neuf pages sont rendues, et l'égalité y est exacte.
+      # Chercher « 0.4.1 » dans du HTML passerait sur n'importe quelle autre
+      # mention du même nombre.
+      #
+      # La boucle n'est pas une superstition : GitHub Pages sert par un CDN qui
+      # rend brièvement la copie précédente après un déploiement. Sans elle, ce
+      # test échouerait sur un site parfaitement à jour — c'est exactement la
+      # méprise qui a fait relancer la publication à la main une fois.
+      - name: le site en ligne annonce la version publiée
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          url=$(node -e "import('./site/config.mjs').then((m) => console.log(m.absoluteUrl('releases.json')))")
+          for attempt in $(seq 1 10); do
+            online=$(curl -fsSL --retry 3 "$url" | node -e "
+              let raw = '';
+              process.stdin.on('data', (chunk) => { raw += chunk; });
+              process.stdin.on('end', () => console.log(JSON.parse(raw).latest?.version ?? ''));
+            ")
+            if [ "$online" = "$version" ]; then
+              echo "le site annonce $version"
+              exit 0
+            fi
+            echo "::notice::tentative $attempt : le site annonce « ${online:-rien} », attendu $version."
+            sleep 15
+          done
+          echo "::error::Le site en ligne n'annonce pas $version après 10 tentatives."
+          exit 1

@@ -29,6 +29,26 @@ concurrency:
 
 jobs:
   build:
+    # Un commit de version ne publie pas le site : la chaîne de publication le
+    # fera elle-même, après la Release, avec les données que celle-ci vient de
+    # créer. Sans cette garde, les deux partent ensemble — `chore(release)`
+    # touche les CHANGELOG, qui sont un chemin déclencheur d'ici — et le premier
+    # arrivé déploie un site où la nouvelle version n'existe pas encore. Elle
+    # est corrigée cinq minutes plus tard, mais entre-temps le tag est public et
+    # la page annonce la version précédente.
+    #
+    # Et surtout : un run *en attente* dans le groupe `pages` est annulé par le
+    # suivant qui s'y présente. Deux producteurs pour un même artefact, c'est un
+    # troisième push qui peut faire disparaître la publication du site sans
+    # qu'aucun voyant ne rougisse.
+    #
+    # Le message du commit, et non le tag : les deux `push` — la branche et le
+    # tag — arrivent séparément, et rien ne garantit lequel le premier. Un tag
+    # qu'on cherche peut n'être pas encore là. Une version publiée sous un autre
+    # libellé ne fait que redéployer le site pour rien, ce qui est bénin.
+    if: >-
+      github.event_name != 'push' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
