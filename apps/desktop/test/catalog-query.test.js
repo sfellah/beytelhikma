@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildCount, buildFacetQuery, buildList, buildWhere } from '../src/main/catalog-query.js';
+import { POPULAR_EDITION_IDS } from '../src/shared/popular.js';
 
 const none = { installedIds: [] };
 
@@ -88,4 +89,33 @@ test('la recherche texte arrive résolue en identifiants', () => {
 
 test('une facette inconnue est refusée', () => {
   assert.throws(() => buildFacetQuery({}, 'rm -rf', none), /facette inconnue/);
+});
+
+test('popular restreint aux éditions de référence, par paramètres liés', () => {
+  const { sql, params } = buildWhere({ popular: true });
+  assert.ok(sql.includes('e.edition_id IN ('));
+  assert.deepEqual(params, POPULAR_EDITION_IDS);
+  // Aucune valeur interpolée : autant de `?` que d'identifiants.
+  assert.equal((sql.match(/\?/g) ?? []).length, POPULAR_EDITION_IDS.length);
+});
+
+test('popular absent ou faux ne pose aucune condition', () => {
+  assert.equal(buildWhere({}).sql, '1 = 1');
+  assert.equal(buildWhere({ popular: false }).sql, '1 = 1');
+});
+
+test('popular se combine avec les autres facettes', () => {
+  const { sql, params } = buildWhere({ popular: true, categories: [7] });
+  assert.ok(sql.includes(' AND '));
+  assert.ok(params.includes(7));
+  assert.equal(params.length, POPULAR_EDITION_IDS.length + 1);
+});
+
+test('popular survit au retrait d’une facette : ce n’en est pas une', () => {
+  // `buildFacetQuery` retire la facette qu'il compte. `popular` n'est pas une
+  // facette — elle n'a pas de valeurs à compter — donc elle reste posée quelle
+  // que soit la colonne comptée, sinon les comptes annonceraient des livres que
+  // la liste exclut.
+  const { params } = buildFacetQuery({ popular: true }, 'categories');
+  assert.equal(params.length, POPULAR_EDITION_IDS.length);
 });

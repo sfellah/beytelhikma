@@ -8,6 +8,8 @@
  * de ce fichier.
  */
 
+import { POPULAR_EDITION_IDS } from '../shared/popular.js';
+
 /** Tris autorisés. Toute autre valeur retombe sur le titre. */
 export const SORTS = {
   title: 'e.title_ar',
@@ -87,12 +89,29 @@ function condition(key, query, installedIds) {
       if (!values.length) return ['1 = 0', []];
       return [`e.edition_id IN (${placeholders(values)})`, values];
     }
+    case 'popular':
+      // Une **case à cocher**, pas une facette : elle n'a pas de valeurs à
+      // compter. Elle est donc absente de `FACET_VALUE`, et `buildFacetQuery`
+      // ne la retire jamais — la retirer ferait annoncer aux facettes des
+      // livres que la liste exclut.
+      //
+      // La liste vient de `shared/popular.js` et n'est pas recopiée ici : les
+      // vingt-trois identifiants partent en paramètres liés, comme tout le
+      // reste de ce fichier.
+      return query.popular
+        ? [
+            `e.edition_id IN (${placeholders(POPULAR_EDITION_IDS)})`,
+            [...POPULAR_EDITION_IDS],
+          ]
+        : null;
     default:
       return null;
   }
 }
 
 const ALL_KEYS = [
+  // La plus sélective d'abord : vingt-trois lignes sur 8 568.
+  'popular',
   'ids',
   'categories',
   'types',
