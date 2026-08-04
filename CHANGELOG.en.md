@@ -6,6 +6,16 @@
 > at render time. Every version must appear in all three files with the same
 > date, or the build fails.
 
+## [0.5.3] — 2026-08-04
+
+### added
+- Twenty-three reference works are now named — the two Sahihs, the four Sunan, the Muwatta and the Musnad, Fath al-Bari, the three major tafsirs, al-Mughni and al-Majmu', Majmu' al-Fatawa, Lisan al-Arab, and four books of history and sira. They show up in three places: a scrolling band on the home screen, a star on their card wherever it is drawn, and a "Popular books only" checkbox that narrows browsing and search to them alone.
+- The choice is of the **printing**, not of the work. The catalogue carries up to nineteen printings of the same book, and the printing is what you download and read: the one retained is the reference edition — the Sultaniyya for al-Bukhari, ʿAbd al-Baqi for Muslim and Ibn Maja, Bashar ʿAwwad for al-Tirmidhi — the ones whose numbering gets cited.
+- Nothing is measured and nothing is ranked. No book opening is counted, and the selection stands as a choice: there is no "sort by popularity" and no visible counter — one would assert it, the other would invent it. None of these books is downloaded unless you ask.
+
+### changed
+- In general search the checkbox applies to catalogue books only; the full-text sweep of installed books is left alone. A passage is not popular or unpopular, and the "n books searched" line would become a lie.
+
 ## [0.5.2] — 2026-08-03
 
 ### changed

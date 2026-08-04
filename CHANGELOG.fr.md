@@ -6,6 +6,16 @@
 > `security` — traduites à l'affichage. Toute version doit figurer dans les
 > trois fichiers, avec la même date : le build échoue sinon.
 
+## [0.5.3] — 2026-08-04
+
+### added
+- Vingt-trois ouvrages de référence sont désormais nommés — les deux Sahih, les quatre Sunan, le Muwatta et le Musnad, Fath al-Bari, les trois grands tafsir, al-Mughni et al-Majmu', Majmu' al-Fatawa, Lisan al-Arab, et quatre livres d'histoire et de sira. Ils se voient en trois endroits : une bande qui défile sur l'accueil, une étoile sur leur carte partout où elle se dessine, et une case « أشهر الكتب فقط » qui restreint l'exploration et la recherche à eux seuls.
+- Le choix porte sur le **tirage** et non sur l'ouvrage. Le catalogue porte jusqu'à dix-neuf tirages d'un même livre, et c'est le tirage qu'on télécharge et qu'on lit : celui retenu est le tirage de référence — la Sultaniyya pour al-Bukhari, ʿAbd al-Baqi pour Muslim et Ibn Maja, Bashar ʿAwwad pour al-Tirmidhi — ceux dont la numérotation est citée.
+- Rien n'est mesuré et rien n'est classé. Aucune ouverture de livre n'est comptée, et la sélection est assumée comme un choix : il n'existe donc ni tri « par popularité » ni compteur affiché — l'un l'affirmerait, l'autre l'inventerait. Aucun de ces livres n'est téléchargé sans qu'on le demande.
+
+### changed
+- Dans la recherche générale, la case ne porte que sur les livres du catalogue : le balayage du texte des livres installés n'est pas restreint. Un passage n'est pas populaire ou non, et l'annonce « n livres parcourus » deviendrait fausse.
+
 ## [0.5.2] — 2026-08-03
 
 ### changed
