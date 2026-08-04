@@ -61,6 +61,14 @@ python tools/publish_minio.py --endpoint aws --region eu-west-1 --bucket <bucket
 
 # publier le catalogue seul (rapide : ne recompresse pas les livres)
 python tools/publish_minio.py --endpoint aws --bucket <bucket> --catalog-only
+
+# journaliser les accès vers un second bucket, privé (une seule fois)
+python tools/publish_minio.py --endpoint aws --bucket beytelhima-library \
+    --access-logs beytelhima-library-logs --set-anonymous-policy
+
+# les indicateurs (depuis la racine) — voir docs/KPI.md
+python tools/stats.py releases            # téléchargements, API GitHub
+python tools/stats.py bucket --days 30    # usage réel, journaux du bucket
 ```
 
 ## Architecture (règles à respecter)
@@ -313,6 +321,24 @@ La graine (`assets/catalog.sqlite.zst`) est **téléchargée depuis le bucket au
 `apps/desktop/build/` est le `buildResources` d'electron-builder, pas un dossier de sortie : il porte `icon.ico`, dérivé de `app-icon.png` par `tools/gen_brand_assets.py`. Il n'est donc pas ignorable en bloc — git ne réinclut rien sous un dossier exclu. Ce qui est artefact y est nommé un par un (`build/screenshots/`), et les artefacts d'empaquetage sortent dans `release/`.
 
 Reste à faire : le catalogue embarqué dans le build (`assets/catalog.sqlite.zst`, ~8 Mo pour le corpus entier) — le chemin de mise à jour depuis le bucket est en place et testé, mais le premier lancement en développement copie toujours le catalogue depuis le dossier source local.
+
+## Le site et sa mesure
+
+**Le site vit sur `https://beytelhikma.com`**, servi par GitHub Pages derrière le proxy Cloudflare. `site/config.mjs` est le seul module qui connaisse l'hôte : `BASE_PATH` vaut `/` et `SITE_ORIGIN` porte le domaine. Le build écrit `dist/CNAME`, **dérivé de `SITE_ORIGIN`** — `deploy-pages` publie ce qu'on lui donne, et un artefact sans `CNAME` peut faire retomber le site sur `github.io` sans qu'aucun voyant ne rougisse.
+
+Le `BASE_PATH` à `/` rend trivialement vrai le test « aucun lien interne n'oublie le préfixe ». Il est donc doublé d'un test qui interdit le `//` initial : `//assets/x` est une URL protocol-relative, que le navigateur lit comme un hôte distant nommé `assets`.
+
+**Rien ne mesure depuis la page.** `test/build.test.js` interdit toute ressource tierce, et un script d'analytics le casserait — outre le bandeau de consentement qu'il faudrait pour une donnée qu'on a déjà autrement. Trois sources, aucun identifiant posé chez personne :
+
+- **Cloudflare**, en proxy, mesure la fréquentation à l'edge. L'ordre d'allumage n'est pas indifférent : nuage **gris** jusqu'à ce que GitHub ait émis son certificat (le défi passe par HTTP et le proxy l'intercepterait), puis nuage orange et SSL **Full (strict)** — jamais *Flexible*, qui boucle avec « Enforce HTTPS ».
+- **L'API GitHub Releases** porte `download_count` par artefact. `site/lib/releases.mjs` le jette ; `tools/stats.py releases` le lit.
+- **Les journaux d'accès S3** disent l'usage réel : chaque démarrage lit `catalog/latest.json`. `publish_minio.py --access-logs` les active vers un second bucket, le seul du projet dont les quatre verrous d'accès public restent fermés — il porte des adresses IP, quand celui de distribution est public par politique. Sa politique est cadrée par `aws:SourceArn` **et** `aws:SourceAccount`, sans quoi le service de journalisation d'un autre compte peut y écrire ; son cycle de vie expire à 30 jours.
+
+`parse_log_line` écarte l'adresse IP au seul endroit qui la voit : aucune fonction en aval ne peut en afficher une. Elle rend `None` sur une ligne illisible, et pose ses champs entre guillemets **même vides** — un `""` sauté décalerait tout ce qui suit d'un cran.
+
+Les compteurs ne sont **pas** affichés sur le site : un chiffre bas dessert un projet jeune, et le site ne se reconstruit qu'aux publications, donc un compteur affiché serait faux la plupart du temps.
+
+Indicateurs et leurs limites : `docs/KPI.md`. Design : `docs/superpowers/specs/2026-08-04-domaine-et-mesure-design.md`.
 
 ## i18n / RTL (critique)
 
