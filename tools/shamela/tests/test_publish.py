@@ -29,7 +29,13 @@ class FakeS3:
         self.buckets = set(buckets)
         self.policies = {}
         self.settings = {}
+        # Les journaux mettent en jeu **deux** buckets aux réglages opposés :
+        # `settings` seul les confondrait, le second réglage écrasant le
+        # premier — et un test qui lit « accès public bloqué » ne saurait plus
+        # de quel bucket il parle.
+        self.par_bucket = {}
         self.create_kwargs = {}
+        self.logging = {}
 
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
@@ -53,20 +59,27 @@ class FakeS3:
     def put_bucket_policy(self, Bucket, Policy):
         self.policies[Bucket] = Policy
 
+    def _note(self, bucket, key, value):
+        self.settings[key] = value
+        self.par_bucket.setdefault(bucket, {})[key] = value
+
     def put_bucket_ownership_controls(self, Bucket, OwnershipControls):
-        self.settings["ownership"] = OwnershipControls
+        self._note(Bucket, "ownership", OwnershipControls)
 
     def put_public_access_block(self, Bucket, PublicAccessBlockConfiguration):
-        self.settings["access_block"] = PublicAccessBlockConfiguration
+        self._note(Bucket, "access_block", PublicAccessBlockConfiguration)
 
     def put_bucket_encryption(self, Bucket, ServerSideEncryptionConfiguration):
-        self.settings["encryption"] = ServerSideEncryptionConfiguration
+        self._note(Bucket, "encryption", ServerSideEncryptionConfiguration)
 
     def put_bucket_cors(self, Bucket, CORSConfiguration):
-        self.settings["cors"] = CORSConfiguration
+        self._note(Bucket, "cors", CORSConfiguration)
 
     def put_bucket_lifecycle_configuration(self, Bucket, LifecycleConfiguration):
-        self.settings["lifecycle"] = LifecycleConfiguration
+        self._note(Bucket, "lifecycle", LifecycleConfiguration)
+
+    def put_bucket_logging(self, Bucket, BucketLoggingStatus):
+        self.logging[Bucket] = BucketLoggingStatus
 
 
 def build_src(root):
@@ -379,6 +392,88 @@ class ConfigureBucketTest(unittest.TestCase):
         self.assertEqual(len(result["skipped"]), 1)
         self.assertIn("ownership", result["skipped"][0])
         self.assertIn("b", client.policies, "la politique est posée quand même")
+
+
+class ConfigureLoggingTest(unittest.TestCase):
+    def test_le_bucket_de_journaux_n_est_jamais_public(self):
+        """Le bucket de distribution est public par politique. Celui-ci porte
+        des adresses IP : le rendre lisible serait une fuite, et il est le seul
+        du projet dont les quatre verrous doivent rester fermés."""
+        client = FakeS3()
+        configure_bucket(client, "b", "eu-west-1", log_bucket="b-logs")
+
+        block = client.par_bucket["b-logs"]["access_block"]
+        self.assertTrue(all(block.values()), block)
+        # Et le bucket public, lui, garde ses politiques ouvertes.
+        self.assertFalse(client.par_bucket["b"]["access_block"]["BlockPublicPolicy"])
+
+    def test_seul_le_service_de_journalisation_peut_ecrire(self):
+        client = FakeS3()
+        configure_bucket(
+            client, "b", "eu-west-1", log_bucket="b-logs", account_id="123456789012"
+        )
+
+        policy = json.loads(client.policies["b-logs"])
+        statement = policy["Statement"][0]
+        self.assertEqual(statement["Principal"], {"Service": "logging.s3.amazonaws.com"})
+        self.assertEqual(statement["Action"], ["s3:PutObject"])
+        self.assertEqual(statement["Resource"], ["arn:aws:s3:::b-logs/access/*"])
+        # Sans ces deux conditions, le service de journalisation d'un *autre*
+        # compte pourrait écrire ici, et l'on paierait son stockage.
+        self.assertEqual(
+            statement["Condition"]["ArnLike"]["aws:SourceArn"], "arn:aws:s3:::b"
+        )
+        self.assertEqual(
+            statement["Condition"]["StringEquals"]["aws:SourceAccount"], "123456789012"
+        )
+
+    def test_compte_inconnu_garde_le_cadrage_par_arn(self):
+        """MinIO n'a pas de STS : l'identifiant de compte peut manquer. La
+        politique doit rester cadrée, pas s'ouvrir."""
+        client = FakeS3()
+        configure_bucket(client, "b", "eu-west-1", log_bucket="b-logs", account_id=None)
+
+        condition = json.loads(client.policies["b-logs"])["Statement"][0]["Condition"]
+        self.assertIn("ArnLike", condition)
+        self.assertNotIn("StringEquals", condition)
+
+    def test_les_journaux_expirent(self):
+        """Un journal gardé un an est un coût qui grimpe et un fichier
+        d'adresses dont on n'a aucun usage."""
+        client = FakeS3()
+        configure_bucket(client, "b", "eu-west-1", log_bucket="b-logs")
+
+        rule = client.par_bucket["b-logs"]["lifecycle"]["Rules"][0]
+        self.assertEqual(rule["Expiration"], {"Days": 30})
+        self.assertEqual(rule["Filter"]["Prefix"], "access/")
+        self.assertEqual(
+            client.logging["b"]["LoggingEnabled"],
+            {"TargetBucket": "b-logs", "TargetPrefix": "access/"},
+        )
+
+    def test_sans_option_aucune_journalisation(self):
+        """L'option est explicite : une journalisation posée par défaut créerait
+        un second bucket, et une facture, chez qui ne l'a pas demandée."""
+        client = FakeS3()
+        configure_bucket(client, "b", "eu-west-1")
+
+        self.assertEqual(client.logging, {})
+        self.assertNotIn("b-logs", client.buckets)
+
+    def test_serveur_sans_journalisation_laisse_le_reste_intact(self):
+        """MinIO n'implémente pas `put_bucket_logging` : un refus se signale et
+        se saute, comme les autres réglages optionnels."""
+
+        class Partiel(FakeS3):
+            def put_bucket_logging(self, **kwargs):
+                raise NotImplementedError("non supporté")
+
+        client = Partiel()
+        result = configure_bucket(client, "b", "eu-west-1", log_bucket="b-logs")
+
+        self.assertEqual(len(result["skipped"]), 1)
+        self.assertIn("journalisation", result["skipped"][0])
+        self.assertIn("b", client.policies, "la lecture publique est posée quand même")
 
 
 if __name__ == "__main__":

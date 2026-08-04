@@ -376,6 +376,43 @@ def publish_catalog(client, *, src, bucket, force=False, dry_run=False):
     return report
 
 
+"""Préfixe et rétention des journaux d'accès.
+
+Trente jours, pas un an : un journal contient des adresses IP, et le seul usage
+qu'on en fait est un décompte par jour. Le garder plus longtemps, c'est payer un
+stockage qui grandit et détenir des données dont on n'a que faire.
+"""
+ACCESS_LOG_PREFIX = "access/"
+ACCESS_LOG_RETENTION_DAYS = 30
+
+
+def logging_policy(log_bucket: str, source_bucket: str, account_id: str | None):
+    """La politique qui laisse S3 écrire les journaux, et personne d'autre.
+
+    `aws:SourceArn` et `aws:SourceAccount` ne sont pas décoratifs : sans eux, le
+    service de journalisation **d'un autre compte** peut écrire dans ce bucket,
+    et l'on paie le stockage de journaux qui ne nous concernent pas. AWS appelle
+    cela le « confused deputy ». `aws:SourceAccount` est omis si l'identifiant
+    du compte n'a pas pu être lu — la restriction par ARN suffit à cadrer.
+    """
+    condition = {"ArnLike": {"aws:SourceArn": f"arn:aws:s3:::{source_bucket}"}}
+    if account_id:
+        condition["StringEquals"] = {"aws:SourceAccount": account_id}
+    return {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "S3ServerAccessLogsPolicy",
+                "Effect": "Allow",
+                "Principal": {"Service": "logging.s3.amazonaws.com"},
+                "Action": ["s3:PutObject"],
+                "Resource": [f"arn:aws:s3:::{log_bucket}/{ACCESS_LOG_PREFIX}*"],
+                "Condition": condition,
+            }
+        ],
+    }
+
+
 def _try(label, fn, applied, skipped):
     """Applique un réglage optionnel ; MinIO n'implémente pas toute l'API S3."""
     try:
@@ -385,7 +422,101 @@ def _try(label, fn, applied, skipped):
         skipped.append(f"{label} ({type(exc).__name__})")
 
 
-def configure_bucket(client, bucket, region=None):
+def configure_logging(client, bucket, log_bucket, region=None, account_id=None):
+    """Fait journaliser les accès du bucket de distribution vers un bucket privé.
+
+    C'est la seule mesure d'usage réel du produit : chaque démarrage d'une
+    application fait un `GET catalog/latest.json`, et rien d'autre ne le dit.
+    Aucun identifiant n'est posé chez le client pour l'obtenir — on compte des
+    requêtes, jamais des personnes.
+
+    Le bucket de journaux est **privé, et le reste**. Le bucket de distribution
+    est public par politique ; celui-ci contient des adresses IP, et une erreur
+    qui le rendrait lisible serait une fuite. D'où le blocage d'accès public à
+    quatre `True`, en toutes lettres, plutôt qu'un défaut hérité.
+
+    Rendu dans le style de `configure_bucket` : ce que MinIO n'implémente pas
+    est signalé et sauté, jamais fatal.
+    """
+    applied, skipped = [], []
+    created = ensure_bucket(client, log_bucket, region)
+
+    _try(
+        f"journaux : {log_bucket} strictement privé",
+        lambda: client.put_public_access_block(
+            Bucket=log_bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        ),
+        applied,
+        skipped,
+    )
+
+    _try(
+        f"journaux : {log_bucket} en BucketOwnerEnforced",
+        lambda: client.put_bucket_ownership_controls(
+            Bucket=log_bucket,
+            OwnershipControls={"Rules": [{"ObjectOwnership": "BucketOwnerEnforced"}]},
+        ),
+        applied,
+        skipped,
+    )
+
+    # `BlockPublicPolicy` est vrai ci-dessus, et cette politique-ci n'est pas
+    # publique : son principal est un service AWS nommé, pas `*`.
+    _try(
+        "journaux : écriture réservée au service de journalisation",
+        lambda: client.put_bucket_policy(
+            Bucket=log_bucket,
+            Policy=json.dumps(logging_policy(log_bucket, bucket, account_id)),
+        ),
+        applied,
+        skipped,
+    )
+
+    _try(
+        f"journaux : expiration à {ACCESS_LOG_RETENTION_DAYS} jours",
+        lambda: client.put_bucket_lifecycle_configuration(
+            Bucket=log_bucket,
+            LifecycleConfiguration={
+                "Rules": [
+                    {
+                        "ID": "expire-access-logs",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": ACCESS_LOG_PREFIX},
+                        "Expiration": {"Days": ACCESS_LOG_RETENTION_DAYS},
+                    }
+                ]
+            },
+        ),
+        applied,
+        skipped,
+    )
+
+    # En dernier : la cible doit accepter l'écriture avant qu'on y dirige quoi
+    # que ce soit, sinon AWS refuse la configuration de journalisation.
+    _try(
+        f"journalisation des accès vers {log_bucket}/{ACCESS_LOG_PREFIX}",
+        lambda: client.put_bucket_logging(
+            Bucket=bucket,
+            BucketLoggingStatus={
+                "LoggingEnabled": {
+                    "TargetBucket": log_bucket,
+                    "TargetPrefix": ACCESS_LOG_PREFIX,
+                }
+            },
+        ),
+        applied,
+        skipped,
+    )
+    return {"created": created, "applied": applied, "skipped": skipped}
+
+
+def configure_bucket(client, bucket, region=None, log_bucket=None, account_id=None):
     """Pose la configuration d'un bucket de distribution publique.
 
     Le principe : **rien n'est public sauf `books/*`, et par politique, jamais
@@ -472,6 +603,15 @@ def configure_bucket(client, bucket, region=None):
         skipped,
     )
 
+    # Les journaux d'accès, si l'on en veut. Leur bucket est un second bucket,
+    # privé : sa configuration vit dans `configure_logging`, pas ici, parce
+    # qu'aucun de ses réglages ne ressemble à ceux du bucket public.
+    if log_bucket:
+        logs = configure_logging(client, bucket, log_bucket, region, account_id)
+        applied.extend(logs["applied"])
+        skipped.extend(logs["skipped"])
+        created = created or logs["created"]
+
     # En dernier : la politique n'est acceptée qu'une fois le blocage levé.
     _try(
         "lecture publique de books/*",
@@ -495,6 +635,12 @@ def build_parser():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--set-anonymous-policy", action="store_true")
+    parser.add_argument(
+        "--access-logs",
+        default=None,
+        metavar="BUCKET",
+        help="journaliser les accès vers ce bucket privé (créé s'il manque)",
+    )
     parser.add_argument("--catalog-only", action="store_true",
                         help="ne publier que le catalogue et son pointeur")
     parser.add_argument("--skip-catalog", action="store_true",
@@ -532,7 +678,27 @@ def main(argv=None):
     )
 
     if args.set_anonymous_policy:
-        result = configure_bucket(client, args.bucket, region)
+        # L'identifiant de compte ne sert qu'à cadrer la politique des journaux.
+        # MinIO n'a pas de STS de ce genre : son absence n'est pas une erreur,
+        # la restriction par ARN cadre déjà la politique.
+        account_id = None
+        if args.access_logs:
+            try:
+                account_id = boto3.client(
+                    "sts",
+                    aws_access_key_id=access,
+                    aws_secret_access_key=secret,
+                    region_name=region,
+                ).get_caller_identity()["Account"]
+            except Exception:  # noqa: BLE001 — cadrage en moins, pas un échec
+                print(
+                    "note : compte AWS non résolu, politique des journaux "
+                    "cadrée par ARN seulement",
+                    file=sys.stderr,
+                )
+        result = configure_bucket(
+            client, args.bucket, region, log_bucket=args.access_logs, account_id=account_id
+        )
         if result["created"]:
             print(f"bucket créé : {args.bucket} ({region})")
         for label in result["applied"]:
