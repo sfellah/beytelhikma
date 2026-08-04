@@ -13,7 +13,8 @@
     "verify": "node scripts/verify.mjs",
     "sync": "npm run prepare:www && npx cap sync android && npm run prepare:android",
     "android": "npm run sync && npx cap run android",
-    "android:release": "npm run seed && node scripts/prepare-www.mjs --sans-sonde && npx cap sync android && node scripts/prepare-android.mjs && node scripts/release-android.mjs"
+    "android:release": "npm run seed && node scripts/prepare-www.mjs --sans-sonde && npx cap sync android && node scripts/prepare-android.mjs && node scripts/release-android.mjs",
+    "aab": "npm run seed && node scripts/prepare-www.mjs --sans-sonde && npx cap sync android && node scripts/prepare-android.mjs && node scripts/release-android.mjs --aab"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.0",
