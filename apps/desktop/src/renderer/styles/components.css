@@ -1092,3 +1092,13 @@
     width: auto;
   }
 }
+
+/* Une seule ligne, sans titre : le libellé de la case dit déjà tout, et un
+   `<h3>` au-dessus d'une ligne unique ferait deux fois la même phrase. */
+.facet--toggle .facet__toggle {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  font-family: var(--font-label);
+  font-weight: 600;
+}

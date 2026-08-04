@@ -19,7 +19,15 @@ const SUGGESTED = [
 ];
 
 /** Clés de [query] qui restreignent réellement la liste. */
-const FILTRANTES = ['categories', 'types', 'centuries', 'status', 'authors', 'publishers'];
+const FILTRANTES = [
+  'popular',
+  'categories',
+  'types',
+  'centuries',
+  'status',
+  'authors',
+  'publishers',
+];
 
 /**
  * Combien de filtres sont posés — c'est ce que le déclencheur doit annoncer.
@@ -32,6 +40,11 @@ export function countActive(query) {
   for (const key of FILTRANTES) {
     const value = query?.[key];
     if (Array.isArray(value)) total += value.length;
+    // Un booléen se compte sur sa **valeur**, pas sur sa présence. La règle
+    // précédente — « ni nul ni vide » — comptait `popular: false` comme un
+    // filtre posé : le déclencheur annonçait un filtre de plus dès l'ouverture
+    // de l'écran, sur une case décochée.
+    else if (typeof value === 'boolean') total += value ? 1 : 0;
     else if (value != null && value !== '') total += 1;
   }
   if (query?.years) total += 1;
@@ -95,6 +108,7 @@ export function facetPanel({ facets, query, onChange, onClose }) {
   );
 
   const sections = [
+    popularFacet(onChange),
     ...LISTS.map(([key, label]) => listFacet(key, label, onChange)),
     ...SUGGESTED.map(([key, label, placeholder]) =>
       suggestFacet(key, label, placeholder, onChange),
@@ -185,6 +199,46 @@ export function facetPanel({ facets, query, onChange, onClose }) {
     setOpen,
     isOpen: () => opened,
     dispose: releaseBack,
+  };
+}
+
+/**
+ * Une case, pas une facette.
+ *
+ * Une facette porte des valeurs et leurs comptes ; celle-ci est un booléen. La
+ * bâtir comme les autres l'obligerait à un `GROUP BY` sur une colonne qui
+ * n'existe pas — la liste vit dans `shared/popular.js`, pas dans le catalogue.
+ *
+ * Elle est **en tête** du panneau parce que c'est la restriction la plus large :
+ * cocher vingt-trois livres sur 8 568 change ce que toutes les autres comptent.
+ */
+function popularFacet(onChange) {
+  const box = h('input', {
+    type: 'checkbox',
+    onchange: (event) => onChange({ popular: event.target.checked }),
+  });
+
+  const node = h(
+    'section',
+    { class: 'facet facet--toggle' },
+    // `facet__toggle` et non `facet__option` : ce n'est pas la valeur d'une
+    // facette, et les écrans qui interrogent `.facet__option` cherchent une
+    // discipline, un type ou un siècle — pas cette ligne-ci.
+    h(
+      'label',
+      { class: 'facet__toggle' },
+      box,
+      h('span', { class: 'facet__label' }, t('popular.filter')),
+    ),
+  );
+
+  return {
+    node,
+    paint({ query }) {
+      // Un champ de saisie ne se réécrit pas sous les doigts qui le tiennent —
+      // mais une case n'a pas de curseur à déplacer : la reposer est sans effet.
+      box.checked = Boolean(query.popular);
+    },
   };
 }
 

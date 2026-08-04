@@ -38,6 +38,7 @@ const EMPTY_QUERY = {
   publishers: [],
   years: null,
   status: null,
+  popular: false,
 };
 
 /** Décode l'état depuis le fragment d'URL, pour qu'un lien soit partageable. */
@@ -57,6 +58,7 @@ function readQuery(params) {
     publishers: list('publishers'),
     years: Object.keys(years).length ? years : null,
     status: raw.status ?? null,
+    popular: raw.popular === '1',
     sort: raw.sort ?? 'title',
   };
 }
@@ -71,6 +73,7 @@ function writeQuery(query) {
   if (query.years?.from != null) params.set('from', String(query.years.from));
   if (query.years?.to != null) params.set('to', String(query.years.to));
   if (query.status) params.set('status', query.status);
+  if (query.popular) params.set('popular', '1');
   if (query.sort && query.sort !== 'title') params.set('sort', query.sort);
   const suffix = params.toString();
   history.replaceState(null, '', `#/explore${suffix ? `?${suffix}` : ''}`);
@@ -339,6 +342,11 @@ export function exploreView(host, params) {
       out.push({ key: 'status', value: null, label: labelOf('status', state.query.status) });
     }
     if (state.query.years) out.push({ key: 'years', value: null, label: t('facet.year') });
+    // La puce se lève par `{ popular: null }` — faux, donc la clause tombe.
+    // Aucun code en plus : c'est déjà ce que fait `chipNodes` pour `value == null`.
+    if (state.query.popular) {
+      out.push({ key: 'popular', value: null, label: t('popular.filter') });
+    }
     return out;
   }
 

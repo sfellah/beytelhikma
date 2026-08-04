@@ -564,6 +564,7 @@ export default {
   'popular.title': 'Popular books',
   'popular.subtitle': 'The reference works every discipline goes back to',
   'popular.badge': 'Popular',
+  'popular.filter': 'Popular books only',
   'curricula.title': 'Paths of study',
   'curricula.subtitle': 'Graded readings, from the short matn to its commentary to the reference work',
   'curricula.empty': 'No curriculum matches the installed catalogue',

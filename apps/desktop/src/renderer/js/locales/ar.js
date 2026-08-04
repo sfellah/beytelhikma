@@ -572,6 +572,7 @@ export default {
   'popular.title': 'أشهر الكتب',
   'popular.subtitle': 'أمهات المصادر التي يرجع إليها في كلّ فنّ',
   'popular.badge': 'من أشهر الكتب',
+  'popular.filter': 'أشهر الكتب فقط',
   'curricula.title': 'مسارات طلب العلم',
   'curricula.subtitle': 'متون مرتّبة تُقرأ بالتدرّج، من المتن إلى شرحه إلى المطوّل',
   'curricula.empty': 'لا يوافق أيّ منهج الفهرس المثبّت',

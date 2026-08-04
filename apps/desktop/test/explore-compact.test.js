@@ -220,6 +220,10 @@ test('countActive compte chaque valeur, le statut et la borne d’années', () =
   assert.equal(countActive({ years: { from: 300 } }), 1);
   // Le texte cherché n'est pas un filtre : il a son champ, toujours visible.
   assert.equal(countActive({ text: 'نحو' }), 0);
+  // Un booléen se compte sur sa valeur : une case décochée n'est pas un filtre.
+  assert.equal(countActive({ popular: false }), 0);
+  assert.equal(countActive({ popular: true }), 1);
+  assert.equal(countActive({ popular: true, categories: [1, 2] }), 3);
   assert.equal(
     countActive({ categories: [1], status: 'installed', years: { to: 400 }, publishers: ['p1'] }),
     4,

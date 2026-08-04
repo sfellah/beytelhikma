@@ -129,3 +129,21 @@ test('chaque bande de l’accueil a son propre rang d’apparition', () => {
   const rangs = [...home.matchAll(/'data-reveal': (\d+),/g)].map((m) => Number(m[1]));
   assert.equal(new Set(rangs).size, rangs.length, 'deux sections partagent un rang');
 });
+
+test('le filtre voyage dans l’URL, pour qu’un lien soit partageable', () => {
+  const explore = read('../src/renderer/js/views/explore.js');
+  assert.ok(/popular: raw\.popular === '1'/.test(explore), 'readQuery doit décoder popular');
+  assert.ok(
+    /params\.set\('popular', '1'\)/.test(explore),
+    'writeQuery doit réécrire popular dans le fragment',
+  );
+});
+
+test('le filtre est une case, pas une facette', () => {
+  const panel = read('../src/renderer/js/components/facet-panel.js');
+  assert.ok(
+    !/\['popular', /.test(panel),
+    'popular n’a pas de valeurs à compter : ni dans LISTS ni dans SUGGESTED',
+  );
+  assert.ok(panel.includes("t('popular.filter')"), 'le libellé vient du catalogue de chaînes');
+});
