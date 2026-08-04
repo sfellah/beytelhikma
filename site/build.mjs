@@ -25,6 +25,7 @@ import {
   PAGES,
   REPO,
   SITE_LOCALES,
+  SITE_ORIGIN,
   absoluteUrl,
   digitsLocale,
   url,
@@ -337,6 +338,12 @@ export async function build(options = {}) {
   // ignore tout dossier commençant par `_`. Rien n'en porte aujourd'hui, mais
   // la panne serait invisible en local et silencieuse en production.
   await fs.writeFile(path.join(out, '.nojekyll'), '', 'utf8');
+  // Le domaine personnalisé vit dans l'artefact déployé, pas seulement dans les
+  // réglages du dépôt : `actions/deploy-pages` publie ce qu'on lui donne, et un
+  // artefact sans `CNAME` peut faire retomber le site sur `github.io` sans
+  // qu'aucun voyant ne rougisse. L'hôte est **dérivé** de `SITE_ORIGIN` : deux
+  // littéraux qui disent le même nom finissent par diverger.
+  await fs.writeFile(path.join(out, 'CNAME'), `${new URL(SITE_ORIGIN).host}\n`, 'utf8');
   await fs.writeFile(
     path.join(out, 'releases.json'),
     `${JSON.stringify(index, null, 2)}\n`,

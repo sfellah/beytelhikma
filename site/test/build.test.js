@@ -10,7 +10,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { build } from '../build.mjs';
-import { BASE_PATH, PAGES, SITE_LOCALES } from '../config.mjs';
+import { BASE_PATH, PAGES, SITE_LOCALES, SITE_ORIGIN } from '../config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(HERE, '..', '..', 'apps', 'desktop', 'src', 'renderer');
@@ -39,6 +39,15 @@ test('neuf pages et la bascule de racine sont écrites', async () => {
   await fs.access(path.join(out, 'releases.json'));
   await fs.access(path.join(out, 'sitemap.xml'));
   await fs.access(path.join(out, '.nojekyll'));
+});
+
+test('le domaine personnalisé part dans l’artefact déployé', async () => {
+  // `actions/deploy-pages` publie ce qu'on lui donne : un artefact sans `CNAME`
+  // peut faire retomber le site sur `github.io`, et la panne est silencieuse —
+  // le déploiement réussit, seule l'URL change.
+  const cname = await read('CNAME');
+  assert.equal(cname.trim().split('\n').length, 1, 'un seul hôte, une seule ligne');
+  assert.equal(cname.trim(), new URL(SITE_ORIGIN).host);
 });
 
 test('chaque page annonce sa langue et sa direction', async () => {
@@ -70,6 +79,22 @@ test('aucun lien interne n’oublie le préfixe de GitHub Pages', async () => {
   }
 });
 
+test('aucun lien interne ne commence par une double barre', async () => {
+  // Le seul piège du `BASE_PATH` à `/` : `//assets/x` est une URL
+  // protocol-relative, que le navigateur lit comme un hôte distant nommé
+  // `assets`. Le test du préfixe ci-dessus ne peut plus la voir — tout chemin
+  // absolu commence par `/`, y compris celui-là.
+  for (const locale of SITE_LOCALES) {
+    for (const page of PAGES) {
+      const file = page === 'index' ? `${locale.key}/index.html` : `${locale.key}/${page}/index.html`;
+      const html = await read(file);
+      const doubled = [...html.matchAll(/(?:href|src)="(\/\/[^"]*)"/g)].map((match) => match[1]);
+      assert.deepEqual(doubled, [], `lien protocol-relative dans ${file}`);
+    }
+  }
+  assert.deepEqual([...(await read('index.html')).matchAll(/(?:href|src)="(\/\/[^"]*)"/g)], []);
+});
+
 test('aucune ressource ne vient d’un tiers', async () => {
   // Les maquettes tiraient Tailwind, Google Fonts et Material Symbols d'un CDN,
   // et leurs images d'un domaine Google. Rien de tout cela ne doit revenir.
@@ -78,7 +103,10 @@ test('aucune ressource ne vient d’un tiers', async () => {
     const external = [...html.matchAll(/(?:href|src)="(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
     for (const link of external) {
       assert.ok(
-        link.startsWith('https://github.com/') || link.startsWith('https://sfellah.github.io'),
+        // `SITE_ORIGIN` et non l'hôte écrit en clair : une origine figée ici
+        // resterait tolérée après un déménagement, et la vérification
+        // deviendrait une passoire qui accepte l'ancien domaine.
+        link.startsWith('https://github.com/') || link.startsWith(SITE_ORIGIN),
         `ressource tierce : ${link}`,
       );
     }

@@ -7,8 +7,8 @@
 Application de bureau pour lire le patrimoine arabe — 8 568 éditions,
 catalogue local, aucun compte, aucun serveur.
 
-[Télécharger](https://sfellah.github.io/beytelhikma/) ·
-[Versions](https://sfellah.github.io/beytelhikma/fr/releases/) ·
+[Télécharger](https://beytelhikma.com/) ·
+[Versions](https://beytelhikma.com/fr/releases/) ·
 [Modèle de données](docs/DATAMODEL.md) ·
 [Design](docs/DESIGN.md)
 

@@ -13,16 +13,27 @@ export const REPO = { owner: 'sfellah', name: 'beytelhikma' };
 /**
  * Le chemin sous lequel le site est servi.
  *
- * GitHub Pages sert un dépôt de projet sous `/<dépôt>/`, pas à la racine. Tout
- * lien interne passe donc par `url()` : un `/assets/…` écrit en dur marcherait
- * en développement et donnerait un 404 en production, ce qui est exactement le
- * genre de panne qui ne se voit qu'après publication. Avec un domaine propre,
- * cette constante devient `'/'` et rien d'autre ne bouge.
+ * GitHub Pages sert un dépôt de projet sous `/<dépôt>/`, pas à la racine — le
+ * site a vécu sous `/beytelhikma/` jusqu'au domaine propre. Tout lien interne
+ * passe donc par `url()` : un `/assets/…` écrit en dur marcherait en
+ * développement et donnerait un 404 en production, ce qui est exactement le
+ * genre de panne qui ne se voit qu'après publication. La constante est
+ * aujourd'hui `'/'`, et la bascule n'a rien touché d'autre — c'est ce que la
+ * règle « un seul module connaît l'hôte » achetait.
+ *
+ * Le seul piège qu'elle introduit : `url()` retire le `/` initial du chemin
+ * qu'on lui donne, sans quoi `url('/assets/x')` rendrait `//assets/x`, que le
+ * navigateur lit comme un hôte distant nommé `assets`. `test/build.test.js`
+ * l'interdit.
  */
-export const BASE_PATH = '/beytelhikma/';
+export const BASE_PATH = '/';
 
-/** L'origine publique du site. Sert aux `hreflang`, à l'`og:url`, au sitemap. */
-export const SITE_ORIGIN = 'https://sfellah.github.io';
+/**
+ * L'origine publique du site. Sert aux `hreflang`, à l'`og:url`, au sitemap —
+ * et le `CNAME` que le build écrit en dérive, plutôt que de réécrire l'hôte.
+ * Deux littéraux qui disent le même nom finissent par diverger.
+ */
+export const SITE_ORIGIN = 'https://beytelhikma.com';
 
 /** Un chemin interne, préfixé une fois pour toutes. */
 export function url(path = '') {
