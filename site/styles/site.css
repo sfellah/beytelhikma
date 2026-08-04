@@ -2,12 +2,12 @@
    ==================================================================
 
    Le monde retenu : **les pages de titre d'un livre imprimé.** Une page de
-   garde, un sommaire, des planches légendées, un colophon. C'est l'expression
-   honnête d'une bibliothèque de 8 568 ouvrages, et l'exact contraire du
-   gabarit de landing que les maquettes proposaient — grille de cartes
-   identiques, icône en carré arrondi, dégradés et halos.
+   garde, une note en marge, des planches légendées, un sommaire folioté, un
+   colophon. C'est l'expression honnête d'une bibliothèque de 8 568 ouvrages,
+   et l'exact contraire du gabarit de landing que les maquettes proposaient —
+   grille de cartes identiques, icône en carré arrondi, dégradés et halos.
 
-   Trois règles tiennent la page :
+   Quatre règles tiennent la page :
 
    1. **Le filet remplace la carte.** La structure est faite de traits d'un
       pixel, pas de rectangles ombrés. Une carte est le conteneur paresseux ;
@@ -19,6 +19,8 @@
       `tokens.css`, copié depuis l'application. Le papier chaud est *dérivé*
       du sable du projet par `color-mix`, jamais posé en valeur nouvelle : une
       seconde palette finit toujours par diverger.
+   4. **L'arabe se compose, il ne se corrige pas.** Voir la section suivante :
+      c'est la règle qui a le plus changé la feuille.
 
    Propriétés logiques uniquement — les pages arabes sont RTL et les latines
    LTR, sur la même feuille. */
@@ -54,18 +56,79 @@
      — le titre : EB Garamond, garalde de bibliothèque, pour ce qui s'annonce ;
      — le texte : Literata, dessinée pour lire un livre à l'écran ;
      — la marge : IBM Plex Sans Arabic, petite et espacée, pour ce qui se
-       consulte sans se lire — libellés, métadonnées, navigation.
-     Sur les pages arabes, Amiri prend le titre et le texte : le naskh de
-     bibliothèque du projet fait les deux, et la coupure serif/sans latine n'a
-     pas d'équivalent en arabe. */
+       consulte sans se lire — libellés, métadonnées, navigation. */
   --title: 'EB Garamond', 'Source Serif 4', Georgia, serif;
   --text: 'Literata', 'Source Serif 4', Georgia, serif;
   --margin-voice: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+
+  /* ---- la voix de marge, en quatre axes -------------------------------
+     Ces quatre variables sont **toute** la différence de composition entre
+     une page latine et une page arabe. Avant elles, chaque règle de marge
+     était écrite deux fois : une pour le latin, une pour l'arabe où l'on
+     annulait la capitale et l'interlettrage. Quatorze blocs qui ne disaient
+     rien de l'arabe — ils disaient seulement « pas de latin ici ».
+
+     La capitale et l'interlettrage sont refusés en arabe pour deux raisons
+     de fond : l'écriture n'a pas de capitales, et espacer les lettres disjoint
+     les liaisons du naskh, ce qui rend le mot illisible. Ce qui les remplace
+     est **positif** : un corps d'un cran plus grand, parce qu'à corps égal
+     l'arabe non capitalisé paraît plus petit et perd la fonction de repère
+     que la petite capitale latine assurait. */
+  --voice-case: uppercase;
+  --voice-tracking: 0.09em;
+  --voice-weight: 500;
+  --voice-sm: 0.75rem;
+  --voice-md: 0.8125rem;
+
+  /* L'approche des titres. Négative en garalde latine, nulle en naskh. */
+  --title-tracking: -0.014em;
+  --title-leading: 1.12;
 }
 
 html[lang='ar'] {
+  /* La coupure display/texte **existe** en arabe : elle n'est simplement pas
+     serif contre sans. Elle est naskh contre grotesque humaniste.
+
+     Amiri porte le titre : c'est un naskh de bibliothèque, taillé sur les
+     fontes du Būlāq, et à grand corps il donne au titre l'autorité d'une page
+     de garde. Il porte mal le petit corps à l'écran — hauteur d'œil basse,
+     traits fins, contreformes serrées — et le lui confier pour le texte
+     courant, comme cette feuille le faisait, revenait à composer toute une
+     page de présentation dans une face conçue pour un in-octavo.
+
+     IBM Plex Sans Arabic prend donc le texte : dessiné pour l'écran, il tient
+     le petit corps, laisse la place au tashkīl, et se lit d'un coup d'œil —
+     ce qu'on demande à une page qu'on parcourt. C'est la même face que la
+     marge, et c'est voulu : deux voix suffisent quand l'une des deux est un
+     naskh de titre. */
   --title: 'Amiri', 'Noto Naskh Arabic', serif;
-  --text: 'Amiri', 'Noto Naskh Arabic', serif;
+  --text: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+
+  --voice-case: none;
+  --voice-tracking: 0;
+  --voice-weight: 500;
+  --voice-sm: 0.875rem;
+  --voice-md: 0.9375rem;
+
+  --title-tracking: 0;
+  --title-leading: 1.42;
+
+  /* Un mot arabe est plus court qu'un mot latin à sens égal : à 68ch la ligne
+     porterait une vingtaine de mots, bien au-delà de la mesure confortable. */
+  --measure: 56ch;
+}
+
+/* Le folio du sommaire, dans les chiffres de la langue. Le style latin porte
+   son zéro de tête ; l'arabe le porte aussi, mais avec son propre zéro — un
+   « 01 » latin posé dans une page arabe est une coquille, pas un chiffre. */
+@counter-style folio-latin {
+  system: extends decimal-leading-zero;
+}
+
+@counter-style folio-arabic {
+  system: numeric;
+  symbols: '٠' '١' '٢' '٣' '٤' '٥' '٦' '٧' '٨' '٩';
+  pad: 2 '٠';
 }
 
 /* ================================================================ base ==== */
@@ -96,12 +159,13 @@ body {
 }
 
 html[lang='ar'] body {
-  /* Amiri a une hauteur d'œil basse : au même corps que Literata, il paraît
-     d'un cran plus petit. On rend l'optique, pas le nombre.
-     Et l'arabe vocalisé demande de l'air entre les lignes — les signes de
-     tashkīl se posent au-dessus et au-dessous du corps. */
-  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
-  line-height: 1.95;
+  /* L'arabe vocalisé demande de l'air entre les lignes — les signes de tashkīl
+     se posent au-dessus et au-dessous du corps. Plex Sans Arabic en demande
+     moins qu'Amiri, dont la hauteur d'œil basse obligeait à 1,95 : sa hauteur
+     d'œil haute rend la même densité optique à 1,8, et rapproche les lignes
+     d'un paragraphe qui se tenait trop lâche. */
+  font-size: clamp(1rem, 0.96rem + 0.25vw, 1.0625rem);
+  line-height: 1.8;
   font-variant-numeric: normal;
 }
 
@@ -111,18 +175,17 @@ h3 {
   margin: 0;
   font-family: var(--title);
   font-weight: 400;
-  line-height: 1.12;
-  letter-spacing: -0.012em;
+  line-height: var(--title-leading);
+  letter-spacing: var(--title-tracking);
   text-wrap: balance;
-}
-
-html[lang='ar'] :is(h1, h2, h3) {
-  line-height: 1.4;
-  letter-spacing: 0;
 }
 
 p {
   margin: 0;
+  /* Une veuve d'un mot en fin de paragraphe est le défaut le plus visible
+     d'une page composée au fil de l'eau. `pretty` la retire là où il est
+     implémenté, et ne coûte rien ailleurs. */
+  text-wrap: pretty;
 }
 
 img {
@@ -146,11 +209,6 @@ a {
   outline-offset: 3px;
 }
 
-/* Note de composition, valable partout plus bas : sur les pages arabes, la
-   mise en capitales et l'interlettrage sont annulés. L'arabe n'a pas de
-   capitales — la première ne fait rien — et le second disjoint les liaisons
-   du naskh, ce qui rend le mot illisible. */
-
 .icon {
   inline-size: 1.05em;
   block-size: 1.05em;
@@ -166,7 +224,7 @@ a {
   background: var(--primary);
   color: var(--on-primary);
   font-family: var(--margin-voice);
-  font-size: 0.8125rem;
+  font-size: var(--voice-md);
 }
 
 .skip:focus {
@@ -214,47 +272,34 @@ a {
   white-space: nowrap;
 }
 
+html[lang='ar'] .brand__name {
+  font-size: 1.55rem;
+  letter-spacing: 0;
+}
+
+/* Trois choses vivent dans cette barre, et elles ne sont pas du même ordre :
+   les pages du site, la langue de lecture, et l'appel. Elles étaient posées
+   dans une seule rangée au même écart, ce qui les donnait pour trois listes
+   d'une même chose. Un filet sépare la langue, qui est un réglage, de la
+   navigation, qui est un déplacement. */
 .topbar__nav {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-}
-
-/* En dessous de 48rem, le bandeau s'empile : la marque sur une ligne, la
-   navigation en dessous, qui se replie. En rangée, « English » sortait de
-   l'écran et la marque se brisait. */
-@media (max-width: 48rem) {
-  .topbar__inner {
-    flex-direction: column;
-    align-items: start;
-    gap: 0.9rem;
-    padding-block: 0.9rem;
-  }
-
-  .topbar__nav {
-    inline-size: 100%;
-    flex-wrap: wrap;
-    gap: 0.75rem 1.1rem;
-  }
+  gap: 1.4rem;
 }
 
 .topbar__link {
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: var(--voice-sm);
+  font-weight: var(--voice-weight);
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-soft);
   text-decoration: none;
   padding-block: 0.35rem;
   border-block-end: 1px solid transparent;
-}
-
-html[lang='ar'] .topbar__link,
-html[lang='ar'] .lang__link {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.875rem;
+  transition: color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .topbar__link:hover,
@@ -267,14 +312,26 @@ html[lang='ar'] .lang__link {
   display: flex;
   align-items: baseline;
   gap: 0.7rem;
+  padding-inline-start: 1.4rem;
+  border-inline-start: 1px solid var(--rule);
 }
 
+/* Le corps de marge latin fait 0,75rem : sans réserve, la cible mesurait
+   28,4 × 19,8 px, sous le plancher de 24 × 24 de la WCAG 2.2 (2.5.8). Ce sont
+   trois liens de navigation, pas des mots dans une phrase — l'exception « en
+   ligne » ne s'y applique pas. La réserve porte la hauteur à ~32 px sans
+   toucher au corps ni au filet qui sépare la langue de la navigation. Elle est
+   posée en `inline-block`, sans quoi une réserve verticale sur une boîte en
+   ligne n'agrandit pas la cible. */
 .lang__link {
+  display: inline-block;
+  padding-block: 0.4rem;
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-faint);
   text-decoration: none;
+  transition: color 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lang__link:hover {
@@ -287,6 +344,35 @@ html[lang='ar'] .lang__link {
   text-underline-offset: 0.3em;
 }
 
+/* En dessous de 48rem, le bandeau s'empile : la marque sur une ligne, la
+   navigation en dessous, qui se replie. En rangée, « English » sortait de
+   l'écran et la marque se brisait. Le filet de la langue tombe avec la rangée :
+   il séparait deux groupes qui ne sont plus côte à côte. */
+/* `47.999rem` et non `48rem` : le pied et les entrées de journal ouvrent à
+   `min-width: 48rem`, et à exactement 768 px les deux blocs s'appliquaient
+   ensemble — bandeau empilé d'un côté, deux colonnes de l'autre. Aucun défaut
+   visible aujourd'hui, les sélecteurs étant disjoints ; c'est la garde que la
+   feuille pose déjà à `63.999rem` pour `.trust`, et qui manquait ici seule. */
+@media (max-width: 47.999rem) {
+  .topbar__inner {
+    flex-direction: column;
+    align-items: start;
+    gap: 0.9rem;
+    padding-block: 0.9rem;
+  }
+
+  .topbar__nav {
+    inline-size: 100%;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.1rem;
+  }
+
+  .lang {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+}
+
 /* ============================================================= boutons ==== */
 
 /* Un seul bouton plein sur la page, et il est carré. Le reste est du texte
@@ -295,23 +381,18 @@ html[lang='ar'] .lang__link {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.85rem 1.6rem;
+  padding: 0.9rem 1.7rem;
   border: 1px solid var(--primary);
   border-radius: 2px;
   font-family: var(--margin-voice);
-  font-size: 0.8125rem;
+  font-size: var(--voice-md);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   text-decoration: none;
   transition: background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 140ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-html[lang='ar'] .button {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.9375rem;
+    color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .button--primary {
@@ -324,14 +405,25 @@ html[lang='ar'] .button {
 }
 
 .button--small {
-  padding: 0.5rem 1rem;
+  padding: 0.55rem 1.1rem;
   background: transparent;
   color: var(--primary);
   border-color: var(--rule-strong);
+  font-size: var(--voice-sm);
 }
 
 .button--small:hover {
   border-color: var(--primary);
+  background: color-mix(in srgb, var(--secondary-container) 40%, var(--paper));
+}
+
+/* Le bouton de la page où l'on est : il cesse de porter la couleur de l'appel.
+   C'est la règle de `.topbar__link--on`, appliquée au seul appel de la barre. */
+.button--on,
+.button--on:hover {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+  background: transparent;
 }
 
 .link {
@@ -339,31 +431,56 @@ html[lang='ar'] .button {
   align-items: center;
   gap: 0.4rem;
   font-family: var(--margin-voice);
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
+  font-size: var(--voice-md);
+  letter-spacing: var(--voice-tracking);
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 0.25em;
 }
 
-html[lang='ar'] .link {
-  letter-spacing: 0;
-  font-size: 0.9375rem;
-}
-
-/* ========================================================= page de titre ==== */
+/* ======================================================== page de titre ==== */
 
 .hero {
   padding-block: clamp(3.5rem, 9vw, 7rem) clamp(3rem, 7vw, 5rem);
 }
 
+/* La page de titre se compose en deux corps : le texte, et la note en marge.
+
+   Elle n'en avait qu'un — un texte plafonné à 46rem dans une colonne de 74rem,
+   donc près de deux cent cinquante pixels de papier vide sur le bord, à toutes
+   les largeurs de bureau. Ce vide n'était pas du blanc de composition : c'était
+   une colonne qu'on n'avait pas remplie, et l'œil le voit ainsi.
+
+   Ce qui la remplit était déjà écrit : les trois garanties, qui sont des faits
+   vérifiables et non des arguments, et qui appartiennent donc à la marge — là
+   où un livre met ce qui atteste. Elles y sont empilées, séparées d'un filet,
+   contre le filet vertical qui borde la marge entière. */
 .hero__inner {
   inline-size: var(--column);
   margin-inline: auto;
+  display: grid;
+  gap: clamp(2.75rem, 6vw, 4rem) clamp(2rem, 4vw, 3.5rem);
 }
 
+@media (min-width: 64rem) {
+  .hero__inner {
+    grid-template-columns: minmax(0, 1fr) minmax(13rem, 17rem);
+    align-items: start;
+  }
+}
+
+/* Le texte n'est plafonné que tant qu'il occupe seul la colonne. Dès que la
+   marge existe, c'est la grille qui le mesure : un second plafond y laissait
+   une bande vide *à l'intérieur* de sa propre colonne, contre la gouttière —
+   un blanc qui ne sépare rien de rien. */
 .hero__text {
-  max-inline-size: 46rem;
+  max-inline-size: 42rem;
+}
+
+@media (min-width: 64rem) {
+  .hero__text {
+    max-inline-size: none;
+  }
 }
 
 /* La ligne de rappel : un filet, un mot, un filet. Pas une pastille. */
@@ -373,16 +490,11 @@ html[lang='ar'] .link {
   gap: 0.9rem;
   margin-block-end: 2rem;
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  font-size: var(--voice-sm);
+  font-weight: var(--voice-weight);
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-soft);
-}
-
-html[lang='ar'] .badge {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.875rem;
 }
 
 .badge::after {
@@ -392,17 +504,16 @@ html[lang='ar'] .badge {
   background: var(--rule);
 }
 
-.badge .icon {
-  display: none;
-}
-
 .hero__heading {
   font-size: clamp(2.6rem, 1.4rem + 5.2vw, 5rem);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.022em;
 }
 
 html[lang='ar'] .hero__heading {
-  font-size: clamp(2.2rem, 1.2rem + 4.4vw, 4.2rem);
+  /* Amiri porte une hauteur d'œil basse : au même corps qu'une garalde latine
+     il paraît d'un cran plus petit, et sur un titre de page de garde le cran
+     se voit. On rend l'optique, pas le nombre. */
+  font-size: clamp(2.5rem, 1.3rem + 5vw, 4.75rem);
   letter-spacing: 0;
 }
 
@@ -412,6 +523,8 @@ html[lang='ar'] .hero__heading {
 }
 
 html[lang='ar'] .hero__accent {
+  /* L'arabe n'a pas d'italique : incliner un naskh est une déformation, pas un
+     style. Le second registre est le gras, qu'Amiri porte réellement. */
   font-style: normal;
   font-weight: 700;
 }
@@ -425,15 +538,15 @@ html[lang='ar'] .hero__accent {
 }
 
 html[lang='ar'] .hero__lede {
-  line-height: 1.9;
-  max-inline-size: 46ch;
+  line-height: 1.85;
+  max-inline-size: 42ch;
 }
 
 .hero__calls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.25rem 1.75rem;
   margin-block-start: 2.5rem;
 }
 
@@ -442,29 +555,25 @@ html[lang='ar'] .hero__lede {
    regard avant de lire, et un manchot se reconnaît plus vite que le mot
    « Linux ». Ce qui n'est pas encore publié pâlit et le dit. */
 .hero__available {
-  margin-block-start: 2.25rem;
+  margin-block-start: 2.5rem;
+  padding-block-start: 1.25rem;
+  border-block-start: 1px solid var(--rule);
 }
 
 .hero__available-title {
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
+  font-size: var(--voice-sm);
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .hero__available-title {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
 }
 
 .hero__platforms {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem 1.75rem;
-  margin: 0.7rem 0 0;
+  margin: 0.8rem 0 0;
   padding-inline: 0;
   list-style: none;
 }
@@ -474,7 +583,7 @@ html[lang='ar'] .hero__available-title {
   align-items: center;
   gap: 0.45rem;
   font-family: var(--margin-voice);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--ink-soft);
 }
 
@@ -490,62 +599,90 @@ html[lang='ar'] .hero__available-title {
 
 .hero__soon {
   font-style: normal;
-  font-size: 0.6875rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
 }
 
-html[lang='ar'] .hero__soon {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
-}
-
-/* Les trois garanties, en pied de page de titre : un filet au-dessus, trois
-   colonnes, aucune icône. Ce sont des faits, pas des arguments. */
+/* ---- la note en marge ---------------------------------------------------
+   Trois faits, aucune icône, aucune pastille. En dessous de la largeur où la
+   marge existe, ils reprennent la forme d'un triptyque en pied de page de
+   titre : c'est la même matière, dans la seule disposition que l'écran
+   autorise. */
 .trust {
   display: grid;
   gap: 1.5rem 3rem;
-  margin-block-start: clamp(3rem, 6vw, 4.5rem);
   padding-block-start: 1.5rem;
   border-block-start: 1px solid var(--rule);
+  margin: 0;
   padding-inline: 0;
   list-style: none;
 }
 
-@media (min-width: 40rem) {
+/* Le filet entre deux notes n'appartient pas à la marge : il appartient à la
+   pile. Il ne vivait que dans le bloc à 64rem, si bien que sur un téléphone —
+   c'est-à-dire là où ces trois faits sont la seule chose qui rassure, l'écran
+   ne montrant rien d'autre — ils s'affaissaient en un pavé de six lignes sans
+   séparation. La règle est donc posée en base, et **retirée** dans la seule
+   largeur où elle serait fausse. */
+.trust__item + .trust__item {
+  padding-block-start: 1.25rem;
+  border-block-start: 1px solid var(--rule);
+}
+
+@media (min-width: 40rem) and (max-width: 63.999rem) {
   .trust {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  /* Trois colonnes côte à côte : un filet au-dessus de la deuxième et de la
+     troisième barrerait le haut de deux colonnes, et ne séparerait rien. */
+  .trust__item + .trust__item {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
 }
 
-.trust__item {
-  display: block;
-}
+@media (min-width: 64rem) {
+  .trust {
+    gap: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--rule);
+    padding-inline-start: clamp(1.5rem, 2.4vw, 2.25rem);
+    /* Le filet court sur toute la hauteur du corps, et non sur celle des trois
+       notes. Arrêté sous la dernière, il s'interrompait au milieu du texte
+       qu'il est censé border : un trait qui finit en l'air se lit comme une
+       coupure, pas comme une marge. */
+    align-self: stretch;
+    align-content: start;
+  }
 
-.trust__item .icon {
-  display: none;
+  /* La gouttière tombe à zéro dans la marge : c'est la marge qui écarte, pas la
+     grille. L'écart au-dessus du filet revient donc en marge propre. */
+  .trust__item + .trust__item {
+    margin-block-start: 1.25rem;
+  }
 }
 
 .trust__item strong {
   display: block;
   font-family: var(--title);
-  font-size: 1.125rem;
+  font-size: 1.1875rem;
   font-weight: 400;
+}
+
+html[lang='ar'] .trust__item strong {
+  font-size: 1.3125rem;
 }
 
 .trust__item span {
   display: block;
-  margin-block-start: 0.2rem;
+  margin-block-start: 0.25rem;
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: var(--voice-md);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-soft);
-}
-
-html[lang='ar'] .trust__item span {
-  letter-spacing: 0;
-  font-size: 0.875rem;
 }
 
 /* ============================================================ planches ==== */
@@ -560,6 +697,12 @@ html[lang='ar'] .trust__item span {
 
 .plate__frame {
   border: 1px solid var(--rule);
+  /* Le seul blanc franc de la feuille, et le seul qui ne soit pas une borne de
+     `color-mix`. Il est voulu : le passe-partout d'une planche est un carton
+     neutre, et une capture d'application posée sur un fond crème prendrait
+     cette chaleur pour la sienne — on ne peut plus lire l'ambiance de l'objet
+     photographié. C'est une propriété du support, comme le blanc de
+     `@media print` plus bas, et non une seconde teinte de la palette. */
   background: #ffffff;
   padding: 0.5rem;
 }
@@ -574,17 +717,19 @@ html[lang='ar'] .trust__item span {
   padding-block-start: 0.55rem;
   border-block-start: 1px solid var(--rule);
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
+  font-size: var(--voice-md);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-soft);
   font-variant-numeric: normal;
 }
 
-html[lang='ar'] .plate__caption {
-  letter-spacing: 0;
-  font-size: 0.875rem;
-}
+/* Deux planches de même format, donc deux colonnes égales.
 
+   Elles étaient en 1,35 contre 1 : les deux captures faisant 1280 × 800, la
+   seconde était rendue plus petite sans qu'aucune raison ne le dise, et son
+   filet de légende tombait quatre-vingts pixels plus haut que l'autre. Deux
+   planches en regard s'alignent sur un même trait — c'est tout l'intérêt de
+   les mettre en regard. */
 .plates {
   inline-size: var(--column);
   margin-inline: auto;
@@ -595,7 +740,7 @@ html[lang='ar'] .plate__caption {
 
 @media (min-width: 52rem) {
   .plates {
-    grid-template-columns: 1.35fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
 }
@@ -622,16 +767,22 @@ html[lang='ar'] .plate__caption {
 }
 
 .section-head__lede {
-  margin-block-start: 0.75rem;
+  margin-block-start: 0.85rem;
   color: var(--ink-soft);
   max-inline-size: 56ch;
 }
 
-/* Un sommaire, pas une grille de cartes : titre en vedette, texte en regard,
-   un filet entre chaque entrée. La cellule identique répétée quatre fois est
-   précisément ce qu'on est venu retirer. */
+/* Un sommaire, pas une grille de cartes : folio en marge, titre en vedette,
+   texte en regard, un filet entre chaque entrée. La cellule identique répétée
+   quatre fois est précisément ce qu'on est venu retirer.
+
+   Le folio est ce qui manquait pour que ce soit un sommaire et non quatre
+   paragraphes à la file : quatre entrées sans numéro se comptent, quatre
+   entrées foliotées se parcourent. Il est composé par compteur, donc aucune
+   balise ne le porte, et il s'écrit dans les chiffres de la langue. */
 .features__grid {
   display: grid;
+  counter-reset: folio;
 }
 
 .feature {
@@ -639,6 +790,7 @@ html[lang='ar'] .plate__caption {
   gap: 0.5rem 3rem;
   padding-block: clamp(1.75rem, 4vw, 2.5rem);
   border-block-start: 1px solid var(--rule);
+  counter-increment: folio;
 }
 
 .feature:last-child {
@@ -647,21 +799,37 @@ html[lang='ar'] .plate__caption {
 
 @media (min-width: 52rem) {
   .feature {
-    grid-template-columns: 22rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
   }
-}
-
-.feature__icon {
-  display: none;
 }
 
 .feature__title {
   font-size: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
 }
 
+/* `/ ''` retire le folio de ce qu'annonce un lecteur d'écran : c'est un repère
+   de composition, pas un mot du titre. Là où la syntaxe n'est pas comprise, la
+   déclaration entière est ignorée et le folio n'apparaît pas — une absence,
+   jamais un doublon lu à voix haute. */
+.feature__title::before {
+  content: counter(folio, folio-latin) / '';
+  display: block;
+  margin-block-end: 0.6rem;
+  font-family: var(--margin-voice);
+  font-size: var(--voice-sm);
+  font-weight: var(--voice-weight);
+  letter-spacing: var(--voice-tracking);
+  font-variant-numeric: lining-nums;
+  color: var(--ink-faint);
+}
+
+html[lang='ar'] .feature__title::before {
+  content: counter(folio, folio-arabic) / '';
+}
+
 .feature__body {
   color: var(--ink-soft);
-  max-inline-size: 58ch;
+  max-inline-size: var(--measure);
 }
 
 .feature__media {
@@ -672,7 +840,8 @@ html[lang='ar'] .plate__caption {
 @media (min-width: 52rem) {
   .feature__media {
     grid-column: 2;
-    margin-block-start: 1.25rem;
+    margin-block-start: 1.5rem;
+    max-inline-size: 34rem;
   }
 }
 
@@ -688,15 +857,10 @@ html[lang='ar'] .plate__caption {
 
 .lead__title {
   font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.5rem);
-  letter-spacing: -0.018em;
-}
-
-html[lang='ar'] .lead__title {
-  letter-spacing: 0;
 }
 
 .lead__text {
-  margin-block-start: 0.9rem;
+  margin-block-start: 0.95rem;
   max-inline-size: var(--measure);
   color: var(--ink-soft);
 }
@@ -717,7 +881,7 @@ html[lang='ar'] .lead__title {
 
 @media (min-width: 60rem) {
   .download {
-    grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+    grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr);
     align-items: start;
   }
 }
@@ -727,7 +891,7 @@ html[lang='ar'] .lead__title {
 }
 
 .platform {
-  padding-block: clamp(1.5rem, 4vw, 2rem);
+  padding-block: clamp(1.75rem, 4vw, 2.25rem);
   border-block-start: 1px solid var(--rule);
 }
 
@@ -743,19 +907,13 @@ html[lang='ar'] .lead__title {
 }
 
 .platform__recommended {
-  margin-block-end: 0.5rem;
+  margin-block-end: 0.55rem;
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
+  font-size: var(--voice-sm);
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--primary);
-}
-
-html[lang='ar'] .platform__recommended {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
 }
 
 .platform__title {
@@ -766,6 +924,10 @@ html[lang='ar'] .platform__recommended {
   font-size: 1.5rem;
   font-weight: 400;
   margin-block-end: 1.25rem;
+}
+
+html[lang='ar'] .platform__title {
+  font-size: 1.75rem;
 }
 
 .platform__title .icon {
@@ -792,14 +954,25 @@ html[lang='ar'] .platform__recommended {
   max-inline-size: 52ch;
 }
 
+/* Une entrée de sommaire : le nom, puis la taille au bout de la ligne.
+
+   Elle n'était pas mesurée, et la colonne des plateformes fait sept cents
+   pixels : la taille partait à l'autre bout de l'écran, si loin du fichier
+   qu'elle n'en disait plus rien. Une taille appartient au fichier qu'elle
+   mesure — elle se pose au bout de *sa* ligne, pas au bout de la page. */
 .asset__link {
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
+  max-inline-size: 24rem;
   font-family: var(--title);
   font-size: 1.1875rem;
   color: var(--primary);
   text-decoration: none;
+}
+
+html[lang='ar'] .asset__link {
+  font-size: 1.3125rem;
 }
 
 .asset__link .icon {
@@ -815,30 +988,25 @@ html[lang='ar'] .platform__recommended {
 .asset__size {
   margin-inline-start: auto;
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-faint);
   font-variant-numeric: normal;
 }
 
 .asset__hint {
-  margin-block-start: 0.25rem;
+  margin-block-start: 0.3rem;
   color: var(--ink-soft);
   font-size: 0.9375rem;
   max-inline-size: 52ch;
 }
 
 .asset__digest {
-  margin-block-start: 0.5rem;
+  margin-block-start: 0.55rem;
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .asset__digest {
-  letter-spacing: 0;
-  font-size: 0.8125rem;
 }
 
 .asset__digest summary {
@@ -848,7 +1016,7 @@ html[lang='ar'] .asset__digest {
 .asset__sha {
   display: block;
   margin-block-start: 0.4rem;
-  padding: 0.5rem 0.65rem;
+  padding: 0.55rem 0.7rem;
   background: var(--paper-deep);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.6875rem;
@@ -866,17 +1034,11 @@ html[lang='ar'] .asset__digest {
 
 .specs__title {
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
+  font-size: var(--voice-md);
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   margin-block-end: 1.25rem;
-}
-
-html[lang='ar'] .specs__title {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.9375rem;
 }
 
 .specs__list {
@@ -888,7 +1050,7 @@ html[lang='ar'] .specs__title {
 
 .specs__row {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.2rem;
   padding-block-end: 1rem;
   border-block-end: 1px solid var(--rule);
 }
@@ -900,16 +1062,10 @@ html[lang='ar'] .specs__title {
 
 .specs__row dt {
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .specs__row dt {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
 }
 
 .specs__row dd {
@@ -924,10 +1080,10 @@ html[lang='ar'] .specs__row dt {
    parcourt après avoir cliqué. */
 .notice {
   margin-block-start: 1.5rem;
-  padding: 1.1rem 1.25rem;
+  padding: 1.1rem 1.35rem;
   max-inline-size: 56ch;
   background: color-mix(in srgb, var(--secondary-container) 45%, var(--paper));
-  border-inline-start: 1px solid var(--secondary);
+  border-inline-start: 2px solid var(--secondary);
 }
 
 .notice__title {
@@ -937,7 +1093,11 @@ html[lang='ar'] .specs__row dt {
   font-family: var(--title);
   font-size: 1.0625rem;
   font-weight: 400;
-  margin-block-end: 0.4rem;
+  margin-block-end: 0.45rem;
+}
+
+html[lang='ar'] .notice__title {
+  font-size: 1.1875rem;
 }
 
 .notice__title .icon {
@@ -946,8 +1106,12 @@ html[lang='ar'] .specs__row dt {
 
 .notice__body {
   font-size: 0.9375rem;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--ink-soft);
+}
+
+html[lang='ar'] .notice__body {
+  line-height: 1.85;
 }
 
 /* ============================================================ versions ==== */
@@ -958,9 +1122,14 @@ html[lang='ar'] .specs__row dt {
   padding-block-end: clamp(3.5rem, 8vw, 6rem);
 }
 
+/* La frise tient toute la colonne, et c'est la **note** qui est mesurée.
+
+   Plafonnée à 54rem, elle laissait ses filets s'arrêter vingt rems avant celui
+   du chapeau, juste au-dessus : deux bords différents à trois pixels l'un de
+   l'autre, que rien ne justifiait. Un filet de journal et un filet de chapeau
+   se répondent ou ne se posent pas. */
 .timeline {
   display: grid;
-  max-inline-size: 54rem;
 }
 
 /* Une entrée de journal : filet, numéro de version en vedette, date en marge.
@@ -1004,17 +1173,11 @@ html[lang='ar'] .specs__row dt {
 
 .chip {
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
+  font-size: var(--voice-sm);
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .chip {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
 }
 
 .chip--on {
@@ -1022,17 +1185,12 @@ html[lang='ar'] .chip {
 }
 
 .release__date {
-  margin-block-start: 0.3rem;
+  margin-block-start: 0.35rem;
   font-family: var(--margin-voice);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
+  font-size: var(--voice-sm);
+  letter-spacing: var(--voice-tracking);
   color: var(--ink-faint);
   font-variant-numeric: normal;
-}
-
-html[lang='ar'] .release__date {
-  letter-spacing: 0;
-  font-size: 0.875rem;
 }
 
 .release__group + .release__group {
@@ -1041,21 +1199,11 @@ html[lang='ar'] .release__date {
 
 .release__kind {
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
+  font-size: var(--voice-sm);
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .release__kind {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8125rem;
-}
-
-.release__kind .icon {
-  display: none;
 }
 
 .release__group--added .release__kind,
@@ -1074,7 +1222,7 @@ html[lang='ar'] .release__kind {
 }
 
 .release__items li + li {
-  margin-block-start: 0.4rem;
+  margin-block-start: 0.45rem;
 }
 
 .release__items li::marker {
@@ -1091,7 +1239,7 @@ html[lang='ar'] .release__kind {
 
 /* ============================================================ colophon ==== */
 
-/* Le pied est une trisagion de fin de livre : qui édite, sous quelle licence,
+/* Le pied est un colophon de fin de livre : qui édite, sous quelle licence,
    d'où vient le texte, en quels caractères il est composé. */
 .footer {
   border-block-start: 1px solid var(--rule);
@@ -1113,17 +1261,11 @@ html[lang='ar'] .release__kind {
 
 .footer__heading {
   font-family: var(--margin-voice);
-  font-size: 0.6875rem;
+  font-size: var(--voice-sm);
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: var(--voice-tracking);
+  text-transform: var(--voice-case);
   color: var(--ink-faint);
-}
-
-html[lang='ar'] .footer__heading {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.875rem;
 }
 
 .footer__line {
@@ -1138,8 +1280,8 @@ html[lang='ar'] .footer__heading {
   align-items: center;
   gap: 0.4rem;
   font-family: var(--margin-voice);
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
+  font-size: var(--voice-md);
+  letter-spacing: var(--voice-tracking);
   color: var(--primary);
   text-decoration: none;
 }
@@ -1156,15 +1298,15 @@ html[lang='ar'] .footer__heading {
 }
 
 .footer__note + .footer__note {
-  margin-block-start: 0.3rem;
+  margin-block-start: 0.35rem;
 }
 
 .footer__note--faint {
   color: var(--ink-faint);
-  font-size: 0.8125rem;
+  font-size: var(--voice-md);
 }
 
-/* ============================================================ mouvement ==== */
+/* =========================================================== mouvement ==== */
 
 /* Un seul moment écrit : le filet du bandeau se tire une fois, au chargement.
    Rien d'autre ne bouge — une page de titre qui s'anime section par section
@@ -1192,12 +1334,14 @@ html[dir='rtl'] .badge::after {
     animation: none;
   }
 
-  .button {
+  .button,
+  .topbar__link,
+  .lang__link {
     transition: none;
   }
 }
 
-/* ============================================================= impression ==== */
+/* ========================================================== impression ==== */
 
 @media print {
   .topbar__nav,

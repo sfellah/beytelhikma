@@ -141,9 +141,29 @@ test('les trois voix typographiques sont posées', async () => {
   assert.match(css, /--title: 'EB Garamond'/);
   assert.match(css, /--text: 'Literata'/);
   assert.match(css, /--margin-voice: 'IBM Plex Sans Arabic'/);
-  // L'arabe n'a pas d'équivalent à la coupure serif/sans latine : Amiri porte
-  // le titre et le texte.
+  // La coupure display/texte existe aussi en arabe — elle n'est pas serif
+  // contre sans, elle est naskh contre grotesque humaniste. Amiri porte le
+  // titre, où son autorité de page de garde se voit ; il portait aussi le
+  // texte, et une page entière composée à petit corps dans une face taillée
+  // pour l'in-octavo se lit lentement. Plex Sans Arabic prend le texte.
   assert.match(css, /html\[lang='ar'\][^}]*--title: 'Amiri'/);
+  assert.match(css, /html\[lang='ar'\][^}]*--text: 'IBM Plex Sans Arabic'/);
+});
+
+test('l’arabe se compose par des axes, jamais par annulation du latin', async () => {
+  // Chaque règle de marge s'écrivait deux fois : une pour le latin, une pour
+  // l'arabe où l'on annulait la capitale et l'interlettrage. Quatorze blocs qui
+  // ne disaient rien de l'arabe — seulement « pas de latin ici ». Les quatre
+  // axes portent la différence, et une règle qui repose `text-transform: none`
+  // hors du bloc racine est le retour de l'ancienne façon.
+  const css = await read('styles/site.css');
+  const root = css.slice(css.indexOf("html[lang='ar'] {"));
+  const head = root.slice(0, root.indexOf('}'));
+  for (const axis of ['--voice-case', '--voice-tracking', '--voice-sm', '--title-tracking']) {
+    assert.match(head, new RegExp(`${axis}:`), `axe manquant : ${axis}`);
+  }
+  const overrides = [...css.matchAll(/html\[lang='ar'\][^{]+\{[^}]*text-transform:/g)];
+  assert.deepEqual(overrides, [], 'la capitale se règle par --voice-case, pas par annulation');
 });
 
 test('les tics du gabarit de démonstration ne reviennent pas', async () => {
@@ -165,6 +185,53 @@ test('polices, marque et captures sont présentes', async () => {
   await fs.access(path.join(out, 'assets', 'brand', 'mark.png'));
   await fs.access(path.join(out, 'assets', 'shots', 'home.png'));
   await fs.access(path.join(out, 'assets', 'site.js'));
+});
+
+test('une planche réserve la place qu’elle prendra vraiment', async () => {
+  // `width`/`height` n'existent que pour empêcher le saut de mise en page. Ils
+  // annonçaient 1280 × 800 alors que les quatre captures font 1360 × 900 : le
+  // navigateur réservait la hauteur du mauvais rapport, puis repeignait vingt
+  // pixels plus bas — et les deux planches de tête ne sont pas différées, donc
+  // le saut tombait juste sous la ligne de flottaison. Un attribut faux produit
+  // exactement le défaut qu'il existe pour éviter, et rien ne le disait.
+  const html = await read('en/index.html');
+  const planches = [...html.matchAll(/src="([^"]*assets\/shots\/([^"]+))"[^>]*width="(\d+)" height="(\d+)"/g)];
+  assert.ok(planches.length >= 3, 'aucune planche trouvée dans la page');
+  for (const [, lien, nom, largeur, hauteur] of planches) {
+    const png = await fs.readFile(path.join(out, lien.slice(BASE_PATH.length)));
+    // Les dimensions d'un PNG vivent dans l'en-tête IHDR, aux octets 16 et 20.
+    assert.equal(png.readUInt32BE(16), Number(largeur), `largeur annoncée fausse : ${nom}`);
+    assert.equal(png.readUInt32BE(20), Number(hauteur), `hauteur annoncée fausse : ${nom}`);
+  }
+});
+
+test('la couleur de barre du navigateur est le papier, jamais une seconde valeur', async () => {
+  // `<meta name="theme-color">` ne peut pas prendre un `var()` : la valeur y est
+  // forcément recopiée à la main. C'est donc le seul endroit du site où la règle
+  // « rien n'est inventé en couleur » ne peut pas se tenir toute seule — on la
+  // tient ici. Changer les 34 % de `--paper` sans toucher au gabarit laisserait
+  // la barre du navigateur sur l'ancien papier, en silence.
+  const site = await read('styles/site.css');
+  const [, part] = site.match(/--paper: color-mix\(in srgb, var\(--secondary-container\) (\d+)%, #ffffff\)/);
+
+  const tokens = await read('styles/tokens.css');
+  const racine = tokens.slice(tokens.indexOf(':root'), tokens.indexOf('}', tokens.indexOf(':root')));
+  const [, sable] = racine.match(/--secondary-container:\s*#([0-9a-f]{6})/i);
+
+  const ratio = Number(part) / 100;
+  const papier = `#${[0, 1, 2]
+    .map((canal) => parseInt(sable.slice(canal * 2, canal * 2 + 2), 16))
+    .map((valeur) => Math.round(valeur * ratio + 255 * (1 - ratio)))
+    .map((valeur) => valeur.toString(16).padStart(2, '0'))
+    .join('')}`;
+
+  for (const locale of SITE_LOCALES) {
+    assert.match(
+      await read(`${locale.key}/index.html`),
+      new RegExp(`name="theme-color" content="${papier}"`, 'i'),
+      `la barre du navigateur n’est plus le papier (${papier} attendu)`,
+    );
+  }
 });
 
 test('chaque fichier référencé par une page existe vraiment', async () => {
@@ -202,6 +269,25 @@ test('les tailles sont en chiffres arabes-indiens sur les pages arabes', async (
   assert.match(arabic, /٩٤ م\.ب/);
   const french = await read('fr/download/index.html');
   assert.match(french, /94 Mo/);
+});
+
+test('les dates aussi : une page arabe n’a qu’un système de chiffres', async () => {
+  // `Intl.DateTimeFormat('ar')` rend « 1 أغسطس 2026 » — des chiffres latins au
+  // milieu d'une phrase arabe, à deux lignes de tailles déjà converties. Deux
+  // systèmes dans une même page se lisent comme une coquille, pas comme un
+  // choix. `-u-nu-arab` demande les chiffres de la langue.
+  const arabic = await read('ar/releases/index.html');
+  assert.match(arabic, /١ أغسطس ٢٠٢٦/);
+  assert.doesNotMatch(arabic, /1 أغسطس 2026/);
+  // Le français et l'anglais ne bougent pas : leur locale n'a rien demandé.
+  assert.match(await read('fr/releases/index.html'), /1 août 2026/);
+  // Le numéro de version, lui, **reste latin** dans la même phrase, et ce
+  // n'est pas un oubli : c'est un identifiant. Il nomme un tag, un fichier
+  // (`Setup 0.3.0.exe`) et l'ancre `#v0.3.0` de cette page même ; on le
+  // recopie dans un rapport de bug. La règle du projet tient en deux mots —
+  // une quantité et une date se lisent donc se convertissent, un identifiant
+  // se recopie donc ne se convertit jamais.
+  assert.match(arabic, /id="v0\.3\.0"/);
 });
 
 test('les notes de version sont rendues dans la langue de la page', async () => {

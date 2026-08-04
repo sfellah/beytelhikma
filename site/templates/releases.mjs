@@ -21,8 +21,13 @@ function notesFor(entry, locale, t) {
 
   return ordered
     .map(
+      // Le genre est écrit, pas tracé. Il portait un `icon(section.kind)` que la
+      // feuille masquait aussitôt (`.release__kind .icon { display: none }`) :
+      // le tracé partait dans chacune des neuf pages pour n'y être jamais vu.
+      // Une règle qui cache ce qu'un gabarit vient d'écrire est un reste des
+      // deux côtés — on retire les deux, pas le seul qui se voit.
       (section) => `<div class="release__group release__group--${escapeHtml(section.kind)}">
-        <h3 class="release__kind">${icon(section.kind)}${escapeHtml(t(`changelog.${section.kind}`))}</h3>
+        <h3 class="release__kind">${escapeHtml(t(`changelog.${section.kind}`))}</h3>
         <ul class="release__items">
           ${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('\n          ')}
         </ul>

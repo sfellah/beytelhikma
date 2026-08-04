@@ -9,7 +9,6 @@
  */
 export default {
   'site.name': 'Beyt El Hikma',
-  'site.tagline': 'La bibliothèque arabe, hors ligne',
 
   'format.size': '{value} Mo',
 
@@ -80,11 +79,7 @@ export default {
     'La première version est en préparation. Le code est déjà là — suivez le dépôt '
     + 'pour être prévenu.',
   'download.recommended': 'Recommandé pour votre système',
-  'download.other': 'Autres plateformes',
   'download.checksum': 'Empreinte SHA-512',
-  'download.checksum.copy': 'Copier',
-  'download.checksum.copied': 'Copié',
-  'download.size': 'Taille',
 
   'platform.windows': 'Windows',
   'platform.linux': 'Linux',
@@ -152,11 +147,10 @@ export default {
   'changelog.removed': 'Retraits',
   'changelog.security': 'Sécurité',
 
-  'footer.source': 'Code source',
   'footer.issues': 'Signaler un problème',
   'footer.license': 'Publié sous licence AGPL-3.0',
   'footer.corpus': 'Corpus issu de la Bibliothèque Shamela',
   'footer.built': 'Version {version} du site',
   'colophon.heading': 'Colophon',
-  'colophon.typefaces': 'Composé en EB Garamond, Literata et Amiri, toutes embarquées.',
+  'colophon.typefaces': 'Composé en EB Garamond, Literata et IBM Plex Sans Arabic, toutes embarquées.',
 };

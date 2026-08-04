@@ -1,7 +1,6 @@
 /** The English site strings. Keys mirror `fr.mjs` exactly — a test enforces it. */
 export default {
   'site.name': 'Beyt El Hikma',
-  'site.tagline': 'The Arabic library, offline',
 
   'format.size': '{value} MB',
 
@@ -70,11 +69,7 @@ export default {
     'The first release is in preparation. The code is already there — watch the repository '
     + 'to be notified.',
   'download.recommended': 'Recommended for your system',
-  'download.other': 'Other platforms',
   'download.checksum': 'SHA-512 checksum',
-  'download.checksum.copy': 'Copy',
-  'download.checksum.copied': 'Copied',
-  'download.size': 'Size',
 
   'platform.windows': 'Windows',
   'platform.linux': 'Linux',
@@ -139,11 +134,10 @@ export default {
   'changelog.removed': 'Removed',
   'changelog.security': 'Security',
 
-  'footer.source': 'Source code',
   'footer.issues': 'Report an issue',
   'footer.license': 'Published under the AGPL-3.0 licence',
   'footer.corpus': 'Corpus from the Shamela Library',
   'footer.built': 'Site build {version}',
   'colophon.heading': 'Colophon',
-  'colophon.typefaces': 'Set in EB Garamond, Literata and Amiri, all self-hosted.',
+  'colophon.typefaces': 'Set in EB Garamond, Literata and IBM Plex Sans Arabic, all self-hosted.',
 };

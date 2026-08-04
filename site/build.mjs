@@ -273,11 +273,15 @@ export async function build(options = {}) {
   for (const locale of SITE_LOCALES) {
     const catalog = (await import(`./locales/${locale.key}.mjs`)).default;
     const t = (key, params) => translate(catalog, key, params, digitsLocale(locale.key));
-    const formatter = new Intl.DateTimeFormat(locale.key, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    // `-u-nu-arab` demande les chiffres arabes-indiens : `Intl` rend sinon
+    // « 1 أغسطس 2026 », des chiffres latins au milieu d'une phrase arabe, sur
+    // une page dont tous les autres nombres — tailles, décomptes, versions du
+    // catalogue — sont déjà convertis par `translate`. Deux systèmes de
+    // chiffres dans une même ligne se lisent comme une coquille.
+    const formatter = new Intl.DateTimeFormat(
+      digitsLocale(locale.key) === 'ar' ? `${locale.key}-u-nu-arab` : locale.key,
+      { year: 'numeric', month: 'long', day: 'numeric' },
+    );
     const fmtDate = (iso) => (iso ? formatter.format(new Date(iso)) : '—');
     const count = formatCount(books, locale.key);
 

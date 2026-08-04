@@ -48,7 +48,16 @@ function header(locale, page, t) {
       ${link('index', 'nav.home')}
       ${link('releases', 'nav.releases')}
       ${languageNav(locale, page, t)}
-      <a class="button button--small" href="${url(pagePath(locale, 'download'))}">${icon('download')}${escapeHtml(t('nav.download'))}</a>
+      ${/* Sur `/download/`, ce bouton proposait la page où l'on se trouve déjà :
+           le seul appel de la barre haute, et il ne menait nulle part. Il devient
+           un repère — `aria-current` pour qui écoute, et l'encre du texte au lieu
+           de celle de l'appel pour qui voit, exactement comme `.topbar__link--on`
+           deux lignes plus haut. */ ''}
+      <a${attrs({
+        class: `button button--small${page === 'download' ? ' button--on' : ''}`,
+        href: url(pagePath(locale, 'download')),
+        'aria-current': page === 'download' ? 'page' : null,
+      })}>${icon('download')}${escapeHtml(t('nav.download'))}</a>
     </nav>
   </div>
 </header>`;

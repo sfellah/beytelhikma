@@ -110,9 +110,16 @@ function plate(name, caption, { className = '', eager = false } = {}) {
     ? 'loading="eager" fetchpriority="high"'
     : 'loading="lazy" fetchpriority="low"';
 
+  // `width`/`height` sont là **pour** réserver la place et empêcher le saut de
+  // mise en page. Ils annonçaient 1280 × 800 quand les quatre fichiers font
+  // 1360 × 900 : le navigateur réservait la hauteur du mauvais rapport et
+  // repeignait 20 px plus bas à l'arrivée de l'image — sur les deux planches
+  // non différées, c'est-à-dire juste sous la ligne de flottaison. Un attribut
+  // faux ne se contente pas de ne pas servir, il produit exactement le défaut
+  // qu'il existe pour éviter. `test/build.test.js` relit l'en-tête PNG.
   return `<figure class="plate${className ? ` ${className}` : ''}">
         <div class="plate__frame">
-          <img class="plate__shot" src="${url(`assets/shots/${name}`)}" alt="" ${loading} decoding="async" width="1280" height="800" />
+          <img class="plate__shot" src="${url(`assets/shots/${name}`)}" alt="" ${loading} decoding="async" width="1360" height="900" />
         </div>
         <figcaption class="plate__caption">${escapeHtml(caption)}</figcaption>
       </figure>`;

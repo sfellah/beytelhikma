@@ -1,7 +1,6 @@
 /** كلمات الموقع بالعربية. المفاتيح مطابقة لـ `fr.mjs` — يتحقّق من ذلك اختبار. */
 export default {
   'site.name': 'بيت الحكمة',
-  'site.tagline': 'المكتبة العربية، دون اتصال',
 
   'format.size': '{value} م.ب',
 
@@ -67,11 +66,7 @@ export default {
   'download.lede.none': 'لا إصدار منشور بعد.',
   'download.empty': 'الإصدار الأول قيد الإعداد. الشيفرة متاحة — تابع المستودع ليصلك الخبر.',
   'download.recommended': 'الموصى به لنظامك',
-  'download.other': 'أنظمة أخرى',
   'download.checksum': 'بصمة SHA-512',
-  'download.checksum.copy': 'نسخ',
-  'download.checksum.copied': 'نُسخت',
-  'download.size': 'الحجم',
 
   'platform.windows': 'ويندوز',
   'platform.linux': 'لينكس',
@@ -136,11 +131,10 @@ export default {
   'changelog.removed': 'ما أُزيل',
   'changelog.security': 'أمان',
 
-  'footer.source': 'الشيفرة المصدرية',
   'footer.issues': 'الإبلاغ عن مشكلة',
   'footer.license': 'منشور برخصة AGPL-3.0',
   'footer.corpus': 'المدوّنة مصدرها المكتبة الشاملة',
   'footer.built': 'بناء الموقع {version}',
   'colophon.heading': 'الترقيمة',
-  'colophon.typefaces': 'رُكِّب بخطوط أميري وEB Garamond وLiterata، وكلّها مضمَّنة.',
+  'colophon.typefaces': 'رُكِّب بخطّي أميري وIBM Plex Sans Arabic، وكلاهما مضمَّن.',
 };
