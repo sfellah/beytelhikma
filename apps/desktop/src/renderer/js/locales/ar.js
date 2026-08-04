@@ -568,6 +568,8 @@ export default {
   'nav.curricula': 'المسارات',
   'nav.authors': 'المؤلفون',
   'nav.settings': 'الإعدادات',
+  // Les ouvrages de référence. Rien n'est compté : voir `shared/popular.js`.
+  'popular.badge': 'من أشهر الكتب',
   'curricula.title': 'مسارات طلب العلم',
   'curricula.subtitle': 'متون مرتّبة تُقرأ بالتدرّج، من المتن إلى شرحه إلى المطوّل',
   'curricula.empty': 'لا يوافق أيّ منهج الفهرس المثبّت',

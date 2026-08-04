@@ -73,3 +73,26 @@ test('aucune vue ne redéclare la liste', () => {
     );
   }
 });
+
+test('la carte de livre porte la pastille, et elle est lisible sans la voir', () => {
+  const card = read('../src/renderer/js/components/book-card.js');
+  assert.ok(card.includes('isPopular'), 'book-card doit interroger isPopular');
+  assert.ok(card.includes('book-card__popular'), 'la pastille doit porter sa classe');
+  assert.ok(
+    card.includes("t('popular.badge')"),
+    'le libellé vient du catalogue de chaînes, jamais du code',
+  );
+  assert.ok(
+    /'aria-label': t\('popular\.badge'\)/.test(card),
+    'une pastille muette ne dit rien à qui ne voit pas l’étoile',
+  );
+});
+
+test('la pastille ne cite aucune teinte, seulement des jetons', () => {
+  const css = read('../src/renderer/styles/components.css');
+  const bloc = css.slice(css.indexOf('.book-card__popular {'));
+  assert.ok(bloc.startsWith('.book-card__popular {'), 'le bloc CSS doit exister');
+  const regle = bloc.slice(0, bloc.indexOf('}'));
+  assert.ok(!/#[0-9a-fA-F]{3,8}/.test(regle), 'aucune couleur en dur');
+  assert.ok(!/\b(left|right)\s*:/.test(regle), 'propriétés logiques seulement');
+});

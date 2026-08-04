@@ -560,6 +560,8 @@ export default {
   'nav.curricula': 'Study paths',
   'nav.authors': 'Authors',
   'nav.settings': 'Settings',
+  // The reference works. Nothing is measured: see `shared/popular.js`.
+  'popular.badge': 'Popular',
   'curricula.title': 'Paths of study',
   'curricula.subtitle': 'Graded readings, from the short matn to its commentary to the reference work',
   'curricula.empty': 'No curriculum matches the installed catalogue',

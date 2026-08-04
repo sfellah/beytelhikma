@@ -423,6 +423,24 @@
   color: var(--ink-mute);
 }
 
+/* Les ouvrages de référence. En bas, du côté où commence la ligne : le haut est
+   déjà pris — l'état d'installation d'un bord, la pastille « جديد » de l'autre.
+   La teinte suit le thème comme le reste ; citée en dur, elle disparaîtrait en
+   nuit, ce qui est arrivé une fois à `.stat-card__note`. */
+.book-card__popular {
+  position: absolute;
+  bottom: var(--space-sm);
+  inset-inline-start: var(--space-sm);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  box-shadow: var(--shadow-sm);
+}
+
 /* L'étiquette porte la cible du pouce, la case garde sa taille : c'est la
    convention du projet (la case du tableau des téléchargements suit la même),
    et grossir la case elle-même ferait une pastille énorme sur une vignette de

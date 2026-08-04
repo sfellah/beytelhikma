@@ -1,3 +1,4 @@
+import { isPopular } from '../../../shared/popular.js';
 import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { icon } from '../icons.js';
@@ -79,6 +80,21 @@ export function bookCard(
       cover(book),
       badge && h('span', { class: 'book-card__badge' }, badge),
       statusBadge(book.downloadStatus),
+      // La pastille des ouvrages de référence. Elle est **à côté** de la
+      // couverture et non dessus : la couverture composée porte déjà trois
+      // canaux de sens — la forme de l'objet, la famille de la discipline, la
+      // patine du siècle — tous tirés du corpus. Celui-ci vient de nous, et un
+      // quatrième canal peint sur la couverture se lirait comme une donnée.
+      isPopular(book.editionId) &&
+        h(
+          'span',
+          {
+            class: 'book-card__popular',
+            title: t('popular.badge'),
+            'aria-label': t('popular.badge'),
+          },
+          icon('star', { size: 12 }),
+        ),
       // L'étiquette porte la cible de 44 px, la case garde sa taille : c'est la
       // convention du projet, et grossir la case ferait une pastille énorme sur
       // une vignette de 150 px.
