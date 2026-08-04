@@ -14,7 +14,8 @@ import { reveal, sectionHead } from '../components/section.js';
 import { asyncView } from '../components/states.js';
 
 /**
- * Accueil : reprise de lecture, étagère, cursus, disciplines, siècles,
+ * Accueil : reprise de lecture, étagère, ouvrages de référence, cursus,
+ * disciplines, siècles,
  * nouveautés, auteur en vedette — dans cet ordre, qui va de ce qu'on a déjà
  * ouvert vers ce qu'on n'a pas encore vu.
  */
@@ -25,7 +26,7 @@ export function homeView(host) {
 }
 
 async function load() {
-  const [resume, library, recent, curricula, disciplines, eras, undated, featured] =
+  const [resume, library, recent, popular, curricula, disciplines, eras, undated, featured] =
     await Promise.all([
       repository.getContinueReading(),
       // L'étagère est une bande, pas un inventaire : en demander une page évite
@@ -33,6 +34,10 @@ async function load() {
       // que quatre. Un de plus que `SHELF_LIMIT` : la reprise en sort.
       repository.getLibrary({ limit: SHELF_LIMIT + 1, sort: 'recent' }),
       repository.getRecentBooks({ limit: 12 }),
+      // Les ouvrages de référence sont une liste close et courte, comme les
+      // cursus : il n'y a pas de page à demander. Pas de `catch` non plus, pour
+      // la même raison — voir juste en dessous.
+      repository.getPopularBooks(),
       // Les cursus sont une liste close et courte : il n'y a pas de page à
       // demander, et c'est la vue qui n'en montre que quelques-uns. Pas de
       // `catch` : l'accueil échoue déjà d'un bloc pour toutes ses autres
@@ -62,6 +67,7 @@ async function load() {
       .slice(0, SHELF_LIMIT),
     libraryTotal: library.total,
     recent,
+    popular,
     curricula,
     disciplines,
     eras: eras.filter((era) => era.bookCount > 0),
@@ -77,12 +83,14 @@ function render(data) {
     'div',
     { class: 'home' },
     // L'ordre va de ce qu'on a déjà ouvert vers ce qu'on n'a pas encore vu :
-    // la reprise, l'étagère, les cursus qu'on suit, puis le fonds — les
+    // la reprise, l'étagère, les ouvrages de référence, les cursus qu'on suit,
+    // puis le fonds — les
     // disciplines, les siècles, les nouveautés — et l'auteur en vedette.
     // Les nouveautés étaient en deuxième, avant tout ce qui est à soi.
     heroSection(data),
     // `data-reveal` 1 est libre : le héros compte pour deux blocs visuels.
     shelfSection(data.shelf, data.libraryTotal),
+    popularSection(data.popular.rows),
     curriculaSection(data.curricula),
     disciplinesSection(data.disciplines),
     erasSection(data.eras, data.undated),
@@ -325,6 +333,41 @@ function shelfRow({ book, percent: value, progress }) {
  */
 const CURRICULA_LIMIT = 3;
 
+// ----------------------------------------- les ouvrages de référence
+
+/**
+ * Une bande qui défile, pas une grille : vingt-trois cartes en grille
+ * pousseraient les cursus et les disciplines sous la ligne de flottaison sur un
+ * téléphone, pour une section qui ne dit qu'une chose.
+ *
+ * Aucun repli « voir tout » : la case des filtres de `/explore` fait déjà ce
+ * travail, et un écran `/popular` serait `/explore?popular=1` avec un titre —
+ * donc un second endroit à tenir pour la même requête.
+ *
+ * Une liste vide est une **réponse** : sur le jeu d'exemple aucun identifiant
+ * `sh-*` ne répond, et la section s'efface. C'est la règle des cursus.
+ */
+function popularSection(rows) {
+  if (!rows?.length) return null;
+
+  const { node, previous, next } = horizontalScroller({
+    items: rows.map((book) => bookCard(book, { action: 'open' })),
+  });
+
+  return h(
+    'section',
+    {
+      class: 'section-block recent',
+      'aria-labelledby': 'popular-title',
+      'data-reveal': 3,
+    },
+    sectionHead('popular-title', t('popular.title'), t('popular.subtitle'), [previous, next]),
+    h('div', { class: 'scroller-frame' }, node),
+  );
+}
+
+// ------------------------------------------------------------------ cursus
+
 /**
  * Les cursus en cours, les plus avancés d'abord.
  *
@@ -341,7 +384,7 @@ function curriculaSection(curricula) {
     {
       class: 'section-block',
       'aria-labelledby': 'curricula-title',
-      'data-reveal': 3,
+      'data-reveal': 4,
     },
     sectionHead(
       'curricula-title',
@@ -385,7 +428,7 @@ function recentSection(recent) {
     {
       class: 'section-block recent',
       'aria-labelledby': 'recent-title',
-      'data-reveal': 6,
+      'data-reveal': 7,
     },
     sectionHead('recent-title', t('home.recentTitle'), t('home.recentHint'), [previous, next]),
     h('div', { class: 'scroller-frame' }, node),
@@ -410,7 +453,7 @@ function disciplinesSection({ rows, total }) {
     {
       class: 'section-block disciplines-section',
       'aria-labelledby': 'disciplines-title',
-      'data-reveal': 4,
+      'data-reveal': 5,
     },
     sectionHead('disciplines-title', t('home.disciplinesTitle'), t('home.disciplinesHint')),
     h(
@@ -488,7 +531,7 @@ function erasSection(eras, undated) {
     {
       class: 'section-block eras',
       'aria-labelledby': 'eras-title',
-      'data-reveal': 5,
+      'data-reveal': 6,
     },
     sectionHead('eras-title', t('home.erasTitle'), t('home.erasHint')),
     h(
@@ -561,7 +604,7 @@ function featuredSection(featured, featuredBooks) {
     {
       class: 'section-block featured',
       'aria-labelledby': 'featured-title',
-      'data-reveal': 7,
+      'data-reveal': 8,
     },
     sectionHead('featured-title', t('home.featuredTitle'), t('home.featuredHint')),
     authorCard(featured, featuredBooks),

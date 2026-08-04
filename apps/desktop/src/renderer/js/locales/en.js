@@ -561,6 +561,8 @@ export default {
   'nav.authors': 'Authors',
   'nav.settings': 'Settings',
   // The reference works. Nothing is measured: see `shared/popular.js`.
+  'popular.title': 'Popular books',
+  'popular.subtitle': 'The reference works every discipline goes back to',
   'popular.badge': 'Popular',
   'curricula.title': 'Paths of study',
   'curricula.subtitle': 'Graded readings, from the short matn to its commentary to the reference work',

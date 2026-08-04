@@ -96,3 +96,36 @@ test('la pastille ne cite aucune teinte, seulement des jetons', () => {
   assert.ok(!/#[0-9a-fA-F]{3,8}/.test(regle), 'aucune couleur en dur');
   assert.ok(!/\b(left|right)\s*:/.test(regle), 'propriétés logiques seulement');
 });
+
+test('l’accueil demande les ouvrages de référence et les place avant les cursus', () => {
+  const home = read('../src/renderer/js/views/home.js');
+  assert.ok(home.includes('repository.getPopularBooks()'), 'la lecture doit être demandée');
+  assert.ok(
+    !/getPopularBooks\(\)\s*\.catch/.test(home),
+    'la lecture n’est pas rattrapée : un dépôt cassé ne doit pas disparaître en silence',
+  );
+  const rendu = home.slice(home.indexOf('function render(data)'));
+  const shelf = rendu.indexOf('shelfSection(');
+  const popular = rendu.indexOf('popularSection(');
+  const curricula = rendu.indexOf('curriculaSection(');
+  assert.ok(shelf > 0 && popular > 0 && curricula > 0);
+  assert.ok(shelf < popular, 'ce qui est à soi passe avant ce qu’on recommande');
+  assert.ok(popular < curricula, 'les ouvrages de référence passent avant les cursus');
+});
+
+test('la section s’efface quand le catalogue ne porte aucune des éditions', () => {
+  const home = read('../src/renderer/js/views/home.js');
+  const section = home.slice(home.indexOf('function popularSection('));
+  assert.ok(
+    /if \(!rows\?\.length\) return null;/.test(section.slice(0, 400)),
+    'une liste vide est une réponse : la section disparaît',
+  );
+});
+
+test('chaque bande de l’accueil a son propre rang d’apparition', () => {
+  // `data-reveal` est un **délai**, pas une clé : deux sections au même rang
+  // montent ensemble et la cascade se casse en son milieu.
+  const home = read('../src/renderer/js/views/home.js');
+  const rangs = [...home.matchAll(/'data-reveal': (\d+),/g)].map((m) => Number(m[1]));
+  assert.equal(new Set(rangs).size, rangs.length, 'deux sections partagent un rang');
+});
