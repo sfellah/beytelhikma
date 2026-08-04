@@ -27,7 +27,7 @@ npm run seed          # récupère la graine de catalogue depuis le bucket
 npm run release:win   # tests + graine + installeur NSIS et portable
 
 # application Android (depuis apps/mobile/)
-npm run verify        # parité des 67 méthodes du pont + écran de démarrage, hors appareil
+npm run verify        # parité des 69 méthodes du pont + écran de démarrage, hors appareil
 npm run prepare:android  # pose l'écran de démarrage dans le projet natif engendré
 npm run seed          # graine de catalogue -> data/, embarquée dans l'APK par prepare-www
 npm run data          # bucket -> .sqlite -> adb push (~30 Mo)
@@ -271,6 +271,12 @@ Deux conséquences de forme :
 
 La carte d'un cursus vit dans `components/curriculum-card.js`, **seule** : deux écrans la montrent maintenant, l'accueil en propose trois et `/curricula` les montre tous. Sur le jeu d'exemple aucun identifiant `sh-*` ne répond, la liste est donc vide et la section s'efface — c'est une réponse, pas une panne, et c'est pourquoi l'appel n'est pas rattrapé : l'accueil échoue d'un bloc pour toutes ses autres sections, et excepter celle-ci ferait disparaître un dépôt cassé en silence.
 
+**Les ouvrages de référence se choisissent, ils ne se mesurent pas.** `src/shared/popular.js` porte vingt-trois identifiants `sh-*`, **seule** — la règle de `curricula.js`, pour la même raison : au catalogue, corriger un choix d'édition coûterait un `schema_version` et 8 589 manifestes republiés. Le choix porte sur l'**édition**, pas sur l'œuvre : le catalogue publié porte dix-neuf éditions de `صحيح مسلم` et onze de `فتح الباري`, et c'est l'édition qui se télécharge — le critère est l'impression de référence, celle dont la numérotation est citée. Rien n'est compté : `tools/stats.py` mesure des téléchargements d'installeurs et des lectures de pointeur, jamais des ouvertures de livre. Il n'existe donc ni tri « par popularité » ni compteur affiché — l'un l'affirmerait, l'autre l'inventerait — et rien n'est téléchargé d'office : les vingt-trois pèsent 272 Mo compressés. Sur le jeu d'exemple aucun `sh-*` ne répond, la bande de l'accueil s'efface : c'est une réponse, et l'appel n'est pas rattrapé pour la raison ci-dessus.
+
+Le filtre est une **case**, jamais une facette. Une facette porte des valeurs et leurs comptes ; celle-ci est un booléen, donc elle n'entre pas dans `FACET_VALUE` et `buildFacetQuery` ne la retire **jamais** — la retirer ferait annoncer aux facettes des livres que la liste exclut. Sur `/search` elle ne porte que la **première** vague : un passage n'est pas populaire ou non, et restreindre le balayage ferait mentir l'annonce « n livres parcourus ». `countActive` compte un booléen sur sa **valeur** et non sur sa présence — « ni nul ni vide » comptait `popular: false` comme un filtre posé, et le déclencheur annonçait un filtre de plus dès l'ouverture de l'écran.
+
+**Une bande qui défile vit dans `components/scroller.js`, seule.** Deux sections de l'accueil en portent une — les nouveautés et les ouvrages de référence — et le sens du défilement se déduit de `localeDir(currentLocale())`. Écrit en dur pour l'arabe, « suivant » ne bougeait pas d'un pixel sous interface anglaise ; `test/direction.test.js` interdit `left: step()` dans les deux fichiers et vérifie que l'accueil ne pilote plus `scrollBy` lui-même. `data-reveal` est un **délai** et non une clé : deux sections au même rang montent ensemble, et `test/popular.test.js` interdit le doublon.
+
 Une teinte de la palette ne se cite pas en dur sur un fond qui, lui, suit le thème : `.stat-card__note` portait `--primary-fixed-dim` sur un fond `--primary`, et en nuit les deux valaient **exactement** `rgb(149 211 186)` — la note était écrite à l'encre invisible. Elle dérive maintenant de `--on-primary`, l'encre de la carte.
 
 **L'accueil échantillonne, et le dit.** `getTopCategories` rend six disciplines sur les quarante peuplées, avec le vrai `total` : c'est lui qu'annonce le lien de repli, jamais `rows.length`. Sa teinte vient de `coverFamily()` puis de `COVER_FAMILIES` — la bulle d'une discipline porte la couleur des couvertures de cette discipline, et il n'existe pas de seconde palette à tenir à jour.
@@ -384,7 +390,7 @@ Les fichiers sont servis par le schéma `userfont:`, qui ne sort jamais de `user
 
 `apps/mobile/` est le **même rendu**, pas une seconde interface. `scripts/prepare-www.mjs` efface `www/` et le refait entièrement depuis `apps/desktop/src/renderer/` et `apps/desktop/src/shared/` : une copie régénérée ne peut pas dériver, et c'est la seule façon de ne pas rejouer `MIRROR_DIRS`, le `sepia` mort et la liste de polices déclarée deux fois.
 
-Un seul fichier diffère : `src/renderer/js/repository.js`, remplacé par `src/repository.capacitor.js` et ses cinq modules `src/repo/*` — **67 méthodes, aucune `not-ported`**. Les modules sont des fabriques sans aucun `import` : chacune reçoit ses dépendances en argument.
+Un seul fichier diffère : `src/renderer/js/repository.js`, remplacé par `src/repository.capacitor.js` et ses cinq modules `src/repo/*` — **69 méthodes, aucune `not-ported`**. Les modules sont des fabriques sans aucun `import` : chacune reçoit ses dépendances en argument.
 
 **L'APK embarque la graine de catalogue.** `scripts/fetch-seed.mjs` (mobile) importe `fetchSeed` du bureau — la recette, pas une copie — et remplit le cache `data/` (ignoré par git) ; `prepare-www.mjs`, qui efface `www/` à chaque exécution, copie `catalog.sqlite.zst` (~4,9 Mo compressés, jamais les 28,8 Mo décompressés) dans `www/assets/` et **refuse de produire un `www/` sans graine** — installée sans elle, l'application n'aurait aucun catalogue et ne montrerait rien. Au premier lancement, `src/repo/graine.js` la décompresse (le fzstd déjà embarqué) et l'installe **seulement si `catalog.sqlite` est absent**, la règle d'`AppDatabase.#plantSeed` : la graine est figée à la date du build, le catalogue installé a pu être mis à jour depuis le bucket, et l'écraser le ferait régresser à chaque mise à jour de l'application. Écriture de côté puis `rename`, comme partout ; `npm run verify` éprouve le planteur avec des dépendances factices.
 
