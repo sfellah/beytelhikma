@@ -285,10 +285,37 @@ export function creerMethodesCatalogue(ctx) {
 
   const placeholders = (values) => values.map(() => '?').join(',');
 
+  /**
+   * Les ouvrages de référence, lus **par accesseur à chaque appel** et jamais
+   * destructurés.
+   *
+   * L'import de `shared/popular.js` est différé — depuis `src/`, où
+   * `verify.mjs` charge ce fichier, le dossier `shared/` n'existe pas. Le
+   * destructurer figerait `undefined` au moment de l'assemblage, c'est-à-dire
+   * toujours.
+   *
+   * Le repli est la liste vide, et il vaut « aucun résultat » — jamais « pas de
+   * filtre » : une clause absente rendrait le catalogue entier sous couvert de
+   * restriction.
+   */
+  const popularIds = () => ctx.POPULAR_EDITION_IDS ?? [];
+
   /** Conditions d'une facette, ou `null` si elle n'est pas filtrée. */
   function condition(key, query, installedIds) {
     const values = query[key];
     switch (key) {
+      case 'popular': {
+        // Une **case à cocher**, pas une facette : elle n'a pas de valeurs à
+        // compter, donc elle est absente de `FACET_VALUE` et `buildFacetQuery`
+        // ne la retire jamais. La retirer ferait annoncer aux facettes des
+        // livres que la liste exclut.
+        if (!query.popular) return null;
+        const ids = popularIds();
+        // Une liste vide n'est pas « pas de filtre » : c'est « aucun résultat ».
+        // `IN ()` est de toute façon une erreur de syntaxe en SQLite.
+        if (!ids.length) return ['1 = 0', []];
+        return [`e.edition_id IN (${placeholders(ids)})`, [...ids]];
+      }
       case 'categories':
         return values?.length ? [`e.category_id IN (${placeholders(values)})`, values] : null;
       case 'types':
@@ -369,6 +396,8 @@ export function creerMethodesCatalogue(ctx) {
   }
 
   const ALL_KEYS = [
+    // La plus sélective d'abord : vingt-trois lignes sur 8 568.
+    'popular',
     'fts',
     'ids',
     'categories',
@@ -830,6 +859,36 @@ export function creerMethodesCatalogue(ctx) {
       // `moteur` voyage avec le résultat : une mesure qui ne dit pas si elle a
       // interrogé l'index ou balayé la mémoire ne mesure rien.
       return { books, total: totals.n, bytes: totals.bytes, moteur };
+    });
+
+  /**
+   * Les ouvrages de référence, **dans l'ordre de la liste**.
+   *
+   * Le SQL vient de `book-repository.js`, repris tel quel ; l'ordre est
+   * réappliqué en JS pour la même raison qu'au bureau — `ORDER BY` ne sait pas
+   * exprimer une suite écrite à la main, et trier par titre effacerait
+   * l'intention.
+   */
+  const getPopularBooks = ({ limit } = {}) =>
+    garde('lecture des livres populaires', async () => {
+      const tous = popularIds();
+      const ids = tous.slice(0, Math.max(1, limit ?? tous.length));
+      // Sans la liste — le module partagé n'est pas encore là — la réponse est
+      // vide, et l'accueil efface la section. C'est la règle des cursus.
+      if (!ids.length) return { rows: [], total: 0 };
+      const db = await catalogue();
+      const installes = await idsInstalles();
+      const rows = (
+        await all(
+          db,
+          `${SUMMARY_SELECT} AND e.edition_id IN (${ids.map(() => '?').join(',')})
+           GROUP BY e.edition_id`,
+          ids,
+        )
+      ).map(bookSummary);
+      const rang = new Map(ids.map((id, index) => [id, index]));
+      rows.sort((a, b) => rang.get(a.editionId) - rang.get(b.editionId));
+      return { rows: marquerInstalles(rows, installes), total: rows.length };
     });
 
   const getFacets = (query = {}) =>
@@ -1354,6 +1413,7 @@ export function creerMethodesCatalogue(ctx) {
     getBooksByCentury,
     getBooksByAuthor,
     exploreBooks,
+    getPopularBooks,
     getFacets,
     suggestValues,
     getSelectionWeight,

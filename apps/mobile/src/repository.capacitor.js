@@ -54,7 +54,7 @@ function arabe() {
 // ---------------------------------------------------------------- la surface
 
 /**
- * Les 68 noms de `src/preload/preload.cjs`, recopiés dans l'ordre.
+ * Les 69 noms de `src/preload/preload.cjs`, recopiés dans l'ordre.
  *
  * Le compte se lit dans le fichier, il ne se décide pas d'avance : c'est
  * `scripts/verify.mjs` qui relit cette liste-là dans le preload et compare. Une
@@ -69,6 +69,7 @@ const METHODS = [
   'getCategories',
   'getTopCategories',
   'getRecentBooks',
+  'getPopularBooks',
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',
@@ -1529,6 +1530,7 @@ async function fermerLivre(editionId) {
  */
 let arabicModule = null;
 let curriculaModule = null;
+let popularModule = null;
 
 import(new URL('../shared/arabic.js', import.meta.url).href)
   .then((module) => {
@@ -1541,6 +1543,12 @@ import(new URL('../shared/arabic.js', import.meta.url).href)
 import(new URL('../shared/curricula.js', import.meta.url).href)
   .then((module) => {
     curriculaModule = module;
+  })
+  .catch(() => {});
+
+import(new URL('../shared/popular.js', import.meta.url).href)
+  .then((module) => {
+    popularModule = module;
   })
   .catch(() => {});
 
@@ -1588,6 +1596,10 @@ const ctx = {
   /** Lu comme une valeur par `catalogue-plus`, d'où l'accesseur. */
   get CURRICULA() {
     return curriculaModule?.CURRICULA;
+  },
+  /** Même chose pour les ouvrages de référence : accesseur, jamais destructuré. */
+  get POPULAR_EDITION_IDS() {
+    return popularModule?.POPULAR_EDITION_IDS;
   },
   // `user.sqlite` — lecture-écriture, API ordinaire du greffon
   allUser,
