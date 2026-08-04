@@ -40,3 +40,27 @@ site/data/
 .env
 .env.*
 !.env.example
+
+# --- clés de signature ------------------------------------------------------
+#
+# Exclues **par extension et partout**, jamais par dossier. La clé d'upload
+# d'Android n'a pas de place naturelle : la pente est de la déposer à côté des
+# certificats publics de `certificates/`, ou dans `apps/mobile/android/` — qui
+# est engendré, donc où elle disparaîtrait au premier `npx cap add android`.
+# Une règle par dossier ne couvrirait ni l'un ni l'autre cas.
+#
+# Ce qui est en jeu : une clé privée entrée dans l'historique y reste après le
+# commit qui la retire, et doit être tenue pour compromise définitivement. La
+# réparation n'est pas un `git rm` — c'est une demande de réinitialisation de
+# clé d'upload auprès de Google, et plusieurs jours d'attente.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Le chemin et les mots de passe de cette clé. Le `.example` reste suivi : il
+# dit quelles clés existent, sans en porter aucune valeur.
+keystore.properties
+!keystore.properties.example
