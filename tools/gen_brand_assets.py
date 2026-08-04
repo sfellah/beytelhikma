@@ -89,6 +89,28 @@ ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256,
 ICON_BACKGROUND = (251, 249, 244, 255)
 LIGHT_INK = (242, 236, 223)
 
+# --- la fiche du Play Store ------------------------------------------------
+#
+# Deux images que Google exige, et qu'aucun autre emplacement du projet ne
+# demande. Elles sortent du même dessin que le reste : une bannière composée à
+# la main dériverait du logo au premier changement de marque, et personne ne le
+# verrait — une fiche de magasin ne se relit pas.
+PLAY_DIR = REPO_ROOT / "apps" / "mobile" / "resources" / "play"
+
+# Le symbole occupe 56 % de l'icône de la fiche, contre 62 % ailleurs. Play
+# masque en cercle sur certaines surfaces : le disque inscrit dans le carré
+# rogne les angles, et 62 % y perdait la pointe du mihrab.
+PLAY_GLYPH = 0.56
+
+FEATURE_SIZE = (1024, 500)
+# Marge sûre, en part de la hauteur. Play recadre la bannière selon la surface
+# — jusqu'à un bandeau très plat sur certaines fiches — et ce qui touche le
+# bord se fait couper.
+FEATURE_SAFE = 0.12
+FEATURE_LOCKUP = 0.54
+# Le filet, dans le sable du projet (`--outline-variant`).
+FEATURE_RULE = (191, 201, 195)
+
 
 def is_green_ink(r: int, g: int, b: int) -> bool:
     """Vrai pour l'encre vert foncé du logo, faux pour les filets dorés."""
@@ -116,6 +138,55 @@ def scaled_to_height(image: Image.Image, height: int) -> Image.Image:
 def scaled_to_width(image: Image.Image, width: int) -> Image.Image:
     height = round(image.height * width / image.width)
     return image.resize((width, height), Image.LANCZOS)
+
+
+def build_play_icon(mark: Image.Image, size: int = ICON_SIZE) -> Image.Image:
+    """L'icône de la fiche Play : carré plein, **sans alpha ni angles arrondis**.
+
+    `app-icon.png` ne convient pas, et pour une raison qui ne se voit qu'après
+    publication : elle porte ses propres angles arrondis sur du transparent.
+    Play applique **son** masque par-dessus — arrondi sur la fiche, circulaire
+    ailleurs — et rogne donc un dessin déjà rogné : on obtient un liseré crème
+    entre deux courbes qui ne coïncident pas, et du noir dans les coins là où
+    la transparence est aplatie. La règle de Play tient en un mot : on fournit
+    le carré plein, c'est lui qui découpe.
+
+    Le symbole est donc calé plus serré qu'ailleurs — `PLAY_GLYPH` — pour tenir
+    dans le disque que le masque circulaire laisse voir : un carré de côté *c*
+    n'offre qu'un disque de diamètre *c*, et une diagonale qui dépasse se fait
+    manger aux quatre coins.
+    """
+    icon = Image.new("RGB", (size, size), ICON_BACKGROUND[:3])
+    glyph = scaled_to_height(mark, round(size * PLAY_GLYPH))
+    icon.paste(glyph, ((size - glyph.width) // 2, (size - glyph.height) // 2), glyph)
+    return icon
+
+
+def build_feature_graphic(lockup: Image.Image) -> Image.Image:
+    """La bannière 1024×500 de la fiche Play.
+
+    Elle ne porte que la marque : ni accroche, ni décompte de livres, ni
+    capture. Trois raisons, dans cet ordre — Play la recadre selon la surface
+    et coupe ce qui approche les bords ; elle est **unique pour toutes les
+    langues**, donc une phrase y serait dans une seule des deux ; et un chiffre
+    posé dans une image se dément tout seul à la republication suivante du
+    catalogue, sans que rien ne le signale.
+
+    Aucune transparence : Play l'aplatirait sur du noir.
+    """
+    banner = Image.new("RGB", (FEATURE_SIZE), ICON_BACKGROUND[:3])
+    width, height = FEATURE_SIZE
+
+    # Les deux filets, à la manière du site : un trait d'un pixel plutôt qu'un
+    # cadre. Ils bornent la marge sûre, et disent où l'on peut couper.
+    margin = round(height * FEATURE_SAFE)
+    draw = ImageDraw.Draw(banner)
+    for y in (margin, height - margin - 1):
+        draw.line((margin, y, width - margin - 1, y), fill=FEATURE_RULE, width=1)
+
+    glyph = scaled_to_width(lockup, round(width * FEATURE_LOCKUP))
+    banner.paste(glyph, ((width - glyph.width) // 2, (height - glyph.height) // 2), glyph)
+    return banner
 
 
 def build_app_icon(mark: Image.Image, size: int = ICON_SIZE) -> Image.Image:
@@ -509,6 +580,19 @@ def main() -> None:
     ico = ico_dir / "icon.ico"
     exports["app-icon.png"].save(ico, sizes=ICO_SIZES)
     print(f"{ico.relative_to(REPO_ROOT)}  {len(ICO_SIZES)} tailles")
+
+    # Les deux images de la fiche Play. Elles vivent avec les ressources du
+    # mobile — c'est la seule application publiée en magasin — et sont suivies
+    # par git : on les téléverse à la main dans le Console, il n'existe aucune
+    # chaîne qui les régénérerait au moment de la publication.
+    PLAY_DIR.mkdir(parents=True, exist_ok=True)
+    for name, image in {
+        "icon-512.png": build_play_icon(mark),
+        "feature-1024x500.png": build_feature_graphic(lockup),
+    }.items():
+        path = PLAY_DIR / name
+        image.save(path, optimize=True)
+        print(f"{path.relative_to(REPO_ROOT)}  {image.width}×{image.height}  {image.mode}")
 
     # L'écran de démarrage Android sort du vectoriel, pas du raster : le
     # symbole y est rendu à 288 dp, soit 1 152 px sur un écran xxxhdpi — deux
