@@ -75,18 +75,33 @@ test('la jauge de lecture se remplit du bord d’où part la poignée', () => {
   );
 });
 
-test('la bande des nouveautés défile dans le sens de lecture', () => {
+test('le sens du défilement horizontal vit dans un seul module', () => {
+  // Deux bandes existent maintenant — les nouveautés et les ouvrages de
+  // référence. Deux copies de la même règle auraient rejoué le `sepia` mort et
+  // la liste de polices déclarée deux fois : c'est `components/scroller.js` qui
+  // la porte, et l'accueil ne la connaît plus.
+  //
   // `scrollLeft` décroît en RTL et croît en LTR. Écrit en dur pour l'arabe, le
   // bouton « suivant » de l'accueil ne bougeait pas d'un pixel sous interface
   // anglaise — un défaut qui coïncide avec la vérité dans la langue où l'on
   // développe, donc invisible jusqu'à la bascule.
+  const scroller = read('../src/renderer/js/components/scroller.js');
   assert.ok(
-    /const avance = \(\) => \(localeDir\(currentLocale\(\)\) === 'rtl' \? -1 : 1\)/.test(home),
+    /const avance = \(\) => \(localeDir\(currentLocale\(\)\) === 'rtl' \? -1 : 1\)/.test(scroller),
     'le sens du défilement doit se déduire de la direction de l’interface',
   );
-  for (const fige of ['left: step()', 'left: -step()']) {
-    assert.ok(!home.includes(fige), `l’accueil fige le sens du défilement : ${fige}`);
+  for (const [nom, source] of [
+    ['home.js', home],
+    ['scroller.js', scroller],
+  ]) {
+    for (const fige of ['left: step()', 'left: -step()']) {
+      assert.ok(!source.includes(fige), `${nom} fige le sens du défilement : ${fige}`);
+    }
   }
+  assert.ok(
+    !home.includes('scrollBy'),
+    'l’accueil ne pilote plus le défilement lui-même : il passe par le composant',
+  );
 });
 
 test('les décalages physiques du lecteur ont leur pendant RTL', () => {

@@ -1,15 +1,15 @@
 import { COVER_FAMILIES, coverFamily } from '../../../shared/book-cover.js';
-import { localeDir } from '../../../shared/locale.js';
 import { h } from '../dom.js';
 import { excerpt, initial, n, ordinal, percent } from '../format.js';
-import { currentLocale, t } from '../i18n.js';
-import { arrowBackward, arrowForward, categoryIcon, icon } from '../icons.js';
+import { t } from '../i18n.js';
+import { arrowForward, categoryIcon, icon } from '../icons.js';
 import { repository } from '../repository.js';
 import { navigate } from '../router.js';
 import { renderShell } from '../shell.js';
 import { bookCard } from '../components/book-card.js';
 import { cover } from '../components/cover.js';
 import { curriculumCard } from '../components/curriculum-card.js';
+import { horizontalScroller } from '../components/scroller.js';
 import { reveal, sectionHead } from '../components/section.js';
 import { asyncView } from '../components/states.js';
 
@@ -370,55 +370,15 @@ function curriculaSection(curricula) {
 function recentSection(recent) {
   if (!recent.length) return null;
 
-  const scroller = h(
-    'div',
-    { class: 'scroller no-scrollbar', tabindex: 0, role: 'list' },
-    recent.map((book) =>
-      h('div', { role: 'listitem' }, bookCard(book, { action: 'open' })),
-    ),
-    h(
+  const { node, previous, next } = horizontalScroller({
+    items: recent.map((book) => bookCard(book, { action: 'open' })),
+    tail: h(
       'button',
       { class: 'scroller__more', type: 'button', onclick: () => navigate('/library') },
       icon('plusSquare', { size: 30 }),
       h('span', {}, t('home.allNew')),
     ),
-  );
-
-  // `scrollLeft` est négatif en RTL sous Chromium : on raisonne en distance
-  // absolue au bord, jamais en signe.
-  const previous = h(
-    'button',
-    { class: 'button--icon', type: 'button', title: t('home.previous'), 'aria-label': t('home.previous') },
-    arrowBackward({ size: 20 }),
-  );
-  const next = h(
-    'button',
-    { class: 'button--icon', type: 'button', title: t('home.next'), 'aria-label': t('home.next') },
-    arrowForward({ size: 20 }),
-  );
-
-  const step = () => Math.max(240, scroller.clientWidth * 0.8);
-  // Le *sens de lecture* décide du signe, jamais une constante : en RTL,
-  // avancer fait décroître `scrollLeft`, en LTR il croît. Écrit en dur pour
-  // l'arabe, « suivant » ne bougeait pas d'un pixel sous interface anglaise —
-  // le défaut coïncidait avec la vérité dans la langue où l'on développe.
-  const avance = () => (localeDir(currentLocale()) === 'rtl' ? -1 : 1);
-  previous.onclick = () => scroller.scrollBy({ left: -avance() * step(), behavior: 'smooth' });
-  next.onclick = () => scroller.scrollBy({ left: avance() * step(), behavior: 'smooth' });
-
-  const syncEdges = () => {
-    const max = scroller.scrollWidth - scroller.clientWidth;
-    const offset = Math.abs(scroller.scrollLeft);
-    previous.disabled = offset <= 1;
-    next.disabled = offset >= max - 1;
-    scroller.classList.toggle('scroller--at-start', previous.disabled);
-    scroller.classList.toggle('scroller--at-end', next.disabled);
-  };
-  scroller.addEventListener('scroll', syncEdges, { passive: true });
-  requestAnimationFrame(syncEdges);
-  // `ResizeObserver` plutôt qu'un écouteur sur `window` : la vue est remplacée
-  // à chaque navigation, l'observateur disparaît avec elle.
-  new ResizeObserver(syncEdges).observe(scroller);
+  });
 
   return h(
     'section',
@@ -427,13 +387,8 @@ function recentSection(recent) {
       'aria-labelledby': 'recent-title',
       'data-reveal': 6,
     },
-    sectionHead(
-      'recent-title',
-      t('home.recentTitle'),
-      t('home.recentHint'),
-      [previous, next],
-    ),
-    h('div', { class: 'scroller-frame' }, scroller),
+    sectionHead('recent-title', t('home.recentTitle'), t('home.recentHint'), [previous, next]),
+    h('div', { class: 'scroller-frame' }, node),
   );
 }
 
