@@ -147,3 +147,23 @@ test('le filtre est une case, pas une facette', () => {
   );
   assert.ok(panel.includes("t('popular.filter')"), 'le libellé vient du catalogue de chaînes');
 });
+
+test('la recherche générale filtre les livres du catalogue, pas le balayage', () => {
+  const search = read('../src/renderer/js/views/search.js');
+  assert.ok(
+    /exploreBooks\(\{[^}]*popular: this\.#popular/s.test(search),
+    'la section « livres » doit porter le filtre',
+  );
+  // La seconde vague ne le porte pas : un passage n'est pas populaire ou non, et
+  // restreindre le balayage ferait mentir l'annonce « n livres parcourus ».
+  const texts = search.slice(search.indexOf('async #runTexts('));
+  assert.ok(!texts.includes('popular'), 'la vague plein texte ne doit pas être filtrée');
+});
+
+test('le filtre de la recherche voyage vers /explore', () => {
+  const search = read('../src/renderer/js/views/search.js');
+  assert.ok(
+    /params\.set\('popular', '1'\)/.test(search),
+    '« voir tout » doit reporter le filtre : le perdre élargirait la réponse sans le dire',
+  );
+});

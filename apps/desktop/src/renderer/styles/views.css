@@ -5148,3 +5148,17 @@ html:not([dir='rtl']) .scroller--at-start {
     background-position: center;
   }
 }
+
+/* La case « les plus connus seulement » de la recherche générale. Elle est sous
+   le champ et au-dessus des résultats : c'est une restriction de la première
+   vague, et la voir en même temps que ce qu'elle restreint est le seul endroit
+   où elle se lit. */
+.search__toggle {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-block: var(--space-sm);
+  font-family: var(--font-label);
+  font-size: var(--text-label-md);
+  color: var(--on-surface-variant);
+}

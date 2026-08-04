@@ -44,6 +44,8 @@ class SearchScreen {
   #nodes = {};
   #timer = null;
   #token = 0;
+  /** La case « les plus connus seulement ». Ne porte que sur la première vague. */
+  #popular = false;
 
   constructor(host, term) {
     this.#host = host;
@@ -76,6 +78,22 @@ class SearchScreen {
       },
     });
 
+    // La case ne porte que sur la **première** vague. Un passage n'est pas
+    // populaire ou non : restreindre le balayage aux vingt-trois livres ferait
+    // mentir l'annonce « n livres parcourus », qui compte les livres installés.
+    const popularToggle = h(
+      'label',
+      { class: 'search__toggle' },
+      h('input', {
+        type: 'checkbox',
+        onchange: (event) => {
+          this.#popular = event.target.checked;
+          if (this.#term.trim().length >= 2) this.#run();
+        },
+      }),
+      h('span', {}, t('popular.filter')),
+    );
+
     this.#nodes = { catalog, texts, status, field };
 
     this.#host.replaceChildren(
@@ -98,6 +116,7 @@ class SearchScreen {
           ),
         ),
         h('div', { class: 'search__box' }, icon('search', { size: 20 }), field),
+        popularToggle,
         catalog,
         status,
         texts,
@@ -107,8 +126,15 @@ class SearchScreen {
   }
 
   #toExplore() {
+    const params = new URLSearchParams();
     const term = this.#term.trim();
-    navigate(`/explore${term ? `?text=${encodeURIComponent(term)}` : ''}`);
+    if (term) params.set('text', term);
+    // Le filtre part avec : le perdre en chemin élargirait la réponse sans le
+    // dire, et l'écran d'arrivée annoncerait un total qui n'est pas celui qu'on
+    // vient de lire.
+    if (this.#popular) params.set('popular', '1');
+    const suffix = params.toString();
+    navigate(`/explore${suffix ? `?${suffix}` : ''}`);
   }
 
   #idle() {
@@ -144,7 +170,7 @@ class SearchScreen {
       const [authors, curricula, books] = await Promise.all([
         repository.getAuthors({ text: term, limit: AUTHORS }),
         repository.getCurricula(),
-        repository.exploreBooks({ text: term, limit: BOOKS }),
+        repository.exploreBooks({ text: term, limit: BOOKS, popular: this.#popular }),
       ]);
       if (!this.#live(token)) return;
 
