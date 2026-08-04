@@ -14,6 +14,8 @@ Guidance pour Claude Code sur ce projet.
 | `tools/` | la chaîne de données Python. |
 | `docs/` | modèle de données, système visuel, maquettes, specs, spikes. |
 
+Ce qui est **différé et daté** vit dans `docs/TODO.md` : chaque entrée dit à quel déclencheur s'y mettre. Une dette qu'on ne date pas se relit tous les six mois sans jamais se payer.
+
 Un client Flutter a existé (`beytelhikma/`, retiré de l'arbre) ; le portage Electron est devenu l'implémentation unique, et le mobile en dérive au lieu de le dupliquer.
 
 ## Commandes
