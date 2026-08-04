@@ -6,6 +6,7 @@ import path from 'node:path';
 import { arabicSearchPattern, normalizeArabic } from '../shared/arabic.js';
 import { CURRICULA } from '../shared/curricula.js';
 import { assertBaseUrl } from '../shared/distribution.js';
+import { POPULAR_EDITION_IDS } from '../shared/popular.js';
 import { all, first } from './app-database.js';
 import { cssFor, installFont } from './font-installer.js';
 import { decideUpdate, fetchPointer, installCatalog } from './catalog-updater.js';
@@ -921,6 +922,37 @@ export class BookRepository {
           [limit],
         ).map(bookSummary),
       );
+    });
+  }
+
+  /**
+   * Les ouvrages de référence, **dans l'ordre de la liste**.
+   *
+   * L'ordre est réappliqué en JS après la requête : `ORDER BY` ne sait pas
+   * exprimer une suite écrite à la main, et trier par titre effacerait
+   * l'intention — les deux Sahih viennent d'abord parce qu'ils viennent
+   * d'abord. C'est la contrainte de `#titleOrder`, dans l'autre sens.
+   *
+   * `total` compte ce que le catalogue **porte**, jamais la longueur de la
+   * liste : sur les cinq livres d'exemple il vaut zéro, et la section
+   * s'efface. Un décompte affiché vient de ce qu'on a trouvé.
+   */
+  getPopularBooks({ limit } = {}) {
+    return this.#guard('lecture des livres populaires', async () => {
+      const db = await this.#db.catalog();
+      const ids = POPULAR_EDITION_IDS.slice(
+        0,
+        Math.max(1, limit ?? POPULAR_EDITION_IDS.length),
+      );
+      const rows = all(
+        db,
+        `${SUMMARY_SELECT} AND e.edition_id IN (${ids.map(() => '?').join(',')})
+         GROUP BY e.edition_id`,
+        ids,
+      ).map(bookSummary);
+      const rang = new Map(ids.map((id, index) => [id, index]));
+      rows.sort((a, b) => rang.get(a.editionId) - rang.get(b.editionId));
+      return { rows: await this.#withDownloadStatus(rows), total: rows.length };
     });
   }
 
@@ -2515,6 +2547,7 @@ export const REPOSITORY_METHODS = [
   'getCategories',
   'getTopCategories',
   'getRecentBooks',
+  'getPopularBooks',
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',

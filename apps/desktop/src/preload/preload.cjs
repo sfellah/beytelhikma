@@ -9,6 +9,7 @@ const METHODS = [
   'getCategories',
   'getTopCategories',
   'getRecentBooks',
+  'getPopularBooks',
   'getBooks',
   'getBooksByCategory',
   'getBookDetail',

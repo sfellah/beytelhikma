@@ -11,6 +11,7 @@ import {
   REPOSITORY_METHODS,
   RepositoryError,
 } from '../src/main/book-repository.js';
+import { POPULAR_EDITION_IDS } from '../src/shared/popular.js';
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -834,4 +835,25 @@ test('une mise à jour de catalogue jette tous les caches qui en dérivent', () 
     false,
     'aucune remise à zéro à la main hors de #forgetCatalogCaches',
   );
+});
+
+test('getPopularBooks rend les éditions de référence, dans l’ordre de la liste', async () => {
+  const { rows, total } = await repository.getPopularBooks();
+  // Le jeu d'exemple ne porte aucun `sh-*` : la réponse est vide, et c'est une
+  // réponse — pas une erreur. `total` compte ce qu'on a trouvé, jamais la
+  // longueur de la liste.
+  assert.ok(Array.isArray(rows));
+  assert.equal(total, rows.length);
+
+  const rangs = rows.map((book) => POPULAR_EDITION_IDS.indexOf(book.editionId));
+  assert.deepEqual(rangs, [...rangs].sort((a, b) => a - b), 'l’ordre de la liste doit survivre');
+});
+
+test('getPopularBooks est déclarée des deux côtés du pont', () => {
+  assert.ok(REPOSITORY_METHODS.includes('getPopularBooks'));
+  const preload = fs.readFileSync(
+    path.join(projectRoot, 'src', 'preload', 'preload.cjs'),
+    'utf8',
+  );
+  assert.ok(preload.includes("'getPopularBooks',"));
 });
