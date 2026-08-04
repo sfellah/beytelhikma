@@ -21,8 +21,10 @@ import { toArabicDigits } from '../apps/desktop/src/shared/digits.js';
 import { translate } from '../apps/desktop/src/shared/translate.js';
 import {
   BASE_PATH,
+  CONTACT_EMAIL,
   DEFAULT_LOCALE,
   PAGES,
+  PRIVACY_UPDATED,
   REPO,
   SITE_LOCALES,
   SITE_ORIGIN,
@@ -37,6 +39,7 @@ import { layout, pagePath } from './templates/layout.mjs';
 import { home } from './templates/home.mjs';
 import { download } from './templates/download.mjs';
 import { releases as releasesPage } from './templates/releases.mjs';
+import { privacy as privacyPage } from './templates/privacy.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -297,6 +300,14 @@ export async function build(options = {}) {
       download: () =>
         download({ locale: locale.key, t, fmtDate, latest: index.latest, repoUrl: REPO_URL }),
       releases: () => releasesPage({ locale: locale.key, t, fmtDate, index }),
+      privacy: () =>
+        privacyPage({
+          t,
+          fmtDate,
+          updated: PRIVACY_UPDATED,
+          email: CONTACT_EMAIL,
+          repoUrl: REPO_URL,
+        }),
     };
 
     for (const page of PAGES) {
@@ -304,11 +315,13 @@ export async function build(options = {}) {
         index: t('home.title'),
         download: t('download.title'),
         releases: t('releases.title'),
+        privacy: t('privacy.title'),
       };
       const descriptions = {
         index: t('home.description', { books: count }),
         download: t('download.description', { version: index.latest?.version ?? '—' }),
         releases: t('releases.description'),
+        privacy: t('privacy.description'),
       };
 
       const html = layout({

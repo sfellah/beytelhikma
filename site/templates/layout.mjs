@@ -68,7 +68,7 @@ function header(locale, page, t) {
  * texte, en quels caractères il est composé. C'est la fin de livre, et c'est
  * aussi le seul endroit honnête où dire que les polices sont embarquées.
  */
-function footer(t, { repoUrl, builtVersion }) {
+function footer(locale, t, { repoUrl, builtVersion }) {
   return `<footer class="footer">
   <div class="footer__inner">
     <h2 class="footer__heading">${escapeHtml(t('colophon.heading'))}</h2>
@@ -76,6 +76,11 @@ function footer(t, { repoUrl, builtVersion }) {
       <p class="footer__line">
         <a class="footer__link" href="${safeUrl(repoUrl)}" rel="noopener">${icon('code')}${escapeHtml(t('nav.source'))}</a>
         <a class="footer__link" href="${safeUrl(`${repoUrl}/issues`)}" rel="noopener">${icon('external')}${escapeHtml(t('footer.issues'))}</a>
+        ${/* La confidentialité vit au pied et non dans la barre haute : le Play
+             Console veut une URL stable et publique, pas un appel à l'action.
+             La barre haute porte ce qu'on vient faire — lire, télécharger ; le
+             colophon porte ce qui répond de la page. */ ''}
+        <a class="footer__link" href="${url(pagePath(locale, 'privacy'))}">${icon('lock')}${escapeHtml(t('footer.privacy'))}</a>
       </p>
       <p class="footer__note">${escapeHtml(t('footer.license'))}</p>
       <p class="footer__note">${escapeHtml(t('footer.corpus'))}</p>
@@ -132,7 +137,7 @@ ${header(locale, page, t)}
 <main id="main" class="main">
 ${body}
 </main>
-${footer(t, { repoUrl, builtVersion })}
+${footer(locale, t, { repoUrl, builtVersion })}
 <script src="${url('assets/site.js')}" defer></script>
 </body>
 </html>

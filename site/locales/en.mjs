@@ -128,6 +128,103 @@ export default {
   'releases.empty': 'No release published yet.',
   'releases.notes.empty': 'No notes for this version.',
 
+  'privacy.title': 'Privacy Policy — Beyt El Hikma',
+  'privacy.description':
+    'What Beyt El Hikma knows about you: nothing. No account, no telemetry, no ads. '
+    + 'Here is the detail, line by line.',
+  'privacy.heading': 'Privacy Policy',
+  'privacy.lede':
+    'This policy covers the Beyt El Hikma application — desktop and Android — and this '
+    + 'website. It is written from what the code does, and the code is public: every claim '
+    + 'below can be checked in the repository.',
+  'privacy.updated': 'In effect since {date}',
+
+  'privacy.summary.title': 'In short',
+  'privacy.summary.account': 'No account. The app never asks who you are.',
+  'privacy.summary.telemetry': 'No telemetry, no trackers, no analytics inside the app.',
+  'privacy.summary.ads': 'No advertising, and no advertising identifier is read.',
+  'privacy.summary.sale': 'Nothing is sold, rented or shared. There is nothing to sell.',
+
+  'privacy.device.title': 'What stays on your device',
+  'privacy.device.body':
+    'Everything you produce while reading lives in a local database on your device, and is '
+    + 'never transmitted anywhere:',
+  'privacy.device.library': 'the books you have installed, and when you installed them;',
+  'privacy.device.progress': 'your reading progress, page and position within the page;',
+  'privacy.device.annotations':
+    'your bookmarks, highlights and notes, with the text they are anchored to;',
+  'privacy.device.settings':
+    'your settings — language, theme, typeface, text size, reading mode.',
+
+  'privacy.network.title': 'What the app asks of the network',
+  'privacy.network.body':
+    'The app needs the network for three things only. Each is an anonymous HTTPS request to '
+    + 'our distribution server, with no account, no cookie and no identifier:',
+  'privacy.network.pointer':
+    'at startup, a small file stating which catalogue version is published;',
+  'privacy.network.catalog': 'the catalogue itself, when a newer version exists;',
+  'privacy.network.books': 'a book file, when you ask to download it.',
+  'privacy.network.anonymous':
+    'Browsing, searching and reading need no connection at all: the catalogue ships with the '
+    + 'app, and a downloaded book is yours.',
+
+  'privacy.logs.title': 'What the server records',
+  'privacy.logs.body':
+    'Like any web server, the one distributing the catalogue and the books logs the requests '
+    + 'it receives. Those logs are private and no one else has access to them:',
+  'privacy.logs.fields':
+    'what they contain: the date, the file requested, its size, the response code, and the '
+    + 'IP address of the request;',
+  'privacy.logs.retention': 'they are deleted automatically after 30 days;',
+  'privacy.logs.purpose':
+    'they serve only to count usage volume — how often a book was downloaded — and the tool '
+    + 'that reads them discards the IP address as it reads;',
+  'privacy.logs.never':
+    'they are never cross-referenced with anything else, never tied to a person, never shared '
+    + 'with a third party.',
+
+  'privacy.fonts.title': 'Fonts you add yourself',
+  'privacy.fonts.body':
+    'The app ships with its six typefaces and downloads none on its own. If you choose to add '
+    + 'a typeface from Google Fonts, and only then, the app contacts fonts.googleapis.com and '
+    + 'fonts.gstatic.com — Google sees that request, and therefore your IP address. The file '
+    + 'is stored once, and the app never goes back for it.',
+
+  'privacy.permissions.title': 'Android permissions',
+  'privacy.permissions.body':
+    'The app requests a single permission: internet access, for the three requests above. No '
+    + 'location, no contacts, no camera, no microphone, no access to your files, no '
+    + 'advertising identifier.',
+
+  'privacy.store.title': 'The store that delivered the app',
+  'privacy.store.body':
+    'If you installed it from Google Play, Google records the installation and may receive '
+    + 'crash reports depending on your device settings. That falls under Google’s privacy '
+    + 'policy, not ours: all we receive from them is aggregate statistics, in which no one is '
+    + 'identifiable.',
+
+  'privacy.children.title': 'Children',
+  'privacy.children.body':
+    'The app is not directed at children under 13 and asks them for nothing. It knowingly '
+    + 'collects no data about them — since it collects none about anyone.',
+
+  'privacy.rights.title': 'Your data, and how to erase it',
+  'privacy.rights.body':
+    'We hold no data that identifies you, so there is nothing to request, correct or export. '
+    + 'Your annotations, your progress and your books are on your device; uninstalling the app '
+    + 'erases all of them. The server logs expire on their own after 30 days.',
+
+  'privacy.changes.title': 'If this policy changes',
+  'privacy.changes.body':
+    'The effective date at the top of this page is updated on every revision, and the full '
+    + 'history of this text is public in the repository. A change that widened what the app '
+    + 'sends would be announced in the release notes.',
+
+  'privacy.contact.title': 'Write to us',
+  'privacy.contact.body':
+    'A question about this text, or about what the app does with your data:',
+  'privacy.contact.issues': 'Ask in public',
+
   'changelog.added': 'New',
   'changelog.changed': 'Improved',
   'changelog.fixed': 'Fixed',
@@ -135,6 +232,7 @@ export default {
   'changelog.security': 'Security',
 
   'footer.issues': 'Report an issue',
+  'footer.privacy': 'Privacy',
   'footer.license': 'Published under the AGPL-3.0 licence',
   'footer.corpus': 'Corpus from the Shamela Library',
   'footer.built': 'Site build {version}',

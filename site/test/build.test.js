@@ -10,7 +10,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { build } from '../build.mjs';
-import { BASE_PATH, PAGES, SITE_LOCALES, SITE_ORIGIN } from '../config.mjs';
+import { BASE_PATH, PAGES, PRIVACY_UPDATED, SITE_LOCALES, SITE_ORIGIN } from '../config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(HERE, '..', '..', 'apps', 'desktop', 'src', 'renderer');
@@ -33,7 +33,7 @@ test.after(async () => {
 
 const read = (relative) => fs.readFile(path.join(out, relative), 'utf8');
 
-test('neuf pages et la bascule de racine sont écrites', async () => {
+test('une page par langue et par rubrique, plus la bascule de racine', async () => {
   assert.equal(report.pages.length, SITE_LOCALES.length * PAGES.length);
   await fs.access(path.join(out, 'index.html'));
   await fs.access(path.join(out, 'releases.json'));
@@ -302,6 +302,101 @@ test('le contrat de données est écrit tel que la page le consomme', async () =
   assert.equal(index.latest.version, '0.3.0');
   assert.equal(index.latest.assets.length, 4);
   assert.ok(index.latest.notes.ar.length > 0);
+});
+
+/* ------------------------------------------------- confidentialité -------- */
+
+/**
+ * Le Play Console refuse une application dont la politique de confidentialité
+ * n'est pas à une URL publique et stable. Ces tests tiennent les trois
+ * propriétés qui la rendent recevable : elle existe dans les trois langues,
+ * on l'atteint depuis n'importe quelle page, et elle dit ce qu'il faut dire.
+ */
+
+test('la politique de confidentialité est rendue dans les trois langues', async () => {
+  for (const locale of SITE_LOCALES) {
+    const html = await read(`${locale.key}/privacy/index.html`);
+    assert.match(html, new RegExp(`<html lang="${locale.key}" dir="${locale.dir}">`));
+    // Le titre de la page vient du catalogue, jamais du nom de fichier.
+    assert.match(html, /<title>[^<]+<\/title>/);
+  }
+  // Et elle est dans le sitemap : une politique qu'aucun robot ne trouve est
+  // une politique que le relecteur du Play Console ne trouve pas non plus.
+  const map = await read('sitemap.xml');
+  for (const locale of SITE_LOCALES) {
+    assert.match(map, new RegExp(`${locale.key}/privacy/`), `absente du sitemap : ${locale.key}`);
+  }
+});
+
+test('chaque page mène à la politique, dans sa propre langue', async () => {
+  // Le lien est au pied, donc sur les douze pages. Un lien qui n'existerait
+  // que sur l'accueil obligerait à y revenir pour le trouver.
+  for (const locale of SITE_LOCALES) {
+    for (const page of PAGES) {
+      const file = page === 'index' ? `${locale.key}/index.html` : `${locale.key}/${page}/index.html`;
+      const html = await read(file);
+      assert.match(
+        html,
+        new RegExp(`href="${BASE_PATH}${locale.key}/privacy/"`),
+        `pas de lien vers la politique dans ${file}`,
+      );
+    }
+  }
+});
+
+test('la date d’effet est écrite à la main, jamais celle du build', async () => {
+  // Une politique datée du jour prétend avoir changé chaque fois que le site
+  // se reconstruit. Deux builds successifs doivent porter la même date, et
+  // c'est celle de la constante — pas l'horloge.
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'beyt-site-privacy-'));
+  await build({
+    out: path.join(scratch, 'dist'),
+    dataDir: path.join(HERE, 'fixtures', 'data'),
+    books: 8568,
+  });
+  const second = await fs.readFile(
+    path.join(scratch, 'dist', 'fr', 'privacy', 'index.html'),
+    'utf8',
+  );
+  const dated = /En vigueur depuis le ([^<]+)</.exec(await read('fr/privacy/index.html'));
+  assert.ok(dated, 'la date d’effet doit être rendue');
+  assert.match(second, new RegExp(`En vigueur depuis le ${dated[1]}<`));
+
+  // Elle dit bien la constante : `2026-08-04` → « 4 août 2026 ».
+  const [year, month, day] = PRIVACY_UPDATED.split('-').map(Number);
+  const attendue = new Intl.DateTimeFormat('fr', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+  assert.equal(dated[1], attendue);
+  await fs.rm(scratch, { recursive: true, force: true });
+});
+
+test('la politique dit les six choses que Play exige', async () => {
+  // Ce que le relecteur cherche : ce qui est collecté, ce que fait le réseau,
+  // la rétention, les autorisations, les enfants, et un moyen de nous joindre.
+  const html = await read('en/privacy/index.html');
+  assert.match(html, /No account/);
+  assert.match(html, /anonymous HTTPS request/);
+  assert.match(html, /deleted automatically after 30 days/);
+  assert.match(html, /internet access/);
+  assert.match(html, /not directed at children under 13/);
+  assert.match(html, /href="mailto:[^"]+@[^"]+"/, 'une adresse de contact est exigée');
+});
+
+test('la politique nomme le seul tiers que l’application puisse joindre', async () => {
+  // `font-installer.js` et sa transcription mobile `repo/polices.js` sont le
+  // seul chemin vers un hôte que nous ne tenons pas. Le taire ferait de cette
+  // page une politique fausse — et c'est exactement le genre d'omission qui se
+  // découvre à l'audit, pas à la relecture.
+  for (const [locale, motif] of [
+    ['fr', /fonts\.gstatic\.com/],
+    ['en', /fonts\.gstatic\.com/],
+    ['ar', /fonts\.gstatic\.com/],
+  ]) {
+    assert.match(await read(`${locale}/privacy/index.html`), motif, `tiers tu en ${locale}`);
+  }
 });
 
 /* ------------------------------------------------------------- Android ---- */

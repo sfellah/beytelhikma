@@ -118,4 +118,26 @@ export function platformIcon(key) {
 }
 
 /** Les pages rendues, une fois par langue. */
-export const PAGES = ['index', 'download', 'releases'];
+export const PAGES = ['index', 'download', 'releases', 'privacy'];
+
+/**
+ * L'adresse de contact publiée par la politique de confidentialité.
+ *
+ * Une politique sans destinataire n'en est pas une : le Play Console exige un
+ * moyen de joindre l'éditeur, et un lien vers les tickets du dépôt ne couvre
+ * pas la demande d'un lecteur qui ne veut pas écrire en public. Une adresse du
+ * domaine plutôt qu'une boîte personnelle — elle se redirige, elle se change,
+ * et elle ne publie le nom de personne.
+ */
+export const CONTACT_EMAIL = 'contact@beytelhikma.com';
+
+/**
+ * La date d'effet de la politique de confidentialité, en ISO.
+ *
+ * Écrite à la main, et **jamais** dérivée de l'heure du build : une politique
+ * qui se date du jour prétend avoir changé chaque fois que le site se
+ * reconstruit, et le lecteur qui la relit ne peut plus voir ce qui a bougé. On
+ * la touche quand le texte change, pas avant. Le build reste déterministe —
+ * c'est la même règle qui interdit au générateur d'appeler le réseau.
+ */
+export const PRIVACY_UPDATED = '2026-08-04';

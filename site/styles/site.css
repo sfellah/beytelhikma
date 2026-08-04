@@ -1237,6 +1237,80 @@ html[lang='ar'] .notice__body {
   color: var(--ink-faint);
 }
 
+/* ====================================================== confidentialité ==== */
+
+/* Une politique de confidentialité se lit de bout en bout ou ne se lit pas du
+   tout : elle est composée comme une page de texte, à la mesure du reste du
+   site, et non en colonnes ni en accordéons. Le filet sépare les sections,
+   comme partout ailleurs — la carte reste bannie. */
+.policy {
+  inline-size: var(--column);
+  margin-inline: auto;
+  padding-block-end: clamp(3.5rem, 8vw, 6rem);
+}
+
+.policy__updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--margin-voice);
+  font-size: var(--voice-md);
+  letter-spacing: var(--voice-tracking);
+  color: var(--ink-faint);
+}
+
+/* Le résumé porte le papier profond : c'est la seule partie que beaucoup
+   liront, et elle doit se distinguer sans se détacher en carte. */
+.policy__summary {
+  background: var(--paper-deep);
+  padding: clamp(1.5rem, 4vw, 2rem);
+  margin-block-end: clamp(2rem, 5vw, 3rem);
+  max-inline-size: var(--measure);
+}
+
+.policy__section {
+  padding-block: clamp(1.5rem, 4vw, 2.25rem);
+  border-block-start: 1px solid var(--rule);
+  max-inline-size: var(--measure);
+}
+
+.policy__section:last-child {
+  border-block-end: 1px solid var(--rule);
+}
+
+.policy__title {
+  font-family: var(--title);
+  font-size: clamp(1.25rem, 1.05rem + 0.7vw, 1.6rem);
+  line-height: var(--title-leading);
+  letter-spacing: var(--title-tracking);
+  margin-block-end: 0.75rem;
+}
+
+.policy__body {
+  color: var(--ink-soft);
+}
+
+.policy__list {
+  margin-block-start: 0.75rem;
+  padding-inline-start: 1.25rem;
+  color: var(--ink-soft);
+}
+
+.policy__list li + li {
+  margin-block-start: 0.5rem;
+}
+
+.policy__list li::marker {
+  color: var(--ink-faint);
+}
+
+.policy__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-block-start: 0.9rem;
+}
+
 /* ============================================================ colophon ==== */
 
 /* Le pied est un colophon de fin de livre : qui édite, sous quelle licence,
